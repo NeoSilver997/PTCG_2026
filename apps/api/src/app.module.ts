@@ -10,6 +10,7 @@ import { UsersModule } from './users/users.module';
 import { TournamentsModule } from './tournaments/tournaments.module';
 import { DecksModule } from './decks/decks.module';
 import { PricesModule } from './prices/prices.module';
+import { StorageModule } from './storage/storage.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { PricesModule } from './prices/prices.module';
     TournamentsModule,
     DecksModule,
     PricesModule,
+    StorageModule,
   ],
 })
 export class AppModule {}

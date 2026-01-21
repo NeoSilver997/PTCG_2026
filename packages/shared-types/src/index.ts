@@ -18,6 +18,12 @@ export type TournamentType = 'CHAMPIONSHIP' | 'REGIONAL' | 'SPECIAL_EVENT' | 'ST
 
 export type DeckArchetype = 'AGGRO' | 'CONTROL' | 'COMBO' | 'MIDRANGE' | 'TOOLBOX' | 'OTHER';
 
+// ============================================================================
+// Storage Types
+// ============================================================================
+
+export * from './storage.types';
+
 export type PriceSource = 'YUYU_TEI' | 'HARERUYA' | 'CARDMARKET' | 'TCGPLAYER' | 'OTHER';
 
 // ============================================================================
