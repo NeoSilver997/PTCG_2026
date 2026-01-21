@@ -1,5 +1,153 @@
 # PTCG CardDB - Implementation Started
 
+## 📁 Data Storage Structure
+
+### Planned Folder Organization
+
+```
+PTCG_2026/
+├── data/                           # All persistent data storage
+│   ├── images/                     # Downloaded card images
+│   │   ├── cards/                  # Card images organized by region
+│   │   │   ├── hk/                 # Hong Kong card images
+│   │   │   │   ├── SV08/           # By expansion code
+│   │   │   │   │   ├── hk00014744.png
+│   │   │   │   │   ├── hk00014745.png
+│   │   │   │   │   └── ...
+│   │   │   ├── jp/                 # Japan card images
+│   │   │   │   ├── SV8/
+│   │   │   │   │   ├── jp49355.png
+│   │   │   │   │   └── ...
+│   │   │   └── en/                 # English card images
+│   │   │       ├── sv9/
+│   │   │       │   └── ...
+│   │   ├── thumbnails/             # Optimized thumbnails (200x280)
+│   │   │   ├── hk/
+│   │   │   ├── jp/
+│   │   │   └── en/
+│   │   └── cache/                  # Temporary image cache
+│   │
+│   ├── html/                       # Scraped HTML files for backup/debugging
+│   │   ├── cards/                  # Card detail pages
+│   │   │   ├── hk/
+│   │   │   │   ├── hk00014744.html # Archived card detail page
+│   │   │   │   └── ...
+│   │   │   ├── jp/
+│   │   │   └── en/
+│   │   ├── events/                 # Tournament/event pages
+│   │   │   ├── 2026-01-15_hong-kong-championship.html
+│   │   │   ├── 2026-01-08_taipei-regional.html
+│   │   │   └── ...
+│   │   └── expansions/             # Expansion listing pages
+│   │       ├── hk/
+│   │       ├── jp/
+│   │       └── en/
+│   │
+│   ├── events/                     # Event and tournament data
+│   │   ├── raw/                    # Raw scraped data (JSON)
+│   │   │   ├── 2026-01-15_hong-kong-championship.json
+│   │   │   └── ...
+│   │   ├── processed/              # Cleaned/validated data
+│   │   │   └── 2026-01.json        # Monthly aggregated events
+│   │   └── archives/               # Historical event data
+│   │       └── 2025/
+│   │           ├── 2025-12.json
+│   │           └── ...
+│   │
+│   ├── decks/                      # Deck list data
+│   │   ├── tournament/             # Tournament winning decks
+│   │   │   ├── 2026-01-15_1st_champion.json
+│   │   │   ├── 2026-01-15_2nd_runner-up.json
+│   │   │   └── ...
+│   │   ├── user/                   # User-created decks (exported)
+│   │   │   └── {userId}/
+│   │   │       ├── grass-control.json
+│   │   │       └── ...
+│   │   └── meta/                   # Meta deck analysis
+│   │       ├── 2026-01_top-decks.json
+│   │       └── ...
+│   │
+│   ├── prices/                     # Price data archives
+│   │   ├── snapshots/              # Daily price snapshots
+│   │   │   ├── 2026-01-21.json     # All prices for this date
+│   │   │   └── ...
+│   │   └── history/                # Historical price trends
+│   │       └── {cardId}/
+│   │           └── hk00014744.json # Price history for specific card
+│   │
+│   └── exports/                    # User data exports
+│       ├── collections/            # Collection exports
+│       ├── decks/                  # Deck exports
+│       └── reports/                # Generated reports
+│
+├── scrapers/
+│   └── downloads/                  # Temporary scraper downloads
+│       └── temp/                   # Auto-cleaned temporary files
+```
+
+### Storage Guidelines
+
+**Images (`data/images/`):**
+- Use `webCardId` as filename (e.g., `hk00014744.png`)
+- Organize by region (hk/jp/en) and expansion
+- Generate thumbnails automatically (200x280px) for list views
+- Cache remote images locally to reduce external requests
+- Implement image cleanup for deleted/deprecated cards
+
+**HTML Archives (`data/html/`):**
+- Store original HTML for data verification and re-parsing
+- Useful for debugging scraper issues
+- Implement rotation policy (keep last 30 days)
+- Compress older archives (gzip)
+
+**Event Data (`data/events/`):**
+- Raw JSON: Unprocessed scraper output
+- Processed JSON: Validated and normalized data
+- Archive monthly to reduce file size
+- Include metadata: scrape date, source URL, version
+
+**Deck Data (`data/decks/`):**
+- Tournament decks: Include player name, placement, event info
+- User decks: Privacy-aware exports (anonymized if needed)
+- Meta analysis: Aggregated deck statistics and trends
+
+**Prices (`data/prices/`):**
+- Daily snapshots: Full price dump for all cards
+- Per-card history: Efficient lookup for individual cards
+- Implement retention policy (keep detailed data for 1 year)
+
+### API Integration
+
+**Serving Images:**
+```typescript
+// API endpoint: GET /api/v1/cards/:cardId/image
+// Returns: Image file or 404
+// Example: GET /api/v1/cards/hk00014744/image
+```
+
+**Event Data Access:**
+```typescript
+// API endpoint: GET /api/v1/events
+// Query params: ?startDate=2026-01-01&endDate=2026-01-31
+// Returns: Event list with deck data
+```
+
+**Deck Import/Export:**
+```typescript
+// POST /api/v1/decks/import
+// Body: { source: 'tournament', eventId: 'xxx', deckId: 'yyy' }
+// Returns: Imported deck data
+```
+
+### Maintenance Tasks
+
+- **Daily**: Price snapshots, new card images
+- **Weekly**: HTML archive cleanup, deck meta analysis
+- **Monthly**: Event data archival, storage optimization
+- **Quarterly**: Full data backup, deprecated card cleanup
+
+---
+
 ## ✅ Completed Setup
 
 ### 1. Project Structure

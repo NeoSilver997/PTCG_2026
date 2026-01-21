@@ -1,0 +1,40 @@
+# Ignore all downloaded/generated data files
+# But keep the folder structure
+
+# Images
+images/cards/**/*.png
+images/cards/**/*.jpg
+images/cards/**/*.webp
+images/thumbnails/**/*.png
+images/thumbnails/**/*.jpg
+images/cache/*
+
+# HTML archives
+html/**/*.html
+html/**/*.html.gz
+
+# Event data
+events/raw/*.json
+events/processed/*.json
+events/archives/**/*.json
+
+# Deck data
+decks/tournament/*.json
+decks/user/**/*.json
+decks/meta/*.json
+
+# Prices
+prices/snapshots/*.json
+prices/history/**/*.json
+
+# Exports
+exports/**/*.json
+exports/**/*.csv
+exports/**/*.pdf
+
+# Temp files
+**/temp/*
+**/*.tmp
+
+# Keep .gitkeep files to preserve folder structure
+!.gitkeep
