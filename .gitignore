@@ -52,3 +52,4 @@ scrapers/__pycache__/
 scrapers/*.pyc
 scrapers/.venv/
 scrapers/failed_*.txt
+data/cards/japan/*.json
