@@ -353,16 +353,179 @@ Create `packages/database/prisma/seed.ts`:
 - [ ] Authentication flow
 - [ ] E2E tests with Playwright
 
-### Scrapers (Next Phase)
-- [ ] Refactor Python scrapers
-- [ ] Defensive parsing implemented
-- [ ] Error recovery added
-- [ ] Integration with API
-- [ ] Schedule scraper jobs
+### Scrapers
+- [x] Japanese card scraper rewritten for PTCG_2026
+- [x] HTML caching system implemented
+- [x] Multi-threaded scraping with rate limiting
+- [x] Data mapping to Prisma schema enums
+- [x] Automatic expansion grouping
+- [ ] Hong Kong card scraper
+- [ ] English card scraper
+- [ ] Tournament/event scraper
+- [ ] Price scraper (Yuyu-tei, Hareruya)
+- [ ] Integration with API import endpoints
+- [ ] Schedule scraper jobs (cron)
 
 ---
 
-## 🔧 Development Commands
+## �️ Scrapers Implementation
+
+### Japanese Card Scraper
+✅ **Status**: Completed and integrated
+
+**Location**: `scrapers/src/japanese_card_scraper.py`
+
+**Features**:
+- Scrapes card details from pokemon-card.com (Japanese official site)
+- Multi-threaded scraping with configurable rate limiting (default: 2s between requests)
+- HTML caching for fast offline re-processing
+- Automatic data mapping to PTCG_2026 Prisma schema
+- Expansion-based file organization
+- Support for Pokemon, Trainer, and Energy cards
+- Extracts attacks, abilities, weakness, resistance, retreat cost
+- Maps Japanese rarity codes to database enums (AR, SAR, SR, UR, etc.)
+
+**Usage Examples**:
+```bash
+# Scrape a range of cards with HTML caching
+python scrapers/src/japanese_card_scraper.py --id-range 48000 100 --cache-html
+
+# Fast offline processing (cache-only mode)
+python scrapers/src/japanese_card_scraper.py --id-range 48000 1000 --cache-only --threads 20
+
+# Scrape specific expansion only
+python scrapers/src/japanese_card_scraper.py --id-range 48000 1000 --expansions sv9 --cache-html
+
+# Scrape specific card IDs
+python scrapers/src/japanese_card_scraper.py --ids 48717,48879,49536
+```
+
+**Output Format**:
+```json
+{
+  "webCardId": "jp49355",
+  "name": "ピカチュウ",
+  "language": "JA_JP",
+  "region": "JP",
+  "supertype": "POKEMON",
+  "subtype": "BASIC",
+  "variantType": "NORMAL",
+  "rarity": "COMMON",
+  "expansionCode": "sv9",
+  "collectorNumber": "001/100",
+  "hp": 60,
+  "pokemonTypes": ["LIGHTNING"],
+  "evolutionStage": "BASIC",
+  "attacks": [...],
+  "weakness": { "type": "FIGHTING", "value": "×2" },
+  "retreatCost": 1,
+  "imageUrl": "https://...",
+  "illustrator": "Mitsuhiro Arita",
+  "sourceUrl": "https://www.pokemon-card.com/...",
+  "scrapedAt": "2026-01-22T10:30:00"
+}
+```
+
+**Data Mapping**:
+- Supertype: `POKEMON`, `TRAINER`, `ENERGY`
+- Subtype: `BASIC`, `STAGE_1`, `STAGE_2`, `ITEM`, `SUPPORTER`, `STADIUM`, `TOOL`, etc.
+- Pokemon Types: `FIRE`, `WATER`, `LIGHTNING`, `GRASS`, `FIGHTING`, `PSYCHIC`, etc.
+- Rarity: `COMMON`, `UNCOMMON`, `RARE`, `ILLUSTRATION_RARE`, `SPECIAL_ILLUSTRATION_RARE`, etc.
+- Variant Types: `NORMAL`, `AR`, `SAR`, `SR`, `UR`, `SECRET_RARE`, etc.
+
+**File Organization**:
+- HTML cache: `data/html/japan/{card_id}.html`
+- Card data: `data/cards/japan/japanese_cards_{expansion}.json`
+
+### Image Downloader
+✅ **Status**: Available
+
+**Location**: `scrapers/src/download_images.py`
+
+**Features**:
+- Downloads card images from scraped JSON data
+- Organizes by region and expansion
+- Configurable retry logic and rate limiting
+
+**Usage**:
+```bash
+python scrapers/src/download_images.py --input data/cards/japan/japanese_cards_sv9.json
+```
+
+### Event Data Manager
+✅ **Status**: Available
+
+**Location**: `scrapers/src/save_event_data.py`
+
+**Features**:
+- Saves tournament and event data to organized JSON files
+- Separates raw and processed data
+- Metadata tracking (scrape date, source URL)
+
+### Pending Scrapers
+
+#### Hong Kong Card Scraper
+**Source**: Pokemon Asia website
+**Priority**: High
+**Notes**: Similar structure to Japanese scraper
+
+#### English Card Scraper
+**Source**: Pokemon.com/TCG
+**Priority**: Medium
+**Notes**: Different HTML structure, may require Selenium
+
+#### Tournament Scraper
+**Source**: Pokemon events website
+**Priority**: High
+**Notes**: Extracts tournament results, player standings, deck lists
+
+#### Price Scraper
+**Sources**: 
+- Yuyu-tei (Japan)
+- Hareruya (Japan)
+- CardMarket (Europe)
+- TCGPlayer (US)
+
+**Priority**: Medium
+**Notes**: Daily price snapshots, historical tracking
+
+### Scraper Integration Workflow
+
+1. **Scrape Cards** → Save JSON to `data/cards/{region}/`
+2. **Download Images** → Save to `data/images/cards/{region}/{expansion}/`
+3. **Import via API** → POST to `/api/v1/cards/import`
+4. **Map Expansions** → Create `RegionalExpansion` entries
+5. **Link to PrimaryCard** → Create/update `PrimaryCard` and `Card` records
+
+### Best Practices
+
+- **Always use HTML caching** for large scrapes to enable fast re-processing
+- **Respect rate limits** - default 2s between requests is safe for pokemon-card.com
+- **Use threading cautiously** - max 5 threads for live scraping, unlimited for cache-only
+- **Filter by expansion** to avoid re-scraping old data
+- **Check logs** in `data/logs/` for detailed scraping activity
+- **Validate data** before importing to database
+- **Handle duplicates** using `webCardId` unique constraint
+
+### Troubleshooting
+
+**Cards not scraping**:
+- Verify card IDs are valid on source website
+- Check internet connection
+- Increase `--min-request-interval` if rate limited
+
+**Missing attributes**:
+- Some cards have incomplete data on source website
+- Check raw HTML cache to verify source data
+- Adjust extraction logic if HTML structure changed
+
+**Slow scraping**:
+- Use `--cache-html` then `--cache-only --threads 20` for fast re-processing
+- Reduce `--min-request-interval` carefully (not recommended below 1.0s)
+
+---
+
+## �🔧 Development Commands
 
 ```bash
 # Install all dependencies
