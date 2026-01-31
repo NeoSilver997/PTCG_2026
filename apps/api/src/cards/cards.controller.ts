@@ -1,0 +1,104 @@
+import { 
+  Controller, 
+  Post, 
+  Get, 
+  Body, 
+  Param, 
+  Query,
+  HttpCode,
+  HttpStatus,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiTags, ApiOperation, ApiResponse, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import { CardsService } from './cards.service';
+import { ImportJapaneseCardsDto } from './dto/import-japanese-cards.dto';
+import { LanguageCode } from '@ptcg/database';
+
+@ApiTags('cards')
+@Controller('cards')
+export class CardsController {
+  constructor(private readonly cardsService: CardsService) {}
+
+  @Post('import/batch')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Batch import Japanese cards from JSON' })
+  @ApiResponse({ status: 200, description: 'Cards imported successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
+  async importJapaneseCards(@Body() dto: ImportJapaneseCardsDto) {
+    return await this.cardsService.importJapaneseCards(dto.cards);
+  }
+
+  @Post('import/file')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: 'Import Japanese cards from JSON file upload' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'File uploaded and processed' })
+  async importFromFile(@UploadedFile() file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+
+    try {
+      const cards = JSON.parse(file.buffer.toString('utf-8'));
+      
+      if (!Array.isArray(cards)) {
+        throw new BadRequestException('File must contain an array of cards');
+      }
+
+      return await this.cardsService.importJapaneseCards(cards);
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        throw new BadRequestException('Invalid JSON file');
+      }
+      throw error;
+    }
+  }
+
+  @Get()
+  @ApiOperation({ summary: 'Get cards with pagination and filters' })
+  @ApiResponse({ status: 200, description: 'Returns paginated cards' })
+  async getCards(
+    @Query('skip') skip?: number,
+    @Query('take') take?: number,
+    @Query('language') language?: LanguageCode,
+    @Query('expansionCode') expansionCode?: string,
+  ) {
+    return await this.cardsService.getCards({
+      skip: skip ? parseInt(skip.toString(), 10) : 0,
+      take: take ? parseInt(take.toString(), 10) : 50,
+      language,
+      expansionCode,
+    });
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get card by ID' })
+  @ApiResponse({ status: 200, description: 'Returns card details' })
+  @ApiResponse({ status: 404, description: 'Card not found' })
+  async getCardById(@Param('id') id: string) {
+    return await this.cardsService.getCardById(id);
+  }
+
+  @Get('web/:webCardId')
+  @ApiOperation({ summary: 'Get card by webCardId (e.g., jp47009)' })
+  @ApiResponse({ status: 200, description: 'Returns card details' })
+  @ApiResponse({ status: 404, description: 'Card not found' })
+  async getCardByWebCardId(@Param('webCardId') webCardId: string) {
+    return await this.cardsService.getCardByWebCardId(webCardId);
+  }
+}

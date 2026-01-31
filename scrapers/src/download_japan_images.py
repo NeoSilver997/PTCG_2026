@@ -27,6 +27,7 @@ class JapaneseImageDownloader:
         
         self.data_root = Path(data_root)
         self.images_dir = self.data_root / 'images' / 'cards' / 'japan'
+        self.legacy_dir = self.data_root / 'images' / 'cards' / 'japan_legacy' / 'japan'
         self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -62,9 +63,16 @@ class JapaneseImageDownloader:
         # Target file path
         file_path = target_dir / f"{web_card_id}.png"
         
-        # Skip if already exists
+        # Check if image exists in new download folder
         if file_path.exists():
-            logger.info(f"Skipping {web_card_id} (already exists)")
+            logger.info(f"Skipping {web_card_id} (already in new folder)")
+            return True
+        
+        # Check if image exists in legacy folder (jpn##### format)
+        legacy_id = web_card_id.replace('jp', 'jpn', 1)  # jp47009 -> jpn47009
+        legacy_path = self.legacy_dir / f"{legacy_id}.png"
+        if legacy_path.exists():
+            logger.info(f"Skipping {web_card_id} (exists in legacy as {legacy_id})")
             return True
         
         try:
