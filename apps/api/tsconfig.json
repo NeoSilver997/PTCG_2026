@@ -18,7 +18,7 @@
     "forceConsistentCasingInFileNames": true,
     "noFallthroughCasesInSwitch": true,
     "paths": {
-      "@ptcg/database": ["../../packages/database/src"],
+      "@ptcg/database": ["../../packages/database/node_modules/.prisma/client", "../../packages/database/src"],
       "@ptcg/shared-types": ["../../packages/shared-types/src"]
     }
   }

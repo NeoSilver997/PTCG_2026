@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "lib": ["ES2022"],
+    "outDir": "./dist",
+    "rootDir": "./",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "moduleResolution": "node",
+    "paths": {
+      "@ptcg/database": ["../packages/database/node_modules/.prisma/client", "../packages/database/src"],
+      "@ptcg/shared-types": ["../packages/shared-types/src"]
+    }
+  },
+  "include": ["*.ts"],
+  "exclude": ["node_modules"]
+}
