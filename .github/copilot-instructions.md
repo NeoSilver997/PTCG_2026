@@ -44,9 +44,17 @@ pnpm db:seed          # Seed database with test data
 
 ### Testing
 ```bash
-pnpm test             # Run all tests
-pnpm test:watch       # Watch mode for tests
+pnpm test                    # Run all tests across workspace
+pnpm test:watch              # Watch mode for tests
+
+# Test specific app
+cd apps/web
+npm test                     # Run all tests
+npm test -- page.test.tsx    # Run specific test file
+npm test:watch               # Watch mode
 ```
+
+**Test File Location:** `apps/web/src/app/cards/__tests__/page.test.tsx`
 
 ## Data Model Patterns
 
@@ -204,3 +212,158 @@ Redis TTL recommendations:
 - **Timestamp fields:** Always include `createdAt` and `updatedAt` on models
 - **Composite constraints:** Prefer `@@unique([field1, field2])` over multiple `@unique`
 - **Error arrays:** Store scraper errors as JSON array in `ScraperJob.errors`
+## Debugging & Testing
+
+### VS Code Launch Configurations
+
+The project includes preconfigured debug setups in [.vscode/launch.json](.vscode/launch.json):
+
+**Available Configurations:**
+1. **API Server** - Debug NestJS API on port 4000
+   - Uses `pnpm --filter @ptcg/api dev`
+   - Runs with ts-node and tsconfig-paths
+   - Auto-attaches debugger to Node process
+   
+2. **Web App** - Debug Next.js frontend on port 3001
+   - Full-stack debugging with server and client components
+   
+3. **Admin GUI** - Debug admin dashboard on port 3332
+
+**Usage:**
+- Press `F5` or use Debug panel → Select configuration → Start debugging
+- Set breakpoints by clicking line numbers
+- Use Debug Console for REPL evaluation
+
+### Running Tests
+
+**Frontend Tests (Jest + React Testing Library):**
+```bash
+cd apps/web
+npm test                     # Run all tests
+npm test -- --coverage       # With coverage report
+npm test -- page.test.tsx    # Run specific test file
+npm test:watch               # Watch mode for TDD
+```
+
+**Test Structure:**
+- Tests located in `__tests__/` directories next to source files
+- Mock API calls with `jest.mock('@/lib/api-client')`
+- Use `@testing-library/react` for component testing
+- All tests must use `render()` with `QueryClientProvider` wrapper
+
+**Common Test Patterns:**
+```typescript
+// Mock API client
+jest.mock('@/lib/api-client');
+const mockApiClient = apiClient as jest.Mocked<typeof apiClient>;
+
+// Setup test wrapper
+const createWrapper = () => {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } }
+  });
+  return ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
+};
+
+// Test filter functionality
+it('should filter by types', async () => {
+  mockApiClient.get.mockResolvedValue(mockResponse);
+  render(<CardsPage />, { wrapper: createWrapper() });
+  
+  await waitFor(() => {
+    expect(screen.getByText('Card Name')).toBeInTheDocument();
+  });
+  
+  const typesSelect = screen.getAllByRole('combobox')[1];
+  fireEvent.change(typesSelect, { target: { value: 'FIRE' } });
+  
+  await waitFor(() => {
+    expect(mockApiClient.get).toHaveBeenCalledWith(
+      expect.stringContaining('types=FIRE')
+    );
+  });
+});
+```
+
+### Debugging API Issues
+
+**Check API Server Status:**
+```bash
+# Test if API is running
+curl http://localhost:4000/api/v1/cards?take=1
+
+# Check specific filter
+curl "http://localhost:4000/api/v1/cards?types=GRASS&take=3"
+```
+
+**Common API Issues:**
+1. **Port 4000 in use** - Kill existing process:
+   ```powershell
+   Get-NetTCPConnection -LocalPort 4000 | Select-Object -ExpandProperty OwningProcess | Stop-Process -Force
+   ```
+
+2. **Prisma client not generated** - Always regenerate after schema changes:
+   ```bash
+   cd packages/database
+   pnpm db:generate
+   ```
+
+3. **Import validation errors** - Set `forbidNonWhitelisted: false` in `main.ts` for backward compatibility with scraped JSON
+
+### Database Debugging
+
+**Direct Database Queries:**
+```bash
+cd packages/database
+pnpm db:studio              # Open Prisma Studio GUI
+```
+
+**Test Filters with Node:**
+```javascript
+node -e "
+const { PrismaClient } = require('./packages/database/node_modules/.prisma/client');
+const prisma = new PrismaClient();
+prisma.card.findMany({ 
+  where: { types: { has: 'GRASS' } }, 
+  take: 3,
+  select: { webCardId: true, name: true, types: true }
+}).then(console.log).then(() => process.exit(0));
+"
+```
+
+**Utility Scripts:**
+- `packages/database/test-filters.js` - Test all card filters
+- `scrapers/update-existing-cards.mjs` - Update cards with types/supertype/rarity from JSON
+
+### Testing Checklist
+
+Before committing changes:
+- [ ] Run `npm test` - All tests pass
+- [ ] Run `pnpm build` - No TypeScript errors
+- [ ] Run `pnpm lint:fix` - Code style consistent
+- [ ] Test API endpoints manually with curl/Postman
+- [ ] Verify database schema is up-to-date (`pnpm db:generate`)
+- [ ] Check `.vscode/launch.json` works for debugging
+- [ ] Update test cases if adding new filters/features
+
+### Troubleshooting Tests
+
+**Issue: "Cannot find module '@/lib/api-client'"**
+- Solution: Check `tsconfig.json` has correct path mappings
+- Ensure Jest config includes `moduleNameMapper` for path aliases
+
+**Issue: "Tests hang/timeout"**
+- Solution: Mock all API calls with `mockApiClient.get.mockResolvedValue()`
+- Set `retry: false` in QueryClient default options
+- Use `waitFor()` for async assertions
+
+**Issue: "Combobox index wrong after adding filter"**
+- Solution: Update all test combobox indices when adding new dropdowns
+- Order: supertype[0], types[1], rarity[2], language[3]
+
+**Issue: "API returns 400 Bad Request during import"**
+- Solution: Check DTO accepts all fields from JSON (language, region, scrapedAt, etc.)
+- Set `forbidNonWhitelisted: false` in ValidationPipe
+- Verify `pokemonTypes` field is mapped to `types` in service
