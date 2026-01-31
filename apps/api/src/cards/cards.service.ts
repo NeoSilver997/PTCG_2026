@@ -153,9 +153,16 @@ export class CardsService {
       : VariantType.NORMAL;
 
     // Map Japanese data to Prisma enums
-    const supertype = cardData.supertype 
-      ? this.SUPERTYPE_MAP[cardData.supertype] 
-      : null;
+    // Handle both Japanese text and enum values for supertype
+    let supertype = null;
+    if (cardData.supertype) {
+      // First try as Japanese text
+      supertype = this.SUPERTYPE_MAP[cardData.supertype];
+      // If not found, try as enum value
+      if (!supertype && Object.values(Supertype).includes(cardData.supertype as Supertype)) {
+        supertype = cardData.supertype as Supertype;
+      }
+    }
 
     const subtypes = cardData.subtypes
       ? cardData.subtypes
@@ -163,15 +170,31 @@ export class CardsService {
           .filter(Boolean)
       : [];
 
-    const types = cardData.types
-      ? cardData.types
-          .map(t => this.TYPE_MAP[t])
+    // Handle both 'types' and 'pokemonTypes' fields
+    const typesArray = cardData.pokemonTypes || cardData.types || [];
+    const types = typesArray.length > 0
+      ? typesArray
+          .map(t => {
+            // First try as enum value (already in correct format)
+            if (Object.values(PokemonType).includes(t as PokemonType)) {
+              return t as PokemonType;
+            }
+            // Then try mapping from Japanese
+            return this.TYPE_MAP[t];
+          })
           .filter(Boolean)
       : [];
 
-    const rarity = cardData.rarity 
-      ? (this.RARITY_MAP[cardData.rarity.toUpperCase()] || null)
-      : null;
+    // Handle both short codes and enum values for rarity  
+    let rarity = null;
+    if (cardData.rarity) {
+      // First try as short code (C, U, R, etc.)
+      rarity = this.RARITY_MAP[cardData.rarity.toUpperCase()];
+      // If not found, try as enum value
+      if (!rarity && Object.values(Rarity).includes(cardData.rarity as Rarity)) {
+        rarity = cardData.rarity as Rarity;
+      }
+    }
 
     const hp = cardData.hp ? parseInt(cardData.hp, 10) : null;
 
@@ -224,6 +247,7 @@ export class CardsService {
     expansionCode?: string;
     name?: string;
     supertype?: string;
+    types?: string;
     rarity?: string;
   }): Promise<{
     data: any[];
@@ -234,7 +258,7 @@ export class CardsService {
       hasMore: boolean;
     };
   }> {
-    const { skip = 0, take = 50, language, expansionCode, name, supertype, rarity } = params;
+    const { skip = 0, take = 50, language, expansionCode, name, supertype, types, rarity } = params;
 
     const where: any = {};
     if (language) {
@@ -248,6 +272,11 @@ export class CardsService {
     }
     if (supertype) {
       where.supertype = supertype;
+    }
+    if (types) {
+      where.types = {
+        has: types,
+      };
     }
     if (rarity) {
       where.rarity = rarity;

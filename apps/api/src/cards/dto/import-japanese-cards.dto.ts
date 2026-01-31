@@ -15,9 +15,11 @@ export class JapaneseCardDto {
   @IsNotEmpty()
   expansionCode: string;
 
-  @ApiProperty({ example: '001' })
-  @IsNotEmpty()
-  cardNumber: string;
+  @ApiProperty({ example: '001', required: false })
+  cardNumber?: string;
+
+  @ApiProperty({ example: '001/100', required: false })
+  collectorNumber?: string;
 
   @ApiProperty({ example: 'ポケモン', required: false })
   supertype?: string;
@@ -30,6 +32,9 @@ export class JapaneseCardDto {
 
   @ApiProperty({ example: ['草'], required: false, isArray: true })
   types?: string[];
+
+  @ApiProperty({ example: ['GRASS'], required: false, isArray: true })
+  pokemonTypes?: string[];
 
   @ApiProperty({ required: false })
   abilities?: any[];

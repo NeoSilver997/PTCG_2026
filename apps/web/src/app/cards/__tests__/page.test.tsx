@@ -167,12 +167,31 @@ describe('CardsPage', () => {
       expect(screen.getByText('基本鋼エネルギー')).toBeInTheDocument();
     });
     
-    const raritySelect = screen.getAllByRole('combobox')[1];
+    const raritySelect = screen.getAllByRole('combobox')[2];
     fireEvent.change(raritySelect, { target: { value: 'COMMON' } });
     
     await waitFor(() => {
       expect(mockApiClient.get).toHaveBeenCalledWith(
         expect.stringContaining('rarity=COMMON')
+      );
+    });
+  });
+
+  it('should filter by types', async () => {
+    mockApiClient.get.mockResolvedValue(mockCardsResponse);
+    
+    render(<CardsPage />, { wrapper: createWrapper() });
+    
+    await waitFor(() => {
+      expect(screen.getByText('基本鋼エネルギー')).toBeInTheDocument();
+    });
+    
+    const typesSelect = screen.getAllByRole('combobox')[1];
+    fireEvent.change(typesSelect, { target: { value: 'FIRE' } });
+    
+    await waitFor(() => {
+      expect(mockApiClient.get).toHaveBeenCalledWith(
+        expect.stringContaining('types=FIRE')
       );
     });
   });
@@ -186,7 +205,7 @@ describe('CardsPage', () => {
       expect(screen.getByText('基本鋼エネルギー')).toBeInTheDocument();
     });
     
-    const languageSelect = screen.getAllByRole('combobox')[2];
+    const languageSelect = screen.getAllByRole('combobox')[3];
     fireEvent.change(languageSelect, { target: { value: 'EN_US' } });
     
     await waitFor(() => {
@@ -301,8 +320,8 @@ describe('CardsPage', () => {
     const supertypeSelect = screen.getAllByRole('combobox')[0];
     fireEvent.change(supertypeSelect, { target: { value: 'POKEMON' } });
     
-    // Set language
-    const languageSelect = screen.getAllByRole('combobox')[2];
+    // Set language (4th dropdown: supertype, types, rarity, language)
+    const languageSelect = screen.getAllByRole('combobox')[3];
     fireEvent.change(languageSelect, { target: { value: 'JA_JP' } });
     
     await waitFor(() => {

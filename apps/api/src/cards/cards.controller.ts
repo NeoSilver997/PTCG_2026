@@ -79,6 +79,7 @@ export class CardsController {
     @Query('expansionCode') expansionCode?: string,
     @Query('name') name?: string,
     @Query('supertype') supertype?: string,
+    @Query('types') types?: string,
     @Query('rarity') rarity?: string,
   ) {
     return await this.cardsService.getCards({
@@ -88,6 +89,7 @@ export class CardsController {
       expansionCode,
       name,
       supertype,
+      types,
       rarity,
     });
   }

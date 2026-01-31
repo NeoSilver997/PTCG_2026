@@ -22,6 +22,7 @@ interface Card {
 interface Filters {
   search: string;
   supertype: string;
+  types: string;
   rarity: string;
   language: string;
 }
@@ -34,6 +35,7 @@ async function fetchCards(skip: number, take: number, filters: Filters) {
   
   if (filters.search) params.append('name', filters.search);
   if (filters.supertype) params.append('supertype', filters.supertype);
+  if (filters.types) params.append('types', filters.types);
   if (filters.rarity) params.append('rarity', filters.rarity);
   if (filters.language) params.append('language', filters.language);
   
@@ -45,11 +47,12 @@ export default function CardsPage() {
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState('');
   const [supertype, setSupertype] = useState('');
+  const [types, setTypes] = useState('');
   const [rarity, setRarity] = useState('');
   const [language, setLanguage] = useState('');
   const pageSize = 50;
   
-  const filters: Filters = { search, supertype, rarity, language };
+  const filters: Filters = { search, supertype, types, rarity, language };
 
   const { data: cards, isLoading, error } = useQuery({
     queryKey: ['cards', page, filters],
@@ -89,7 +92,7 @@ export default function CardsPage() {
             </div>
 
             {/* Search and Filters */}
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-5 gap-4">
               <div className="col-span-1">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -113,6 +116,27 @@ export default function CardsPage() {
                   <option value="POKEMON">寶可夢</option>
                   <option value="TRAINER">訓練師</option>
                   <option value="ENERGY">能量</option>
+                </select>
+              </div>
+
+              <div>
+                <select 
+                  value={types}
+                  onChange={(e) => { setTypes(e.target.value); handleFilterChange(); }}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">所有屬性</option>
+                  <option value="COLORLESS">無色</option>
+                  <option value="DARKNESS">惡</option>
+                  <option value="DRAGON">龍</option>
+                  <option value="FAIRY">妖精</option>
+                  <option value="FIGHTING">格鬥</option>
+                  <option value="FIRE">火</option>
+                  <option value="GRASS">草</option>
+                  <option value="LIGHTNING">雷</option>
+                  <option value="METAL">鋼</option>
+                  <option value="PSYCHIC">超</option>
+                  <option value="WATER">水</option>
                 </select>
               </div>
 
