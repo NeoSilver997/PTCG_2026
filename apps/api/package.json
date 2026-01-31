@@ -4,8 +4,10 @@
   "description": "NestJS REST API for PTCG CardDB",
   "scripts": {
     "build": "nest build",
-    "dev": "nest start --watch",
+    "dev": "ts-node -r tsconfig-paths/register src/main.ts",
     "start": "node dist/apps/api/src/main",
+    "start:dev": "ts-node -r tsconfig-paths/register src/main.ts --watch",
+    "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/apps/api/src/main",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",

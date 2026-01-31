@@ -19,20 +19,47 @@ interface Card {
   supertype: string | null;
 }
 
-async function fetchCards(skip: number, take: number) {
-  const { data } = await apiClient.get(`/cards?skip=${skip}&take=${take}`);
+interface Filters {
+  search: string;
+  supertype: string;
+  rarity: string;
+  language: string;
+}
+
+async function fetchCards(skip: number, take: number, filters: Filters) {
+  const params = new URLSearchParams({
+    skip: skip.toString(),
+    take: take.toString(),
+  });
+  
+  if (filters.search) params.append('name', filters.search);
+  if (filters.supertype) params.append('supertype', filters.supertype);
+  if (filters.rarity) params.append('rarity', filters.rarity);
+  if (filters.language) params.append('language', filters.language);
+  
+  const { data } = await apiClient.get(`/cards?${params.toString()}`);
   return data.data; // Extract the cards array from the API response
 }
 
 export default function CardsPage() {
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState('');
+  const [supertype, setSupertype] = useState('');
+  const [rarity, setRarity] = useState('');
+  const [language, setLanguage] = useState('');
   const pageSize = 50;
+  
+  const filters: Filters = { search, supertype, rarity, language };
 
   const { data: cards, isLoading, error } = useQuery({
-    queryKey: ['cards', page],
-    queryFn: () => fetchCards(page * pageSize, pageSize),
+    queryKey: ['cards', page, filters],
+    queryFn: () => fetchCards(page * pageSize, pageSize, filters),
   });
+  
+  // Reset to first page when filters change
+  const handleFilterChange = () => {
+    setPage(0);
+  };
 
   // Debug logging
   console.log('Cards data:', cards);
@@ -70,14 +97,18 @@ export default function CardsPage() {
                     type="text"
                     placeholder="搜尋卡片名稱..."
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => { setSearch(e.target.value); handleFilterChange(); }}
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
               </div>
               
               <div>
-                <select className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                <select 
+                  value={supertype}
+                  onChange={(e) => { setSupertype(e.target.value); handleFilterChange(); }}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
                   <option value="">所有超級類型</option>
                   <option value="POKEMON">寶可夢</option>
                   <option value="TRAINER">訓練師</option>
@@ -86,7 +117,11 @@ export default function CardsPage() {
               </div>
 
               <div>
-                <select className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                <select 
+                  value={rarity}
+                  onChange={(e) => { setRarity(e.target.value); handleFilterChange(); }}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
                   <option value="">所有稀有度</option>
                   <option value="COMMON">C - 普通</option>
                   <option value="UNCOMMON">U - 非普通</option>
@@ -98,7 +133,11 @@ export default function CardsPage() {
               </div>
 
               <div>
-                <select className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                <select 
+                  value={language}
+                  onChange={(e) => { setLanguage(e.target.value); handleFilterChange(); }}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
                   <option value="">所有語言</option>
                   <option value="JA_JP">日文</option>
                   <option value="ZH_HK">繁體中文</option>

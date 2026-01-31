@@ -222,6 +222,9 @@ export class CardsService {
     take?: number;
     language?: LanguageCode;
     expansionCode?: string;
+    name?: string;
+    supertype?: string;
+    rarity?: string;
   }): Promise<{
     data: any[];
     pagination: {
@@ -231,11 +234,23 @@ export class CardsService {
       hasMore: boolean;
     };
   }> {
-    const { skip = 0, take = 50, language, expansionCode } = params;
+    const { skip = 0, take = 50, language, expansionCode, name, supertype, rarity } = params;
 
     const where: any = {};
     if (language) {
       where.language = language;
+    }
+    if (name) {
+      where.name = {
+        contains: name,
+        mode: 'insensitive',
+      };
+    }
+    if (supertype) {
+      where.supertype = supertype;
+    }
+    if (rarity) {
+      where.rarity = rarity;
     }
 
     const [cards, total] = await Promise.all([

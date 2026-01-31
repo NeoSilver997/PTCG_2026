@@ -77,12 +77,18 @@ export class CardsController {
     @Query('take') take?: number,
     @Query('language') language?: LanguageCode,
     @Query('expansionCode') expansionCode?: string,
+    @Query('name') name?: string,
+    @Query('supertype') supertype?: string,
+    @Query('rarity') rarity?: string,
   ) {
     return await this.cardsService.getCards({
       skip: skip ? parseInt(skip.toString(), 10) : 0,
       take: take ? parseInt(take.toString(), 10) : 50,
       language,
       expansionCode,
+      name,
+      supertype,
+      rarity,
     });
   }
 
