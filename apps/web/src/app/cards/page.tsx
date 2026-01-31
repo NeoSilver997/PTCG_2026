@@ -21,7 +21,7 @@ interface Card {
 
 async function fetchCards(skip: number, take: number) {
   const { data } = await apiClient.get(`/cards?skip=${skip}&take=${take}`);
-  return data;
+  return data.data; // Extract the cards array from the API response
 }
 
 export default function CardsPage() {
@@ -29,10 +29,15 @@ export default function CardsPage() {
   const [search, setSearch] = useState('');
   const pageSize = 50;
 
-  const { data: cards, isLoading } = useQuery({
+  const { data: cards, isLoading, error } = useQuery({
     queryKey: ['cards', page],
     queryFn: () => fetchCards(page * pageSize, pageSize),
   });
+
+  // Debug logging
+  console.log('Cards data:', cards);
+  console.log('Is loading:', isLoading);
+  console.log('Error:', error);
 
   return (
     <div className="min-h-screen">
@@ -135,13 +140,19 @@ export default function CardsPage() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {isLoading ? (
+                {error ? (
+                  <tr>
+                    <td colSpan={8} className="px-6 py-12 text-center text-red-500">
+                      錯誤: {error instanceof Error ? error.message : '無法載入卡片'}
+                    </td>
+                  </tr>
+                ) : isLoading ? (
                   <tr>
                     <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
                       載入中...
                     </td>
                   </tr>
-                ) : cards?.length === 0 ? (
+                ) : !cards || cards.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
                       沒有找到卡片
@@ -154,9 +165,12 @@ export default function CardsPage() {
                         <div className="w-16 h-22 bg-gray-100 rounded flex items-center justify-center">
                           {card.imageUrl ? (
                             <img
-                              src={`${process.env.NEXT_PUBLIC_API_URL}/cards/image/${card.webCardId}`}
+                              src={`${process.env.NEXT_PUBLIC_API_URL}/storage/cards/${card.webCardId}/image`}
                               alt={card.name}
                               className="w-full h-full object-cover rounded"
+                              onError={(e) => {
+                                e.currentTarget.src = card.imageUrl || '';
+                              }}
                             />
                           ) : (
                             <span className="text-gray-400 text-xs">無圖片</span>
