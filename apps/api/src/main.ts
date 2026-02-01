@@ -19,9 +19,13 @@ async function bootstrap() {
   app.enableCors({
     origin: process.env.ALLOWED_ORIGINS?.split(',') || [
       'http://localhost:3001',
+      'http://127.0.0.1:3001',
       'http://localhost:3332',
+      'http://127.0.0.1:3332',
       'http://localhost:3333',
+      'http://127.0.0.1:3333',
       'http://localhost:3334',
+      'http://127.0.0.1:3334',
     ],
     credentials: true,
   });
