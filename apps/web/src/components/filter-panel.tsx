@@ -18,7 +18,7 @@ interface FilterPanelProps {
     artist?: string;
     regulationMark?: string;
     hasAbilities?: string;
-    hasAttacks?: string;
+    hasAttackText?: string;
   };
   onFilterChange: (filters: any) => void;
 }
@@ -47,14 +47,14 @@ export function FilterPanel({ filters, onFilterChange }: FilterPanelProps) {
       artist: '',
       regulationMark: '',
       hasAbilities: '',
-      hasAttacks: '',
+      hasAttackText: '',
     });
   };
   
   const hasActiveFilters = filters.search || filters.supertype || filters.types || 
     filters.rarity || filters.language || filters.webCardId || filters.subtypes ||
     filters.variantType || filters.minHp || filters.maxHp || filters.artist ||
-    filters.regulationMark || filters.hasAbilities || filters.hasAttacks;
+    filters.regulationMark || filters.hasAbilities || filters.hasAttackText;
   
   return (
     <div className="bg-white rounded-lg shadow-md p-4 mb-6">
@@ -316,19 +316,19 @@ export function FilterPanel({ filters, onFilterChange }: FilterPanelProps) {
               </select>
             </div>
 
-            {/* Has Attacks */}
+            {/* Has Attack Text */}
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">
-                有招式
+                招式有特性
               </label>
               <select
-                value={filters.hasAttacks || ''}
-                onChange={(e) => updateFilter('hasAttacks', e.target.value)}
+                value={filters.hasAttackText || ''}
+                onChange={(e) => updateFilter('hasAttackText', e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900"
               >
                 <option value="" className="text-gray-900">全部</option>
-                <option value="true" className="text-gray-900">有招式</option>
-                <option value="false" className="text-gray-900">無招式</option>
+                <option value="true" className="text-gray-900">有特性描述</option>
+                <option value="false" className="text-gray-900">無特性描述</option>
               </select>
             </div>
           </div>

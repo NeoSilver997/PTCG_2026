@@ -112,9 +112,9 @@ export class FindAllCardsDto {
   @IsBoolean()
   hasAbilities?: boolean;
 
-  @ApiProperty({ required: false, type: Boolean })
+  @ApiProperty({ required: false, type: Boolean, description: 'Filter for attacks with text/description' })
   @IsOptional()
   @Type(() => Boolean)
   @IsBoolean()
-  hasAttacks?: boolean;
+  hasAttackText?: boolean;
 }

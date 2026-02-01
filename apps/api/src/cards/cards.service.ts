@@ -267,7 +267,7 @@ export class CardsService {
     artist?: string;
     regulationMark?: string;
     hasAbilities?: boolean;
-    hasAttacks?: boolean;
+    hasAttackText?: boolean;
   }): Promise<{
     data: any[];
     pagination: {
@@ -297,7 +297,7 @@ export class CardsService {
       artist,
       regulationMark,
       hasAbilities,
-      hasAttacks,
+      hasAttackText,
     } = params;
 
     const where: any = {};
@@ -328,7 +328,7 @@ export class CardsService {
     // New advanced filters
     if (subtypes) {
       where.subtypes = {
-        has: subtypes,
+        hasSome: [subtypes],
       };
     }
     if (ruleBox) {
@@ -362,9 +362,13 @@ export class CardsService {
         where.abilities = null;
       }
     }
-    if (hasAttacks !== undefined) {
-      if (hasAttacks) {
-        where.attacks = { not: null };
+    if (hasAttackText !== undefined) {
+      // Filter for attacks that have text/description
+      if (hasAttackText) {
+        where.attacks = {
+          path: ['$[*].text'],
+          not: null,
+        };
       } else {
         where.attacks = null;
       }

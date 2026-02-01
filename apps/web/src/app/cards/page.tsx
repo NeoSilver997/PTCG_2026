@@ -38,7 +38,7 @@ interface Filters {
   artist?: string;
   regulationMark?: string;
   hasAbilities?: string;
-  hasAttacks?: string;
+  hasAttackText?: string;
 }
 
 async function fetchCards(skip: number, take: number, filters: Filters) {
@@ -64,7 +64,7 @@ async function fetchCards(skip: number, take: number, filters: Filters) {
   if (filters.artist) params.append('artist', filters.artist);
   if (filters.regulationMark) params.append('regulationMark', filters.regulationMark);
   if (filters.hasAbilities && filters.hasAbilities !== '') params.append('hasAbilities', filters.hasAbilities);
-  if (filters.hasAttacks && filters.hasAttacks !== '') params.append('hasAttacks', filters.hasAttacks);
+  if (filters.hasAttackText && filters.hasAttackText !== '') params.append('hasAttackText', filters.hasAttackText);
   
   const { data } = await apiClient.get(`/cards?${params.toString()}`);
   return data; // Return full response with data and pagination
@@ -90,7 +90,7 @@ export default function CardsPage() {
     artist: '',
     regulationMark: '',
     hasAbilities: '',
-    hasAttacks: '',
+    hasAttackText: '',
   });
   const pageSize = 48;
 
@@ -223,7 +223,7 @@ export default function CardsPage() {
                 artist: '',
                 regulationMark: '',
                 hasAbilities: '',
-                hasAttacks: '',
+                hasAttackText: '',
               })}
               className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >
