@@ -103,6 +103,8 @@ export default function CardsPage() {
                   onChange={(e) => setFilters({ ...filters, sortBy: e.target.value })}
                   className="border-none bg-transparent text-sm focus:outline-none focus:ring-0"
                 >
+                  <option value="id">ID</option>
+                  <option value="webCardId">卡號</option>
                   <option value="createdAt">建立時間</option>
                   <option value="updatedAt">更新時間</option>
                   <option value="name">卡片名稱</option>

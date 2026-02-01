@@ -250,6 +250,7 @@ export class CardsService {
   async getCards(params: {
     skip?: number;
     take?: number;
+    webCardId?: string;
     language?: LanguageCode;
     expansionCode?: string;
     name?: string;
@@ -279,6 +280,7 @@ export class CardsService {
     const { 
       skip = 0, 
       take = 50, 
+      webCardId,
       language, 
       expansionCode, 
       name, 
@@ -301,6 +303,9 @@ export class CardsService {
     const where: any = {};
     
     // Existing filters
+    if (webCardId) {
+      where.webCardId = webCardId;
+    }
     if (language) {
       where.language = language;
     }
@@ -367,7 +372,7 @@ export class CardsService {
 
     // Dynamic sorting
     const orderBy: any = {};
-    const validSortFields = ['name', 'hp', 'createdAt', 'updatedAt', 'rarity', 'supertype'];
+    const validSortFields = ['id', 'webCardId', 'name', 'hp', 'createdAt', 'updatedAt', 'rarity', 'supertype'];
     if (sortBy && validSortFields.includes(sortBy)) {
       orderBy[sortBy] = sortOrder || 'desc';
     } else {
