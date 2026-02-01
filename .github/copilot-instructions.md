@@ -10,13 +10,12 @@
 ```
 apps/
   api/              # NestJS REST API (Port 4000)
-  admin-gui/        # Admin dashboard (Port 3332)
-  private-gui/      # Local single-user app (Port 3333)
-  public-gui/       # Multi-user web app (Port 3334)
+  web/              # Next.js frontend (Port 3001)
 packages/
   database/         # Prisma schema + client (@ptcg/database)
   shared-types/     # TypeScript types (@ptcg/shared-types)
-  ui-components/    # Shared React components
+scrapers/           # Python scrapers for card/tournament data
+data/               # Persistent data storage (cards, images, events)
 ```
 
 **Workspace package imports:** Use `@ptcg/database` and `@ptcg/shared-types` aliases (defined in each app's tsconfig.json).
@@ -41,6 +40,31 @@ pnpm db:seed          # Seed database with test data
 ```
 
 **Critical:** After modifying `schema.prisma`, always run `pnpm db:generate` before building or running apps.
+
+### Scraper & Import Workflows
+
+**Japanese Card Import Pipeline:**
+```powershell
+# 1. Scrape cards with HTML caching (for debugging/re-processing)
+cd scrapers
+python src/japanese_card_scraper.py --id-range 48000 100 --cache-html
+
+# 2. Fast offline re-processing (20 threads, cache-only)
+python src/japanese_card_scraper.py --id-range 48000 1000 --cache-only --threads 20
+
+# 3. Import JSON to database via API
+python import_cards_to_api.py --file "../data/cards/japan/japanese_cards_40k_sv9.json"
+
+# 4. Update existing cards with types/supertype/rarity (if schema evolved)
+node update-existing-cards.mjs
+```
+
+**Data Storage Structure:**
+- `data/cards/{region}/` - Scraped card JSON organized by region
+- `data/images/cards/{region}/{expansion}/` - Card images (named by webCardId)
+- `data/html/{region}/` - Cached HTML for debugging/re-parsing
+- `data/events/` - Tournament data (raw, processed, archives)
+- `data/decks/` - Tournament decks and user exports
 
 ### Testing
 ```bash
@@ -140,17 +164,67 @@ All relationships use `onDelete: Cascade` to maintain referential integrity when
 
 ## Scraper Integration
 
+### Japanese Card Scraper (Production-Ready)
+**Location:** `scrapers/src/japanese_card_scraper.py`
+
+**Key Features:**
+- Multi-threaded with configurable rate limiting (default: 2s between requests)
+- HTML caching for fast offline re-processing (cache-only mode)
+- Automatic expansion grouping (outputs `japanese_cards_{expansion}.json`)
+- Maps Japanese rarity codes to database enums (AR→ILLUSTRATION_RARE, SAR→SPECIAL_ILLUSTRATION_RARE, etc.)
+
+**Critical Pattern - Always Use HTML Caching:**
+```powershell
+# Step 1: Initial scrape (creates HTML cache for debugging)
+python src/japanese_card_scraper.py --id-range 48000 100 --cache-html
+
+# Step 2: Fast re-processing if data mapping changes
+python src/japanese_card_scraper.py --id-range 48000 1000 --cache-only --threads 20
+```
+
+**Data Mapping to Prisma Schema:**
+- `pokemonTypes` (scraper) → `types` (database) - Array of `PokemonType` enum
+- `rarity` - Maps JP codes: `C`→`COMMON`, `U`→`UNCOMMON`, `RR`→`DOUBLE_RARE`, `AR`→`ILLUSTRATION_RARE`, `SAR`→`SPECIAL_ILLUSTRATION_RARE`, `SR`→`ULTRA_RARE`, `UR`→`HYPER_RARE`
+- `supertype` - `POKEMON`, `TRAINER`, `ENERGY`
+- `subtype` - `BASIC`, `STAGE_1`, `STAGE_2`, `ITEM`, `SUPPORTER`, `STADIUM`, `TOOL`
+
+### Import Pipeline to Database
+**Script:** `scrapers/import_cards_to_api.py`
+
+**Workflow:**
+1. Reads JSON from `data/cards/{region}/`
+2. Batches cards (default: 100 per request)
+3. POSTs to `http://localhost:4000/api/v1/cards/import/batch`
+4. Logs success/failure with detailed error reporting
+
+**Usage:**
+```powershell
+# Import all Japanese cards
+python import_cards_to_api.py
+
+# Import specific file with custom batch size
+python import_cards_to_api.py --file "../data/cards/japan/japanese_cards_40k_sv9.json" --batch-size 50
+```
+
+**Output Format:**
+```
+Files processed:  94
+Total cards:      9,593
+Successfully imported: 9,593
+Failed:           0
+```
+
+### Defensive Parsing (FR-5)
+- HTML caching system: Stores raw HTML in `data/html/{region}/` for re-parsing without re-scraping
+- Error handling: Continues scraping on individual card failures, logs errors to file
+- Duplicate prevention: API checks `webCardId` unique constraint before insert
+- Validation: Pre-insert validation at DTO level with `class-validator`
+
 ### Scraper Job Tracking
 Jobs logged in `ScraperJob` model with:
 - `source` - Region (HK, JP, EN)
 - `status` - PENDING, RUNNING, SUCCESS, FAILED
 - `errors` - JSON array of error objects
-
-### Defensive Parsing (FR-5)
-- `parseCardDetailsSafe()` - Error handling wrapper
-- `validateScrapedData()` - Pre-insert validation
-- `detectDuplicateCard()` - Check `webCardId` before insert
-- `generateFailureReport()` - Structured error logging
 
 ## Tournament & Deck System
 
