@@ -63,8 +63,8 @@ async function fetchCards(skip: number, take: number, filters: Filters) {
   if (filters.maxHp) params.append('maxHp', filters.maxHp);
   if (filters.artist) params.append('artist', filters.artist);
   if (filters.regulationMark) params.append('regulationMark', filters.regulationMark);
-  if (filters.hasAbilities) params.append('hasAbilities', filters.hasAbilities);
-  if (filters.hasAttacks) params.append('hasAttacks', filters.hasAttacks);
+  if (filters.hasAbilities && filters.hasAbilities !== '') params.append('hasAbilities', filters.hasAbilities);
+  if (filters.hasAttacks && filters.hasAttacks !== '') params.append('hasAttacks', filters.hasAttacks);
   
   const { data } = await apiClient.get(`/cards?${params.toString()}`);
   return data; // Return full response with data and pagination

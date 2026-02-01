@@ -109,12 +109,12 @@ export function FilterPanel({ filters, onFilterChange }: FilterPanelProps) {
           <select
             value={filters.supertype}
             onChange={(e) => updateFilter('supertype', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900"
           >
-            <option value="">全部</option>
-            <option value="POKEMON">寶可夢</option>
-            <option value="TRAINER">訓練師</option>
-            <option value="ENERGY">能量</option>
+            <option value="" className="text-gray-900">全部</option>
+            <option value="POKEMON" className="text-gray-900">寶可夢</option>
+            <option value="TRAINER" className="text-gray-900">訓練師</option>
+            <option value="ENERGY" className="text-gray-900">能量</option>
           </select>
         </div>
         
@@ -125,20 +125,20 @@ export function FilterPanel({ filters, onFilterChange }: FilterPanelProps) {
           <select
             value={filters.types}
             onChange={(e) => updateFilter('types', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900"
           >
-            <option value="">全部</option>
-            <option value="COLORLESS">無色</option>
-            <option value="DARKNESS">惡</option>
-            <option value="DRAGON">龍</option>
-            <option value="FAIRY">妖精</option>
-            <option value="FIGHTING">格鬥</option>
-            <option value="FIRE">火</option>
-            <option value="GRASS">草</option>
-            <option value="LIGHTNING">雷</option>
-            <option value="METAL">鋼</option>
-            <option value="PSYCHIC">超</option>
-            <option value="WATER">水</option>
+            <option value="" className="text-gray-900">全部</option>
+            <option value="COLORLESS" className="text-gray-900">無色</option>
+            <option value="DARKNESS" className="text-gray-900">惡</option>
+            <option value="DRAGON" className="text-gray-900">龍</option>
+            <option value="FAIRY" className="text-gray-900">妖精</option>
+            <option value="FIGHTING" className="text-gray-900">格鬥</option>
+            <option value="FIRE" className="text-gray-900">火</option>
+            <option value="GRASS" className="text-gray-900">草</option>
+            <option value="LIGHTNING" className="text-gray-900">雷</option>
+            <option value="METAL" className="text-gray-900">鋼</option>
+            <option value="PSYCHIC" className="text-gray-900">超</option>
+            <option value="WATER" className="text-gray-900">水</option>
           </select>
         </div>
         
@@ -149,19 +149,19 @@ export function FilterPanel({ filters, onFilterChange }: FilterPanelProps) {
           <select
             value={filters.rarity}
             onChange={(e) => updateFilter('rarity', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900"
           >
-            <option value="">全部</option>
-            <option value="COMMON">C - 普通</option>
-            <option value="UNCOMMON">U - 非普通</option>
-            <option value="RARE">R - 稀有</option>
-            <option value="DOUBLE_RARE">RR - 雙倍稀有</option>
-            <option value="ULTRA_RARE">RRR - 三倍稀有</option>
-            <option value="ILLUSTRATION_RARE">AR - 插圖稀有</option>
-            <option value="SPECIAL_ILLUSTRATION_RARE">SAR - 特別插圖稀有</option>
-            <option value="HYPER_RARE">UR - 超級稀有</option>
-            <option value="SECRET_RARE">SR - 秘藏稀有</option>
-            <option value="SHINY_RARE">閃卡稀有</option>
+            <option value="" className="text-gray-900">全部</option>
+            <option value="COMMON" className="text-gray-900">C - 普通</option>
+            <option value="UNCOMMON" className="text-gray-900">U - 非普通</option>
+            <option value="RARE" className="text-gray-900">R - 稀有</option>
+            <option value="DOUBLE_RARE" className="text-gray-900">RR - 雙倍稀有</option>
+            <option value="ULTRA_RARE" className="text-gray-900">RRR - 三倍稀有</option>
+            <option value="ILLUSTRATION_RARE" className="text-gray-900">AR - 插圖稀有</option>
+            <option value="SPECIAL_ILLUSTRATION_RARE" className="text-gray-900">SAR - 特別插圖稀有</option>
+            <option value="HYPER_RARE" className="text-gray-900">UR - 超級稀有</option>
+            <option value="SECRET_RARE" className="text-gray-900">SR - 秘藏稀有</option>
+            <option value="SHINY_RARE" className="text-gray-900">閃卡稀有</option>
           </select>
         </div>
         
@@ -172,12 +172,12 @@ export function FilterPanel({ filters, onFilterChange }: FilterPanelProps) {
           <select
             value={filters.language}
             onChange={(e) => updateFilter('language', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900"
           >
-            <option value="">全部</option>
-            <option value="JA_JP">日文</option>
-            <option value="ZH_HK">繁體中文</option>
-            <option value="EN_US">英文</option>
+            <option value="" className="text-gray-900">全部</option>
+            <option value="JA_JP" className="text-gray-900">日文</option>
+            <option value="ZH_HK" className="text-gray-900">繁體中文</option>
+            <option value="EN_US" className="text-gray-900">英文</option>
           </select>
         </div>
       </div>
@@ -208,19 +208,19 @@ export function FilterPanel({ filters, onFilterChange }: FilterPanelProps) {
               <select
                 value={filters.subtypes || ''}
                 onChange={(e) => updateFilter('subtypes', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900"
               >
-                <option value="">全部</option>
-                <option value="BASIC">基本寶可夢</option>
-                <option value="STAGE_1">1階進化</option>
-                <option value="STAGE_2">2階進化</option>
-                <option value="EX">EX</option>
-                <option value="V">V</option>
-                <option value="VMAX">VMAX</option>
-                <option value="ITEM">物品</option>
-                <option value="SUPPORTER">支援者</option>
-                <option value="STADIUM">競技場</option>
-                <option value="TOOL">寶可夢道具</option>
+                <option value="" className="text-gray-900">全部</option>
+                <option value="BASIC" className="text-gray-900">基本寶可夢</option>
+                <option value="STAGE_1" className="text-gray-900">1階進化</option>
+                <option value="STAGE_2" className="text-gray-900">2階進化</option>
+                <option value="EX" className="text-gray-900">EX</option>
+                <option value="V" className="text-gray-900">V</option>
+                <option value="VMAX" className="text-gray-900">VMAX</option>
+                <option value="ITEM" className="text-gray-900">物品</option>
+                <option value="SUPPORTER" className="text-gray-900">支援者</option>
+                <option value="STADIUM" className="text-gray-900">競技場</option>
+                <option value="TOOL" className="text-gray-900">寶可夢道具</option>
               </select>
             </div>
 
@@ -232,13 +232,13 @@ export function FilterPanel({ filters, onFilterChange }: FilterPanelProps) {
               <select
                 value={filters.variantType || ''}
                 onChange={(e) => updateFilter('variantType', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900"
               >
-                <option value="">全部</option>
-                <option value="NORMAL">普通</option>
-                <option value="HOLO">閃卡</option>
-                <option value="REVERSE_HOLO">反閃</option>
-                <option value="COSMOS_HOLO">宇宙閃</option>
+                <option value="" className="text-gray-900">全部</option>
+                <option value="NORMAL" className="text-gray-900">普通</option>
+                <option value="HOLO" className="text-gray-900">閃卡</option>
+                <option value="REVERSE_HOLO" className="text-gray-900">反閃</option>
+                <option value="COSMOS_HOLO" className="text-gray-900">宇宙閃</option>
               </select>
             </div>
 
@@ -303,32 +303,32 @@ export function FilterPanel({ filters, onFilterChange }: FilterPanelProps) {
             {/* Has Abilities */}
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">
-                特性
+                有特性
               </label>
               <select
                 value={filters.hasAbilities || ''}
                 onChange={(e) => updateFilter('hasAbilities', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900"
               >
-                <option value="">全部</option>
-                <option value="true">有特性</option>
-                <option value="false">無特性</option>
+                <option value="" className="text-gray-900">全部</option>
+                <option value="true" className="text-gray-900">有特性</option>
+                <option value="false" className="text-gray-900">無特性</option>
               </select>
             </div>
 
             {/* Has Attacks */}
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">
-                招式
+                有招式
               </label>
               <select
                 value={filters.hasAttacks || ''}
                 onChange={(e) => updateFilter('hasAttacks', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900"
               >
-                <option value="">全部</option>
-                <option value="true">有招式</option>
-                <option value="false">無招式</option>
+                <option value="" className="text-gray-900">全部</option>
+                <option value="true" className="text-gray-900">有招式</option>
+                <option value="false" className="text-gray-900">無招式</option>
               </select>
             </div>
           </div>
