@@ -225,7 +225,8 @@ model Card {
   abilities      Json?       // Array of ability objects
   attacks        Json?       // Array of attack objects
   rules          String[]
-  flavorText     String?
+  text           String?     // Trainer/Energy card effect text
+  flavorText     String?     // Pokemon flavor text (height, weight, description)
   
   // Card metadata
   artist         String?

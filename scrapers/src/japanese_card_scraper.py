@@ -762,13 +762,27 @@ class JapaneseCardScraper:
         if supertype == 'POKEMON':
             return None
         
-        # Look for paragraphs with effect text
+        # Method 1: Look for specific Trainer/Energy sections
+        for section_title in ['グッズ', 'サポート', 'スタジアム', 'ポケモンのどうぐ', '特殊エネルギー', '基本エネルギー']:
+            section = soup.find(['h2', 'h3'], string=re.compile(section_title))
+            if section:
+                # Get the next paragraph after the section title
+                next_p = section.find_next('p')
+                if next_p:
+                    text = next_p.get_text(strip=True)
+                    # Skip header/metadata paragraphs
+                    if text and len(text) > 15 and not text.startswith('高さ') and not text.startswith('重さ'):
+                        return text
+        
+        # Method 2: Look for paragraphs with effect-like keywords (fallback)
         for p in soup.find_all('p'):
             text = p.get_text(strip=True)
             if text and len(text) > 20:
                 # Check for effect-like keywords
                 if any(keyword in text for keyword in ['このカード', '自分の番', '相手の', 'ダメージ', 'ポケモン']):
-                    return text
+                    # Skip if it's flavor text indicators
+                    if not any(skip in text for skip in ['高さ：', '重さ：']):
+                        return text
         
         return None
 

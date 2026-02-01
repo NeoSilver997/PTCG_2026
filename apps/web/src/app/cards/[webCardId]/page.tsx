@@ -23,6 +23,7 @@ interface CardDetail {
   artist: string | null;
   regulationMark: string | null;
   ruleBox: string | null;
+  text: string | null; // For Trainer/Energy card text/description
   abilities: any;
   attacks: any;
   weaknesses: any;
@@ -247,6 +248,20 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                     <div className="text-sm text-gray-800 mt-1">{ability.text}</div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Trainer Card Text/Description */}
+            {card.supertype === 'TRAINER' && card.text && (
+              <div className="bg-white rounded-lg p-6 shadow-sm">
+                <h2 className="text-xl font-semibold mb-4 text-gray-900">
+                  {card.subtypes.includes('SUPPORTER') && '效果 (Supporter Effect)'}
+                  {card.subtypes.includes('ITEM') && '效果 (Item Effect)'}
+                  {card.subtypes.includes('STADIUM') && '效果 (Stadium Effect)'}
+                  {card.subtypes.includes('TOOL') && '效果 (Tool Effect)'}
+                  {!card.subtypes.includes('SUPPORTER') && !card.subtypes.includes('ITEM') && !card.subtypes.includes('STADIUM') && !card.subtypes.includes('TOOL') && '效果'}
+                </h2>
+                <p className="text-gray-800 whitespace-pre-wrap leading-relaxed">{card.text}</p>
               </div>
             )}
 
