@@ -43,7 +43,7 @@ async function fetchCards(skip: number, take: number, filters: Filters) {
   if (filters.language) params.append('language', filters.language);
   
   const { data } = await apiClient.get(`/cards?${params.toString()}`);
-  return data.data; // Extract the cards array from the API response
+  return data; // Return full response with data and pagination
 }
 
 export default function CardsPage() {
@@ -138,7 +138,7 @@ export default function CardsPage() {
             <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
             <p className="text-gray-600 mt-4">載入中...</p>
           </div>
-        ) : !data?.data || data.data.length === 0 ? (
+        ) : !data || !data.data || data.data.length === 0 ? (
           <div className="bg-white rounded-lg shadow-md p-12 text-center">
             <p className="text-gray-500 text-lg">沒有找到符合條件的卡片</p>
             <button
