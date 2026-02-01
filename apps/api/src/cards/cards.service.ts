@@ -434,18 +434,8 @@ export class CardsService {
     if (regulationMark) {
       where.regulationMark = regulationMark;
     }
-    // Note: hasAbilities filter is handled via raw SQL below due to Prisma JSON limitations
-    if (hasAttackText !== undefined) {
-      // Filter for attacks that have text/description
-      if (hasAttackText) {
-        where.attacks = {
-          path: ['$[*].text'],
-          not: null,
-        };
-      } else {
-        where.attacks = null;
-      }
-    }
+    // Note: hasAbilities and hasAttackText filters are handled via raw SQL below due to Prisma JSON limitations
+    // If hasAttackText is used, it will be added to the raw SQL WHERE clause
 
     // Dynamic sorting
     const orderBy: any = {};
@@ -469,17 +459,29 @@ export class CardsService {
 
     let countQuery = this.prisma.card.count({ where });
 
-    // Apply hasAbilities filter using raw SQL if specified
-    if (hasAbilities !== undefined) {
-      // Debug logging
-      console.log('hasAbilities value:', hasAbilities, 'type:', typeof hasAbilities);
+    // Apply hasAbilities or hasAttackText filter using raw SQL if specified
+    // Both require raw SQL due to Prisma JSON field limitations
+    if (hasAbilities !== undefined || hasAttackText !== undefined) {
+      const jsonFieldConditions: string[] = [];
       
       // For JSON fields: null (JSON null) is different from NULL (SQL null)
       // Cards without abilities have abilities = null (JSON value)
       // Cards with abilities have abilities = [{...}] (JSON array)
-      const abilityCondition = hasAbilities 
-        ? `(c.abilities IS NOT NULL AND c.abilities != 'null'::jsonb)` 
-        : `c.abilities = 'null'::jsonb`;
+      if (hasAbilities !== undefined) {
+        const abilityCondition = hasAbilities 
+          ? `(c.abilities IS NOT NULL AND c.abilities != 'null'::jsonb)` 
+          : `c.abilities = 'null'::jsonb`;
+        jsonFieldConditions.push(abilityCondition);
+      }
+      
+      // Cards without attack text have attacks = null (JSON value)
+      // Cards with attack text have attacks = [{...}] (JSON array with text)
+      if (hasAttackText !== undefined) {
+        const attackCondition = hasAttackText
+          ? `(c.attacks IS NOT NULL AND c.attacks != 'null'::jsonb)`
+          : `c.attacks = 'null'::jsonb`;
+        jsonFieldConditions.push(attackCondition);
+      }
       
       const baseWhereConditions = Object.entries(where)
         .map(([key, value]) => {
@@ -503,11 +505,9 @@ export class CardsService {
         })
         .filter(Boolean);
       
-      baseWhereConditions.push(abilityCondition);
+      // Add JSON field conditions
+      baseWhereConditions.push(...jsonFieldConditions);
       const whereClause = `WHERE ${baseWhereConditions.join(' AND ')}`;
-
-      // Log the actual SQL being generated
-      console.log('Generated WHERE clause:', whereClause);
 
       const [cards, totalResult] = await Promise.all([
         this.prisma.$queryRawUnsafe<any[]>(`
