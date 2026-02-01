@@ -92,6 +92,12 @@ export class JapaneseCardDto {
 
   @ApiProperty({ required: false })
   retreatCost?: number;
+
+  @ApiProperty({ required: false })
+  effectText?: string;
+
+  @ApiProperty({ required: false })
+  text?: string;
 }
 
 export class ImportJapaneseCardsDto {

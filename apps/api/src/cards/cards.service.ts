@@ -122,17 +122,30 @@ export class CardsService {
   }
 
   private async importSingleCard(cardData: JapaneseCardDto): Promise<void> {
-    // 1. Generate skills signature
+    // 1. Get or create RegionalExpansion and PrimaryExpansion
+    const { regionalExpansion, primaryExpansion } = await this.getOrCreateExpansion(
+      cardData.expansionCode,
+      Region.JP
+    );
+
+    // 2. Extract card number from collectorNumber (e.g., "001/100" -> "001")
+    const cardNumber = cardData.collectorNumber
+      ? cardData.collectorNumber.split('/')[0]
+      : cardData.cardNumber || null;
+
+    // 3. Generate skills signature
     const skillsSignature = this.generateSkillsSignature(cardData);
 
-    // 2. Get or create PrimaryCard based on name + skills
+    // 4. Get or create PrimaryCard based on expansion + number + skills
     const primaryCard = await this.getOrCreatePrimaryCard(
+      primaryExpansion.id,
+      cardNumber,
       cardData.name,
       skillsSignature
     );
 
-    // 3. Create or update Card
-    await this.upsertCard(primaryCard.id, cardData);
+    // 5. Create or update Card
+    await this.upsertCard(primaryCard.id, regionalExpansion.id, cardData);
   }
 
   private generateSkillsSignature(cardData: JapaneseCardDto): string {
@@ -147,7 +160,65 @@ export class CardsService {
     return hash.substring(0, 16);
   }
 
+  private async getOrCreateExpansion(
+    expansionCode: string,
+    region: Region
+  ): Promise<{
+    regionalExpansion: any;
+    primaryExpansion: any;
+  }> {
+    // Normalize expansion code (e.g., "SV9" -> "sv9")
+    const normalizedCode = expansionCode.toLowerCase();
+
+    // Find or create RegionalExpansion
+    let regionalExpansion = await this.prisma.regionalExpansion.findFirst({
+      where: {
+        code: normalizedCode,
+        region,
+      },
+      include: {
+        primaryExpansion: true,
+      },
+    });
+
+    if (regionalExpansion) {
+      return {
+        regionalExpansion,
+        primaryExpansion: regionalExpansion.primaryExpansion,
+      };
+    }
+
+    // If not found, create both PrimaryExpansion and RegionalExpansion
+    // Convert to canonical format (e.g., "sv9" -> "SV9")
+    const canonicalCode = normalizedCode.toUpperCase();
+
+    const primaryExpansion = await this.prisma.primaryExpansion.upsert({
+      where: { code: canonicalCode },
+      update: {},
+      create: {
+        code: canonicalCode,
+        nameEn: `Set ${canonicalCode}`, // Placeholder, can be updated later
+      },
+    });
+
+    regionalExpansion = await this.prisma.regionalExpansion.create({
+      data: {
+        code: normalizedCode,
+        region,
+        name: `${canonicalCode} (${region})`, // Placeholder
+        primaryExpansionId: primaryExpansion.id,
+      },
+      include: {
+        primaryExpansion: true,
+      },
+    });
+
+    return { regionalExpansion, primaryExpansion };
+  }
+
   private async getOrCreatePrimaryCard(
+    primaryExpansionId: string,
+    cardNumber: string | null,
     name: string,
     skillsSignature: string
   ) {
@@ -158,15 +229,20 @@ export class CardsService {
           skillsSignature,
         },
       },
-      update: {},
+      update: {
+        primaryExpansionId,
+        cardNumber,
+      },
       create: {
         name,
         skillsSignature,
+        primaryExpansionId,
+        cardNumber,
       },
     });
   }
 
-  private async upsertCard(primaryCardId: string, cardData: JapaneseCardDto) {
+  private async upsertCard(primaryCardId: string, regionalExpansionId: string, cardData: JapaneseCardDto) {
     const variantType = cardData.variantType 
       ? (this.VARIANT_MAP[cardData.variantType.toUpperCase()] || VariantType.NORMAL)
       : VariantType.NORMAL;
@@ -262,6 +338,7 @@ export class CardsService {
         abilities: (cardData.abilities || null) as any,
         attacks: (cardData.attacks || null) as any,
         rules: cardData.rules || [],
+        text: cardData.effectText || cardData.text || null,
         flavorText: cardData.flavorText || null,
         artist: cardData.artist || null,
         rarity,
@@ -269,6 +346,7 @@ export class CardsService {
         imageUrl: cardData.imageUrl || null,
         imageUrlHiRes: cardData.imageUrlHiRes || null,
         variantType,
+        regionalExpansionId,
       },
       create: {
         webCardId: cardData.webCardId,
@@ -284,15 +362,15 @@ export class CardsService {
         abilities: (cardData.abilities || null) as any,
         attacks: (cardData.attacks || null) as any,
         rules: cardData.rules || [],
+        text: cardData.effectText || cardData.text || null,
         flavorText: cardData.flavorText || null,
         artist: cardData.artist || null,
         rarity,
         regulationMark: cardData.regulationMark || null,
         imageUrl: cardData.imageUrl || null,
         imageUrlHiRes: cardData.imageUrlHiRes || null,
-        primaryCard: {
-          connect: { id: primaryCardId }
-        }
+        regionalExpansionId,
+        primaryCardId,
       },
     });
   }
@@ -434,6 +512,14 @@ export class CardsService {
     if (regulationMark) {
       where.regulationMark = regulationMark;
     }
+    if (expansionCode) {
+      where.regionalExpansion = {
+        code: {
+          equals: expansionCode,
+          mode: 'insensitive',
+        },
+      };
+    }
     // Note: hasAbilities and hasAttackText filters are handled via raw SQL below due to Prisma JSON limitations
     // If hasAttackText is used, it will be added to the raw SQL WHERE clause
 
@@ -452,7 +538,16 @@ export class CardsService {
       skip,
       take: Math.min(take, 100), // Max 100 per page
       include: {
-        primaryCard: true,
+        primaryCard: {
+          include: {
+            primaryExpansion: true,
+          },
+        },
+        regionalExpansion: {
+          include: {
+            primaryExpansion: true,
+          },
+        },
       },
       orderBy,
     });
@@ -545,8 +640,23 @@ export class CardsService {
       countQuery,
     ]);
 
+    // Include expansion info in response
+    const enrichedCards = cards.map(card => ({
+      ...card,
+      regionalExpansion: card.regionalExpansion ? {
+        id: card.regionalExpansion.id,
+        code: card.regionalExpansion.code,
+        name: card.regionalExpansion.name,
+        region: card.regionalExpansion.region,
+        primaryExpansion: card.regionalExpansion.primaryExpansion ? {
+          code: card.regionalExpansion.primaryExpansion.code,
+          nameEn: card.regionalExpansion.primaryExpansion.nameEn,
+        } : null,
+      } : null,
+    }));
+
     return {
-      data: cards,
+      data: enrichedCards,
       pagination: {
         total,
         skip,
@@ -560,7 +670,16 @@ export class CardsService {
     return await this.prisma.card.findUnique({
       where: { id },
       include: {
-        primaryCard: true,
+        primaryCard: {
+          include: {
+            primaryExpansion: true,
+          },
+        },
+        regionalExpansion: {
+          include: {
+            primaryExpansion: true,
+          },
+        },
       },
     });
   }
@@ -569,7 +688,16 @@ export class CardsService {
     const card = await this.prisma.card.findUnique({
       where: { webCardId },
       include: {
-        primaryCard: true,
+        primaryCard: {
+          include: {
+            primaryExpansion: true,
+          },
+        },
+        regionalExpansion: {
+          include: {
+            primaryExpansion: true,
+          },
+        },
       },
     });
 

@@ -137,7 +137,7 @@ async function importCard(prisma: PrismaClient, card: any) {
   });
 
   // 2. Get or create RegionalExpansion
-  await prisma.regionalExpansion.upsert({
+  const regionalExpansion = await prisma.regionalExpansion.upsert({
     where: {
       primaryExpansionId_region: {
         primaryExpansionId: primaryExpansion.id,
@@ -153,7 +153,7 @@ async function importCard(prisma: PrismaClient, card: any) {
     },
   });
 
-  // 3. Get or create PrimaryCard based on name + skills signature
+  // 3. Get or create PrimaryCard based on expansion + number + skills
   const skillsSignature = generateSkillsSignature(card);
   
   const primaryCard = await prisma.primaryCard.upsert({
@@ -163,10 +163,15 @@ async function importCard(prisma: PrismaClient, card: any) {
         skillsSignature: skillsSignature,
       },
     },
-    update: {},
+    update: {
+      primaryExpansionId: primaryExpansion.id,
+      cardNumber,
+    },
     create: {
       name: card.name,
       skillsSignature: skillsSignature,
+      primaryExpansionId: primaryExpansion.id,
+      cardNumber,
     },
   });
 
@@ -213,6 +218,7 @@ async function importCard(prisma: PrismaClient, card: any) {
     where: { webCardId: card.webCardId },
     update: {
       primaryCardId: primaryCard.id,
+      regionalExpansionId: regionalExpansion.id,
       name: card.name,
       supertype,
       subtypes,
@@ -234,6 +240,7 @@ async function importCard(prisma: PrismaClient, card: any) {
     },
     create: {
       primaryCardId: primaryCard.id,
+      regionalExpansionId: regionalExpansion.id,
       webCardId: card.webCardId,
       language: LanguageCode.JA_JP,
       variantType,

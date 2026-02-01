@@ -71,6 +71,7 @@ model PrimaryExpansion {
   
   // Relations
   regionalExpansions RegionalExpansion[]
+  primaryCards       PrimaryCard[]
   
   @@index([code])
   @@map("primary_expansions")
@@ -86,6 +87,7 @@ model RegionalExpansion {
   
   // Relations
   primaryExpansion PrimaryExpansion @relation(fields: [primaryExpansionId], references: [id], onDelete: Cascade)
+  cards            Card[]
   
   @@unique([primaryExpansionId, region])
   @@index([region, code])
@@ -192,25 +194,30 @@ enum Region {
 
 model PrimaryCard {
   id                  String           @id @default(cuid())
+  primaryExpansionId  String?          // Link to canonical expansion
   name                String           // Card name for grouping
   skillsSignature     String           // Hash of abilities + attacks for uniqueness
+  cardNumber          String?          // Card number in expansion (e.g., "001")
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
   
   // Relations
   cards            Card[]
+  primaryExpansion PrimaryExpansion? @relation(fields: [primaryExpansionId], references: [id], onDelete: SetNull)
   
   @@unique([name, skillsSignature])
   @@index([name])
+  @@index([primaryExpansionId])
   @@map("primary_cards")
 }
 
 model Card {
-  id             String       @id @default(cuid())
-  primaryCardId  String
-  webCardId      String       @unique // Format: "hk00014744", "jp49355"
-  language       LanguageCode
-  variantType    VariantType  @default(NORMAL)
+  id                  String       @id @default(cuid())
+  primaryCardId       String
+  regionalExpansionId String?      // Link to regional expansion variant
+  webCardId           String       @unique // Format: "hk00014744", "jp49355"
+  language            LanguageCode
+  variantType         VariantType  @default(NORMAL)
   
   // Card details
   name           String
@@ -241,15 +248,17 @@ model Card {
   updatedAt      DateTime    @updatedAt
   
   // Relations
-  primaryCard    PrimaryCard @relation(fields: [primaryCardId], references: [id], onDelete: Cascade)
-  collectionItems CollectionItem[]
-  deckCards      DeckCard[]
-  prices         CardPrice[]
+  primaryCard       PrimaryCard        @relation(fields: [primaryCardId], references: [id], onDelete: Cascade)
+  regionalExpansion RegionalExpansion? @relation(fields: [regionalExpansionId], references: [id], onDelete: SetNull)
+  collectionItems   CollectionItem[]
+  deckCards         DeckCard[]
+  prices            CardPrice[]
   
   @@index([language])
   @@index([name])
   @@index([supertype])
   @@index([primaryCardId, language, variantType])
+  @@index([regionalExpansionId])
   @@map("cards")
 }
 

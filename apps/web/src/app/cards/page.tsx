@@ -37,6 +37,7 @@ interface Filters {
   maxHp?: string;
   artist?: string;
   regulationMark?: string;
+  expansionCode?: string;
   hasAbilities?: string;
   hasAttackText?: string;
 }
@@ -63,6 +64,7 @@ async function fetchCards(skip: number, take: number, filters: Filters) {
   if (filters.maxHp) params.append('maxHp', filters.maxHp);
   if (filters.artist) params.append('artist', filters.artist);
   if (filters.regulationMark) params.append('regulationMark', filters.regulationMark);
+  if (filters.expansionCode) params.append('expansionCode', filters.expansionCode);
   if (filters.hasAbilities && filters.hasAbilities !== '') params.append('hasAbilities', filters.hasAbilities);
   if (filters.hasAttackText && filters.hasAttackText !== '') params.append('hasAttackText', filters.hasAttackText);
   
@@ -89,6 +91,7 @@ export default function CardsPage() {
     maxHp: '',
     artist: '',
     regulationMark: '',
+    expansionCode: '',
     hasAbilities: '',
     hasAttackText: '',
   });

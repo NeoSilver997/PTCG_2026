@@ -39,7 +39,21 @@ interface CardDetail {
     id: string;
     expansionId: string;
     cardNumber: string;
+    primaryExpansion: {
+      code: string;
+      nameEn: string;
+    } | null;
   };
+  regionalExpansion: {
+    id: string;
+    code: string;
+    name: string;
+    region: string;
+    primaryExpansion: {
+      code: string;
+      nameEn: string;
+    };
+  } | null;
   languageVariants: Array<{
     id: string;
     webCardId: string;
@@ -190,6 +204,17 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                   <dt className="text-sm text-gray-600">卡號</dt>
                   <dd className="font-medium text-gray-900">{card.webCardId}</dd>
                 </div>
+                {card.regionalExpansion && (
+                  <div>
+                    <dt className="text-sm text-gray-600">擴展包</dt>
+                    <dd className="font-medium text-gray-900">
+                      {card.regionalExpansion.primaryExpansion?.code || card.regionalExpansion.code}
+                      {card.regionalExpansion.name && (
+                        <span className="text-sm text-gray-600 ml-1">({card.regionalExpansion.name})</span>
+                      )}
+                    </dd>
+                  </div>
+                )}
                 {card.hp && (
                   <div>
                     <dt className="text-sm text-gray-600">HP</dt>
