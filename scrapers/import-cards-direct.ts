@@ -1,3 +1,31 @@
+/**
+ * Direct Database Card Import Script
+ * 
+ * Imports card data from JSON files directly into PostgreSQL via Prisma Client.
+ * Bypasses API validation and handles both Japanese text and English enum values.
+ * 
+ * Usage Examples:
+ * 
+ * 1. Import all JSON files from default directory (data/cards/japan):
+ *    npx tsx scrapers/import-cards-direct.ts
+ * 
+ * 2. Import from custom directory:
+ *    npx tsx scrapers/import-cards-direct.ts "../data/cards/japan"
+ * 
+ * 3. Import specific files matching pattern:
+ *    npx tsx scrapers/import-cards-direct.ts "../data/cards/japan" "japanese_cards_40k_sv*.json"
+ * 
+ * 4. Import single file:
+ *    npx tsx scrapers/import-cards-direct.ts "../data/cards/japan" "japanese_cards_sv9.json"
+ * 
+ * Features:
+ * - Automatic expansion code normalization (sv9 → SV9)
+ * - Creates PrimaryExpansion and RegionalExpansion as needed
+ * - Extracts card number from collectorNumber
+ * - Skills signature for duplicate detection
+ * - Handles both update and create operations
+ */
+
 import { PrismaClient, LanguageCode, Supertype, Subtype, EvolutionStage, RuleBox, PokemonType, Rarity, VariantType, Region } from '../packages/database/node_modules/.prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -109,6 +137,11 @@ function generateSkillsSignature(card: any): string {
 }
 
 async function importCard(prisma: PrismaClient, card: any) {
+  // Skip "カード検索" (Card Search) placeholder cards
+  if (card.name === 'カード検索') {
+    return null;
+  }
+  
   // Extract card number from collectorNumber (e.g., "001/100" -> "001")
   let cardNumber = card.collectorNumber ? card.collectorNumber.split('/')[0] : card.cardNumber;
   
@@ -283,6 +316,7 @@ async function main() {
   
   let totalSuccess = 0;
   let totalFailed = 0;
+  let totalSkipped = 0;
   
   for (const file of files) {
     const filePath = path.join(jsonDir, file);
@@ -296,12 +330,17 @@ async function main() {
       
       let success = 0;
       let failed = 0;
+      let skipped = 0;
       
       for (let i = 0; i < cards.length; i++) {
         const card = cards[i];
         try {
-          await importCard(prisma, card);
-          success++;
+          const result = await importCard(prisma, card);
+          if (result === null) {
+            skipped++;
+          } else {
+            success++;
+          }
           
           if ((i + 1) % 50 === 0) {
             console.log(`  Progress: ${i + 1}/${cards.length} cards...`);
@@ -312,9 +351,10 @@ async function main() {
         }
       }
       
-      console.log(`✓ ${file}: ${success} success, ${failed} failed`);
+      console.log(`✓ ${file}: ${success} success, ${failed} failed${skipped > 0 ? `, ${skipped} skipped` : ''}`);
       totalSuccess += success;
       totalFailed += failed;
+      totalSkipped += skipped;
       
     } catch (error) {
       console.error(`✗ Error processing ${file}: ${error.message}`);
@@ -327,6 +367,9 @@ async function main() {
   console.log(`Files processed: ${files.length}`);
   console.log(`Successfully imported: ${totalSuccess}`);
   console.log(`Failed: ${totalFailed}`);
+  if (totalSkipped > 0) {
+    console.log(`Skipped (カード検索): ${totalSkipped}`);
+  }
   console.log(`${'='.repeat(60)}\n`);
   
   await prisma.$disconnect();
