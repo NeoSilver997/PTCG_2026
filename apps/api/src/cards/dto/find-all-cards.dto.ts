@@ -1,5 +1,5 @@
 import { IsOptional, IsString, IsInt, Min, Max, IsIn, IsBoolean } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import { LanguageCode } from '@ptcg/database';
 
@@ -113,13 +113,21 @@ export class FindAllCardsDto {
 
   @ApiProperty({ required: false, type: Boolean })
   @IsOptional()
-  @Type(() => Boolean)
+  @Transform(({ value }) => {
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return value;
+  })
   @IsBoolean()
   hasAbilities?: boolean;
 
   @ApiProperty({ required: false, type: Boolean, description: 'Filter for attacks with text/description' })
   @IsOptional()
-  @Type(() => Boolean)
+  @Transform(({ value }) => {
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return value;
+  })
   @IsBoolean()
   hasAttackText?: boolean;
 }

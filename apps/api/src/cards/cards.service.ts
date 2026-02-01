@@ -434,13 +434,7 @@ export class CardsService {
     if (regulationMark) {
       where.regulationMark = regulationMark;
     }
-    if (hasAbilities !== undefined) {
-      if (hasAbilities) {
-        where.abilities = { not: null };
-      } else {
-        where.abilities = null;
-      }
-    }
+    // Note: hasAbilities filter is handled via raw SQL below due to Prisma JSON limitations
     if (hasAttackText !== undefined) {
       // Filter for attacks that have text/description
       if (hasAttackText) {
@@ -462,17 +456,93 @@ export class CardsService {
       orderBy.createdAt = 'desc'; // Default sort
     }
 
-    const [cards, total] = await Promise.all([
-      this.prisma.card.findMany({
-        where,
-        skip,
-        take: Math.min(take, 100), // Max 100 per page
-        include: {
-          primaryCard: true,
+    // Handle hasAbilities filter using raw SQL due to Prisma JSON limitations
+    let cardsQuery = this.prisma.card.findMany({
+      where,
+      skip,
+      take: Math.min(take, 100), // Max 100 per page
+      include: {
+        primaryCard: true,
+      },
+      orderBy,
+    });
+
+    let countQuery = this.prisma.card.count({ where });
+
+    // Apply hasAbilities filter using raw SQL if specified
+    if (hasAbilities !== undefined) {
+      // Debug logging
+      console.log('hasAbilities value:', hasAbilities, 'type:', typeof hasAbilities);
+      
+      // For JSON fields: null (JSON null) is different from NULL (SQL null)
+      // Cards without abilities have abilities = null (JSON value)
+      // Cards with abilities have abilities = [{...}] (JSON array)
+      const abilityCondition = hasAbilities 
+        ? `(c.abilities IS NOT NULL AND c.abilities != 'null'::jsonb)` 
+        : `c.abilities = 'null'::jsonb`;
+      
+      const baseWhereConditions = Object.entries(where)
+        .map(([key, value]) => {
+          if (value === null || value === undefined) return null;
+          if (key === 'supertype' && typeof value === 'string') return `c."${key}" = '${value}'`;
+          if (key === 'name' && typeof value === 'object' && value !== null && 'contains' in value) 
+            return `c."${key}" ILIKE '%${value.contains}%'`;
+          if (key === 'types' && typeof value === 'object' && value !== null && 'has' in value)
+            return `c."${key}" @> '["${value.has}"]'::jsonb`;
+          if (key === 'evolutionStage' && typeof value === 'string') return `c."${key}" = '${value}'`;
+          if (key === 'ruleBox' && typeof value === 'string') return `c."${key}" = '${value}'`;
+          if (key === 'rarity' && typeof value === 'string') return `c."${key}" = '${value}'`;
+          if (key === 'language' && typeof value === 'string') return `c."${key}" = '${value}'`;
+          if (key === 'regulationMark' && typeof value === 'string') return `c."${key}" = '${value}'`;
+          // Handle subtypes array filter
+          if (key === 'subtypes' && typeof value === 'object' && value !== null && 'hasSome' in value && Array.isArray(value.hasSome)) {
+            const subtypeConditions = value.hasSome.map(st => `c."${key}" @> '["${st}"]'::jsonb`);
+            return subtypeConditions.length > 0 ? `(${subtypeConditions.join(' OR ')})` : null;
+          }
+          return null;
+        })
+        .filter(Boolean);
+      
+      baseWhereConditions.push(abilityCondition);
+      const whereClause = `WHERE ${baseWhereConditions.join(' AND ')}`;
+
+      // Log the actual SQL being generated
+      console.log('Generated WHERE clause:', whereClause);
+
+      const [cards, totalResult] = await Promise.all([
+        this.prisma.$queryRawUnsafe<any[]>(`
+          SELECT c.*, pc.name as "primaryCardName", pc."skillsSignature" as "primaryCardSkillsSignature"
+          FROM cards c
+          LEFT JOIN primary_cards pc ON c."primaryCardId" = pc.id
+          ${whereClause}
+          ORDER BY c."${sortBy || 'createdAt'}" ${sortOrder || 'DESC'}
+          LIMIT ${Math.min(take, 100)} OFFSET ${skip}
+        `),
+        this.prisma.$queryRawUnsafe<[{ count: bigint }]>(`
+          SELECT COUNT(*) as count FROM cards c ${whereClause}
+        `)
+      ]);
+
+      return {
+        data: cards.map(card => ({
+          ...card,
+          primaryCard: {
+            name: card.primaryCardName,
+            skillsSignature: card.primaryCardSkillsSignature,
+          }
+        })),
+        pagination: {
+          total: Number(totalResult[0].count),
+          skip,
+          take,
+          hasMore: skip + take < Number(totalResult[0].count),
         },
-        orderBy,
-      }),
-      this.prisma.card.count({ where }),
+      };
+    }
+
+    const [cards, total] = await Promise.all([
+      cardsQuery,
+      countQuery,
     ]);
 
     return {

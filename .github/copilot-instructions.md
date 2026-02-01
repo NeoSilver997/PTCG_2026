@@ -146,6 +146,49 @@ Global exception filter at [all-exceptions.filter.ts](apps/api/src/common/filter
 }
 ```
 
+### JSON Field Filtering (Critical Pattern)
+
+**Problem:** PostgreSQL JSONB fields store JSON `null` as a value, not SQL `NULL`. Prisma's `{ field: null }` or `{ field: { not: null } }` doesn't work for JSON fields.
+
+**Solution:** Use raw SQL queries with proper JSONB comparisons:
+
+```typescript
+// Checking for JSON null (cards without abilities)
+const withoutAbilities = await prisma.$queryRaw`
+  SELECT * FROM cards 
+  WHERE abilities = 'null'::jsonb
+`;
+
+// Checking for actual JSON data (cards with abilities)
+const withAbilities = await prisma.$queryRaw`
+  SELECT * FROM cards 
+  WHERE abilities IS NOT NULL AND abilities != 'null'::jsonb
+`;
+```
+
+**DTO Pattern for Boolean Query Parameters:**
+
+Query string parameters are always strings. Use `@Transform` to convert `"true"`/`"false"` strings:
+
+```typescript
+import { Transform } from 'class-transformer';
+
+@ApiProperty({ required: false, type: Boolean })
+@IsOptional()
+@Transform(({ value }) => {
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  return value;
+})
+@IsBoolean()
+hasAbilities?: boolean;
+```
+
+**Common Mistakes:**
+- Using `@Type(() => Boolean)` - doesn't handle `"false"` string correctly
+- Using `IS NULL` for JSONB fields - matches SQL NULL, not JSON null
+- Forgetting `c.` table alias prefix in raw SQL WHERE clauses
+
 ## Database Constraints & Validation
 
 ### Critical Unique Constraints
@@ -304,6 +347,8 @@ Redis TTL recommendations:
 8. **Pokemon cards without types** - All `supertype: POKEMON` cards MUST have at least one type in `types` array
 9. **API import validation issues** - Use direct import (`import-cards-direct.ts`) to bypass DTO validation problems
 10. **Missing `pokemonTypes` field** - Ensure import scripts handle both `types` and `pokemonTypes` from JSON
+11. **JSON null vs SQL NULL** - PostgreSQL JSONB fields store JSON `null` as a value, not SQL `NULL`. Use `field = 'null'::jsonb` not `field IS NULL`
+12. **Boolean query parameters** - Query string `"false"` is truthy in JavaScript. Use `@Transform` decorator to properly convert string to boolean
 
 ## Key Files Reference
 
@@ -486,3 +531,8 @@ Before committing changes:
 - Solution: Check DTO accepts all fields from JSON (language, region, scrapedAt, etc.)
 - Set `forbidNonWhitelisted: false` in ValidationPipe
 - Verify `pokemonTypes` field is mapped to `types` in service
+
+**Issue: "Filter returns same results for true/false"**
+- Solution: Check if filtering on JSONB field - use raw SQL with `= 'null'::jsonb` not `IS NULL`
+- Verify boolean query parameters use `@Transform` decorator, not `@Type(() => Boolean)`
+- Add logging to see actual SQL WHERE clause being generated
