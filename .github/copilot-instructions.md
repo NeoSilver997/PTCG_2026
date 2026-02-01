@@ -52,11 +52,12 @@ python src/japanese_card_scraper.py --id-range 48000 100 --cache-html
 # 2. Fast offline re-processing (20 threads, cache-only)
 python src/japanese_card_scraper.py --id-range 48000 1000 --cache-only --threads 20
 
-# 3. Import JSON to database via API
-python import_cards_to_api.py --file "../data/cards/japan/japanese_cards_40k_sv9.json"
+# 3. Import JSON to database (RECOMMENDED: Direct import)
+cd ..
+npx tsx scrapers/import-cards-direct.ts
 
-# 4. Update existing cards with types/supertype/rarity (if schema evolved)
-node update-existing-cards.mjs
+# Alternative: Import via API (if API validation is needed)
+python scrapers/import_cards_to_api.py --file "data/cards/japan/japanese_cards_40k_sv9.json"
 ```
 
 **Data Storage Structure:**
@@ -194,29 +195,54 @@ python src/japanese_card_scraper.py --id-range 48000 1000 --cache-only --threads
 - `subtype` - `BASIC`, `STAGE_1`, `STAGE_2`, `ITEM`, `SUPPORTER`, `STADIUM`, `TOOL`
 
 ### Import Pipeline to Database
+
+**RECOMMENDED: Direct Database Import**
+**Script:** `scrapers/import-cards-direct.ts`
+
+**Advantages:**
+- Bypasses API validation issues
+- Direct Prisma Client access
+- Handles both Japanese text and English enum values
+- Automatic PrimaryCard/RegionalExpansion creation
+- Skills signature for duplicate detection
+
+**Usage:**
+```powershell
+# Import all Japanese cards from default directory
+cd c:\AI_Server\Coding\PTCG_2026
+npx tsx scrapers/import-cards-direct.ts
+
+# Import from specific directory with pattern
+npx tsx scrapers/import-cards-direct.ts "../data/cards/japan" "japanese_cards_40k_sv*.json"
+```
+
+**Output Format:**
+```
+============================================================
+IMPORT SUMMARY
+============================================================
+Files processed: 94
+Successfully imported: 9593
+Failed: 0
+============================================================
+```
+
+**Alternative: API Import (when validation needed)**
 **Script:** `scrapers/import_cards_to_api.py`
 
 **Workflow:**
 1. Reads JSON from `data/cards/{region}/`
 2. Batches cards (default: 100 per request)
 3. POSTs to `http://localhost:4000/api/v1/cards/import/batch`
-4. Logs success/failure with detailed error reporting
+4. Requires API server running on port 4000
 
 **Usage:**
 ```powershell
 # Import all Japanese cards
-python import_cards_to_api.py
+python scrapers/import_cards_to_api.py
 
 # Import specific file with custom batch size
-python import_cards_to_api.py --file "../data/cards/japan/japanese_cards_40k_sv9.json" --batch-size 50
-```
-
-**Output Format:**
-```
-Files processed:  94
-Total cards:      9,593
-Successfully imported: 9,593
-Failed:           0
+python scrapers/import_cards_to_api.py --file "../data/cards/japan/japanese_cards_40k_sv9.json" --batch-size 50
 ```
 
 ### Defensive Parsing (FR-5)
@@ -276,6 +302,8 @@ Redis TTL recommendations:
 6. **Missing cascade deletes** - Use `onDelete: Cascade` for parent-child relations
 7. **Pagination limits** - Enforce max: 100 items per page
 8. **Pokemon cards without types** - All `supertype: POKEMON` cards MUST have at least one type in `types` array
+9. **API import validation issues** - Use direct import (`import-cards-direct.ts`) to bypass DTO validation problems
+10. **Missing `pokemonTypes` field** - Ensure import scripts handle both `types` and `pokemonTypes` from JSON
 
 ## Key Files Reference
 
@@ -390,7 +418,18 @@ curl "http://localhost:4000/api/v1/cards?types=GRASS&take=3"
    pnpm db:generate
    ```
 
-3. **Import validation errors** - Set `forbidNonWhitelisted: false` in `main.ts` for backward compatibility with scraped JSON
+3. **Import validation errors** - Use direct import instead:
+   ```bash
+   npx tsx scrapers/import-cards-direct.ts
+   ```
+   This bypasses DTO validation and handles both Japanese text and English enum values.
+
+4. **DTO stripping fields** - If using API import, ensure all fields have `@IsOptional()` decorator in DTO:
+   ```typescript
+   @IsOptional()
+   @ApiProperty({ required: false })
+   fieldName?: type;
+   ```
 
 ### Database Debugging
 

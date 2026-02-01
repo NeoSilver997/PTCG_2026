@@ -17,6 +17,7 @@ import { CardsService } from './cards.service';
 import { ImportJapaneseCardsDto } from './dto/import-japanese-cards.dto';
 import { FindAllCardsDto } from './dto/find-all-cards.dto';
 import { LanguageCode } from '@ptcg/database';
+import * as fs from 'fs';
 
 @ApiTags('cards')
 @Controller('cards')
@@ -29,6 +30,12 @@ export class CardsController {
   @ApiResponse({ status: 200, description: 'Cards imported successfully' })
   @ApiResponse({ status: 400, description: 'Invalid request body' })
   async importJapaneseCards(@Body() dto: ImportJapaneseCardsDto) {
+    const logData = {
+      timestamp: new Date().toISOString(),
+      count: dto.cards.length,
+      firstCard: dto.cards[0]
+    };
+    fs.appendFileSync('c:/temp/api-debug.log', JSON.stringify(logData, null, 2) + '\n---\n');
     return await this.cardsService.importJapaneseCards(dto.cards);
   }
 

@@ -6,6 +6,7 @@ import { Navbar } from '@/components/navbar';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
+import { use } from 'react';
 
 interface CardDetail {
   id: string;
@@ -81,11 +82,12 @@ const TYPE_COLORS: Record<string, string> = {
   COLORLESS: 'bg-gray-300',
 };
 
-export default function CardDetailPage({ params }: { params: { webCardId: string } }) {
+export default function CardDetailPage({ params }: { params: Promise<{ webCardId: string }> }) {
   const router = useRouter();
+  const { webCardId } = use(params);
   const { data: card, isLoading, error } = useQuery<CardDetail>({
-    queryKey: ['card', params.webCardId],
-    queryFn: () => fetchCardDetail(params.webCardId),
+    queryKey: ['card', webCardId],
+    queryFn: () => fetchCardDetail(webCardId),
   });
 
   if (isLoading) {
@@ -142,7 +144,7 @@ export default function CardDetailPage({ params }: { params: { webCardId: string
             {/* Language Variants */}
             {card.languageVariants && card.languageVariants.length > 0 && (
               <div className="mt-6">
-                <h3 className="text-lg font-semibold mb-3">語言版本</h3>
+                <h3 className="text-lg font-semibold mb-3 text-gray-900">語言版本</h3>
                 <div className="grid grid-cols-3 gap-3">
                   {card.languageVariants.map((variant) => (
                     <Link
@@ -165,7 +167,7 @@ export default function CardDetailPage({ params }: { params: { webCardId: string
           <div className="space-y-6">
             {/* Basic Info */}
             <div className="bg-white rounded-lg p-6 shadow-sm">
-              <h1 className="text-3xl font-bold mb-2">{card.name}</h1>
+              <h1 className="text-3xl font-bold mb-2 text-gray-900">{card.name}</h1>
               <div className="flex items-center gap-3 mb-4">
                 <span className="px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-full">
                   {SUPERTYPE_LABELS[card.supertype] || card.supertype}
@@ -185,32 +187,32 @@ export default function CardDetailPage({ params }: { params: { webCardId: string
               <dl className="grid grid-cols-2 gap-4">
                 <div>
                   <dt className="text-sm text-gray-600">卡號</dt>
-                  <dd className="font-medium">{card.webCardId}</dd>
+                  <dd className="font-medium text-gray-900">{card.webCardId}</dd>
                 </div>
                 {card.hp && (
                   <div>
                     <dt className="text-sm text-gray-600">HP</dt>
-                    <dd className="font-medium">{card.hp}</dd>
+                    <dd className="font-medium text-gray-900">{card.hp}</dd>
                   </div>
                 )}
                 <div>
                   <dt className="text-sm text-gray-600">語言</dt>
-                  <dd className="font-medium">{LANGUAGE_LABELS[card.language] || card.language}</dd>
+                  <dd className="font-medium text-gray-900">{LANGUAGE_LABELS[card.language] || card.language}</dd>
                 </div>
                 <div>
                   <dt className="text-sm text-gray-600">變體類型</dt>
-                  <dd className="font-medium">{card.variantType}</dd>
+                  <dd className="font-medium text-gray-900">{card.variantType}</dd>
                 </div>
                 {card.artist && (
                   <div className="col-span-2">
                     <dt className="text-sm text-gray-600">繪師</dt>
-                    <dd className="font-medium">{card.artist}</dd>
+                    <dd className="font-medium text-gray-900">{card.artist}</dd>
                   </div>
                 )}
                 {card.regulationMark && (
                   <div>
                     <dt className="text-sm text-gray-600">規格標記</dt>
-                    <dd className="font-medium">{card.regulationMark}</dd>
+                    <dd className="font-medium text-gray-900">{card.regulationMark}</dd>
                   </div>
                 )}
               </dl>
@@ -219,17 +221,17 @@ export default function CardDetailPage({ params }: { params: { webCardId: string
             {/* Evolution */}
             {(card.evolvesFrom || card.evolvesTo) && (
               <div className="bg-white rounded-lg p-6 shadow-sm">
-                <h2 className="text-xl font-semibold mb-4">進化</h2>
+                <h2 className="text-xl font-semibold mb-4 text-gray-900">進化</h2>
                 {card.evolvesFrom && (
                   <div className="mb-2">
                     <span className="text-sm text-gray-600">進化自：</span>
-                    <span className="ml-2 font-medium">{card.evolvesFrom}</span>
+                    <span className="ml-2 font-medium text-gray-900">{card.evolvesFrom}</span>
                   </div>
                 )}
                 {card.evolvesTo && (
                   <div>
                     <span className="text-sm text-gray-600">可進化為：</span>
-                    <span className="ml-2 font-medium">{card.evolvesTo}</span>
+                    <span className="ml-2 font-medium text-gray-900">{card.evolvesTo}</span>
                   </div>
                 )}
               </div>
@@ -238,11 +240,11 @@ export default function CardDetailPage({ params }: { params: { webCardId: string
             {/* Abilities */}
             {card.abilities && Array.isArray(card.abilities) && card.abilities.length > 0 && (
               <div className="bg-white rounded-lg p-6 shadow-sm">
-                <h2 className="text-xl font-semibold mb-4">特性</h2>
+                <h2 className="text-xl font-semibold mb-4 text-gray-900">特性</h2>
                 {card.abilities.map((ability: any, index: number) => (
                   <div key={index} className="mb-4 last:mb-0">
-                    <div className="font-semibold text-blue-600">{ability.name}</div>
-                    <div className="text-sm text-gray-700 mt-1">{ability.text}</div>
+                    <div className="font-semibold text-blue-700">{ability.name}</div>
+                    <div className="text-sm text-gray-800 mt-1">{ability.text}</div>
                   </div>
                 ))}
               </div>
@@ -251,13 +253,13 @@ export default function CardDetailPage({ params }: { params: { webCardId: string
             {/* Attacks */}
             {card.attacks && Array.isArray(card.attacks) && card.attacks.length > 0 && (
               <div className="bg-white rounded-lg p-6 shadow-sm">
-                <h2 className="text-xl font-semibold mb-4">招式</h2>
+                <h2 className="text-xl font-semibold mb-4 text-gray-900">招式</h2>
                 {card.attacks.map((attack: any, index: number) => (
                   <div key={index} className="mb-4 last:mb-0 border-b last:border-0 pb-4 last:pb-0">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <div className="font-semibold">{attack.name}</div>
-                        <div className="text-sm text-gray-700 mt-1">{attack.text}</div>
+                        <div className="font-semibold text-gray-900">{attack.name}</div>
+                        <div className="text-sm text-gray-800 mt-1">{attack.text}</div>
                       </div>
                       {attack.damage && (
                         <div className="ml-4 text-xl font-bold text-red-600">{attack.damage}</div>
@@ -265,7 +267,7 @@ export default function CardDetailPage({ params }: { params: { webCardId: string
                     </div>
                     {attack.cost && attack.cost.length > 0 && (
                       <div className="flex gap-1 mt-2">
-                        {attack.cost.map((cost: string, idx: number) => (
+                        {(Array.isArray(attack.cost) ? attack.cost : attack.cost.split('')).map((cost: string, idx: number) => (
                           <span
                             key={idx}
                             className={`w-6 h-6 rounded-full flex items-center justify-center text-xs text-white ${
@@ -286,7 +288,7 @@ export default function CardDetailPage({ params }: { params: { webCardId: string
             {((card.weaknesses && Array.isArray(card.weaknesses) && card.weaknesses.length > 0) ||
               (card.resistances && Array.isArray(card.resistances) && card.resistances.length > 0)) && (
               <div className="bg-white rounded-lg p-6 shadow-sm">
-                <h2 className="text-xl font-semibold mb-4">弱點與抵抗</h2>
+                <h2 className="text-xl font-semibold mb-4 text-gray-900">弱點與抵抗</h2>
                 {card.weaknesses && card.weaknesses.length > 0 && (
                   <div className="mb-3">
                     <span className="text-sm text-gray-600">弱點：</span>
@@ -312,25 +314,25 @@ export default function CardDetailPage({ params }: { params: { webCardId: string
 
             {/* Metadata */}
             <div className="bg-white rounded-lg p-6 shadow-sm">
-              <h2 className="text-xl font-semibold mb-4">資料</h2>
+              <h2 className="text-xl font-semibold mb-4 text-gray-900">資料</h2>
               <dl className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <dt className="text-gray-600">擴展包</dt>
-                  <dd className="font-medium">{card.primaryCard.expansionId}</dd>
+                  <dd className="font-medium text-gray-900">{card.primaryCard.expansionId}</dd>
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-gray-600">卡片編號</dt>
-                  <dd className="font-medium">{card.primaryCard.cardNumber}</dd>
+                  <dd className="font-medium text-gray-900">{card.primaryCard.cardNumber}</dd>
                 </div>
                 {card.region && (
                   <div className="flex justify-between">
                     <dt className="text-gray-600">地區</dt>
-                    <dd className="font-medium">{card.region}</dd>
+                    <dd className="font-medium text-gray-900">{card.region}</dd>
                   </div>
                 )}
                 <div className="flex justify-between">
                   <dt className="text-gray-600">建立時間</dt>
-                  <dd className="font-medium">{new Date(card.createdAt).toLocaleDateString('zh-TW')}</dd>
+                  <dd className="font-medium text-gray-900">{new Date(card.createdAt).toLocaleDateString('zh-TW')}</dd>
                 </div>
               </dl>
             </div>

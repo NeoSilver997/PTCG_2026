@@ -4,8 +4,10 @@ import {
   LanguageCode, 
   Supertype, 
   Subtype, 
+  EvolutionStage,
   PokemonType, 
   Rarity, 
+  RuleBox,
   VariantType,
   Region 
 } from '@ptcg/database';
@@ -23,15 +25,32 @@ export class CardsService {
   };
 
   private readonly SUBTYPE_MAP: Record<string, Subtype> = {
-    'たねポケモン': Subtype.BASIC,
-    '1進化': Subtype.STAGE_1,
-    '2進化': Subtype.STAGE_2,
     'グッズ': Subtype.ITEM,
     'サポート': Subtype.SUPPORTER,
     'スタジアム': Subtype.STADIUM,
     'ポケモンのどうぐ': Subtype.TOOL,
     '基本エネルギー': Subtype.BASIC_ENERGY,
     '特殊エネルギー': Subtype.SPECIAL_ENERGY,
+  };
+
+  private readonly EVOLUTION_STAGE_MAP: Record<string, EvolutionStage> = {
+    'たね': EvolutionStage.BASIC,
+    'たねポケモン': EvolutionStage.BASIC,
+    'BASIC': EvolutionStage.BASIC,
+    '1進化': EvolutionStage.STAGE_1,
+    'STAGE_1': EvolutionStage.STAGE_1,
+    '2進化': EvolutionStage.STAGE_2,
+    'STAGE_2': EvolutionStage.STAGE_2,
+  };
+
+  private readonly RULEBOX_MAP: Record<string, RuleBox> = {
+    'EX': RuleBox.EX,
+    'GX': RuleBox.GX,
+    'V': RuleBox.V,
+    'VMAX': RuleBox.VMAX,
+    'VSTAR': RuleBox.VSTAR,
+    'RADIANT': RuleBox.RADIANT,
+    'MEGA': RuleBox.MEGA,
   };
 
   private readonly TYPE_MAP: Record<string, PokemonType> = {
@@ -152,6 +171,8 @@ export class CardsService {
       ? (this.VARIANT_MAP[cardData.variantType.toUpperCase()] || VariantType.NORMAL)
       : VariantType.NORMAL;
 
+    this.logger.debug(`Processing card: ${cardData.webCardId}, supertype from DTO: ${cardData.supertype}, pokemonTypes from DTO: ${JSON.stringify(cardData.pokemonTypes)}`);
+
     // Map Japanese data to Prisma enums
     // Handle both Japanese text and enum values for supertype
     let supertype = null;
@@ -163,24 +184,45 @@ export class CardsService {
         supertype = cardData.supertype as Supertype;
       }
     }
+    
+    this.logger.debug(`Mapped supertype: ${supertype}`);
 
+    // Map subtypes (only for Trainers and Energy)
     const subtypes = cardData.subtypes
       ? cardData.subtypes
           .map(st => this.SUBTYPE_MAP[st])
           .filter(Boolean)
       : [];
 
-    // Handle both 'types' and 'pokemonTypes' fields - use first type only
+    // Map evolution stage (only for Pokemon)
+    let evolutionStage: EvolutionStage | null = null;
+    if (supertype === Supertype.POKEMON && cardData.evolutionStage) {
+      evolutionStage = this.EVOLUTION_STAGE_MAP[cardData.evolutionStage] || null;
+    }
+
+    // Map ruleBox (for special mechanics)
+    let ruleBox: RuleBox | null = null;
+    if (cardData.ruleBox) {
+      ruleBox = this.RULEBOX_MAP[cardData.ruleBox.toUpperCase()] || null;
+    }
+
+    // Handle both 'types' and 'pokemonTypes' fields - convert to array
     const typesArray = cardData.pokemonTypes || cardData.types || [];
-    let type: PokemonType | null = null;
+    const types: PokemonType[] = [];
+    
+    this.logger.debug(`Types array from DTO: ${JSON.stringify(typesArray)}`);
+    
     if (typesArray.length > 0) {
       const firstType = typesArray[0];
       // First try as enum value (already in correct format)
       if (Object.values(PokemonType).includes(firstType as PokemonType)) {
-        type = firstType as PokemonType;
+        types.push(firstType as PokemonType);
       } else {
         // Then try mapping from Japanese
-        type = this.TYPE_MAP[firstType] || null;
+        const mappedType = this.TYPE_MAP[firstType];
+        if (mappedType) {
+          types.push(mappedType);
+        }
       }
     }
 
@@ -197,13 +239,15 @@ export class CardsService {
 
     const hp = cardData.hp ? parseInt(cardData.hp, 10) : null;
 
-    // Validation: Pokemon cards MUST have a type
-    if (supertype === Supertype.POKEMON && !type) {
+    // Validation: Pokemon cards MUST have at least one type
+    if (supertype === Supertype.POKEMON && types.length === 0) {
       throw new BadRequestException(
         `Pokemon card ${cardData.webCardId} (${cardData.name}) must have a type. ` +
         `Received pokemonTypes: ${JSON.stringify(cardData.pokemonTypes)}, types: ${JSON.stringify(cardData.types)}`
       );
     }
+
+    this.logger.debug(`Final values - supertype: ${supertype}, types: ${JSON.stringify(types)}, evolutionStage: ${evolutionStage}, imageUrl: ${cardData.imageUrl}`);
 
     return await this.prisma.card.upsert({
       where: { webCardId: cardData.webCardId },
@@ -211,8 +255,10 @@ export class CardsService {
         name: cardData.name,
         supertype,
         subtypes: subtypes as any,
+        evolutionStage,
         hp,
-        types: type as any,
+        types,
+        ruleBox,
         abilities: (cardData.abilities || null) as any,
         attacks: (cardData.attacks || null) as any,
         rules: cardData.rules || [],
@@ -225,15 +271,16 @@ export class CardsService {
         variantType,
       },
       create: {
-        primaryCardId,
         webCardId: cardData.webCardId,
         language: LanguageCode.JA_JP,
         variantType,
         name: cardData.name,
         supertype,
         subtypes: subtypes as any,
+        evolutionStage,
         hp,
-        types: type as any,
+        types,
+        ruleBox,
         abilities: (cardData.abilities || null) as any,
         attacks: (cardData.attacks || null) as any,
         rules: cardData.rules || [],
@@ -243,6 +290,9 @@ export class CardsService {
         regulationMark: cardData.regulationMark || null,
         imageUrl: cardData.imageUrl || null,
         imageUrlHiRes: cardData.imageUrlHiRes || null,
+        primaryCard: {
+          connect: { id: primaryCardId }
+        }
       },
     });
   }
@@ -319,7 +369,9 @@ export class CardsService {
       where.supertype = supertype;
     }
     if (types) {
-      where.types = types;
+      where.types = {
+        has: types,
+      };
     }
     if (rarity) {
       where.rarity = rarity;

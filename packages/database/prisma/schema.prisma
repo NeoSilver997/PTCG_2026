@@ -123,15 +123,18 @@ enum PokemonType {
 }
 
 enum Subtype {
-  BASIC
-  STAGE_1
-  STAGE_2
   ITEM
   SUPPORTER
   STADIUM
   TOOL
   BASIC_ENERGY
   SPECIAL_ENERGY
+}
+
+enum EvolutionStage {
+  BASIC
+  STAGE_1
+  STAGE_2
 }
 
 enum RuleBox {
@@ -141,6 +144,7 @@ enum RuleBox {
   VMAX
   VSTAR
   RADIANT
+  MEGA
 }
 
 enum Rarity {
@@ -212,8 +216,9 @@ model Card {
   name           String
   supertype      Supertype?
   subtypes       Subtype[]
+  evolutionStage EvolutionStage?  // Only for Pokemon cards
   hp             Int?
-  types          PokemonType?
+  types          PokemonType[]    // Pokemon can have multiple types
   ruleBox        RuleBox?
   
   // Card text

@@ -344,7 +344,7 @@ class JapaneseCardScraper:
                 
                 # Card classification
                 "supertype": supertype,
-                "subtype": subtype,
+                "subtypes": [subtype] if subtype else [],
                 "variantType": variant_type,
                 "rarity": rarity_enum,
                 
@@ -356,6 +356,7 @@ class JapaneseCardScraper:
                 "hp": hp,
                 "pokemonTypes": [pokemon_type] if pokemon_type else None,
                 "evolutionStage": evolution_stage,
+                "ruleBox": self._extract_rulebox(card_name),
                 "pokedexNumber": pokedex_number,
                 
                 # Combat stats
@@ -735,6 +736,19 @@ class JapaneseCardScraper:
             rules.append("You can't have more than 1 ACE SPEC card in your deck")
         
         return rules if rules else None
+    
+    def _extract_rulebox(self, card_name: str) -> Optional[str]:
+        """Extract ruleBox enum value from card name"""
+        # Check name for rule box keywords (VMAX, VSTAR, etc.)
+        for pattern_name, pattern in RULE_BOX_PATTERNS.items():
+            if re.search(pattern, card_name):
+                return pattern_name
+        
+        # Check for MEGA in name
+        if re.search(r'M([^a-z]|$)', card_name):  # M followed by non-lowercase or end
+            return 'MEGA'
+        
+        return None
 
     def _extract_effect_text(self, soup: BeautifulSoup, supertype: str) -> Optional[str]:
         """Extract card effect text (for Trainer/Energy cards)"""
@@ -785,10 +799,11 @@ class JapaneseCardScraper:
         evolution_stage: Optional[str],
         soup: BeautifulSoup,
         page_text: str
-    ) -> str:
-        """Determine card subtype"""
+    ) -> Optional[str]:
+        """Determine card subtype - Returns None for Pokemon cards"""
+        # Pokemon cards don't have subtypes (evolution stage is separate)
         if supertype == 'POKEMON':
-            return evolution_stage or 'BASIC'
+            return None
         
         if supertype == 'ENERGY':
             if '基本' in page_text:

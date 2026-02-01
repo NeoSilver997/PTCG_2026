@@ -62,11 +62,15 @@ interface JapaneseCard {
   webCardId: string;
   name: string;
   expansionCode: string;
-  cardNumber: string;
+  cardNumber?: string;
+  collectorNumber?: string;
   supertype?: string;
+  subtype?: string;
   subtypes?: string[];
-  hp?: string;
+  evolutionStage?: string;
+  hp?: string | number;
   types?: string[];
+  pokemonTypes?: string[];
   abilities?: any[];
   attacks?: any[];
   rules?: string[];
@@ -149,13 +153,27 @@ async function importCard(prisma: PrismaClient, card: any) {
     },
   });
 
-  // 4. Map data
-  const supertype = card.supertype ? SUPERTYPE_MAP[card.supertype] : null;
-  const subtypes = card.subtypes?.map(st => SUBTYPE_MAP[st]).filter(Boolean) || [];
-  const types = card.types?.map(t => TYPE_MAP[t]).filter(Boolean) || [];
-  const rarity = card.rarity ? RARITY_MAP[card.rarity.toUpperCase()] : null;
+  // 4. Map data - handle both Japanese text and English enum values
+  let supertype = null;
+  if (card.supertype) {
+    supertype = SUPERTYPE_MAP[card.supertype] || (Object.values(Supertype).includes(card.supertype as Supertype) ? card.supertype as Supertype : null);
+  }
+
+  // Handle both subtypes array and single subtype string, plus evolutionStage
+  const subtypesSource = card.subtypes || (card.subtype ? [card.subtype] : card.evolutionStage ? [card.evolutionStage] : []);
+  const subtypes = subtypesSource.map(st => SUBTYPE_MAP[st] || (Object.values(Subtype).includes(st as Subtype) ? st as Subtype : null)).filter(Boolean) || [];
+  
+  // Handle both types and pokemonTypes fields
+  const typesSource = card.pokemonTypes || card.types || [];
+  const types = typesSource.map(t => TYPE_MAP[t] || (Object.values(PokemonType).includes(t as PokemonType) ? t as PokemonType : null)).filter(Boolean) || [];
+  
+  let rarity = null;
+  if (card.rarity) {
+    rarity = RARITY_MAP[card.rarity.toUpperCase()] || (Object.values(Rarity).includes(card.rarity as Rarity) ? card.rarity as Rarity : null);
+  }
+  
   const variantType = card.variantType ? (VARIANT_MAP[card.variantType.toUpperCase()] || VariantType.NORMAL) : VariantType.NORMAL;
-  const hp = card.hp ? parseInt(card.hp, 10) : null;
+  const hp = card.hp ? (typeof card.hp === 'number' ? card.hp : parseInt(card.hp, 10)) : null;
 
   // 5. Upsert Card using webCardId as unique key
   await prisma.card.upsert({

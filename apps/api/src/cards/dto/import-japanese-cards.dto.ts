@@ -27,14 +27,20 @@ export class JapaneseCardDto {
   @ApiProperty({ example: ['たねポケモン'], required: false, isArray: true })
   subtypes?: string[];
 
+  @ApiProperty({ example: 'たね', required: false })
+  evolutionStage?: string;
+
+  @ApiProperty({ example: 'VMAX', required: false })
+  ruleBox?: string;
+
   @ApiProperty({ example: '40', required: false })
   hp?: string;
 
-  @ApiProperty({ example: '草', required: false })
-  types?: string;
+  @ApiProperty({ example: ['GRASS'], required: false, isArray: true })
+  types?: string[];
 
-  @ApiProperty({ example: 'GRASS', required: false })
-  pokemonTypes?: string;
+  @ApiProperty({ example: ['GRASS'], required: false, isArray: true })
+  pokemonTypes?: string[];
 
   @ApiProperty({ required: false })
   abilities?: any[];
@@ -65,6 +71,27 @@ export class JapaneseCardDto {
 
   @ApiProperty({ required: false })
   variantType?: string;
+
+  @ApiProperty({ required: false })
+  language?: string;
+
+  @ApiProperty({ required: false })
+  region?: string;
+
+  @ApiProperty({ required: false })
+  sourceUrl?: string;
+
+  @ApiProperty({ required: false })
+  scrapedAt?: string;
+
+  @ApiProperty({ required: false })
+  pokedexNumber?: number;
+
+  @ApiProperty({ required: false })
+  weakness?: any;
+
+  @ApiProperty({ required: false })
+  retreatCost?: number;
 }
 
 export class ImportJapaneseCardsDto {
