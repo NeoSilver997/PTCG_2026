@@ -213,7 +213,7 @@ model Card {
   supertype      Supertype?
   subtypes       Subtype[]
   hp             Int?
-  types          PokemonType[]
+  types          PokemonType?
   ruleBox        RuleBox?
   
   // Card text

@@ -153,6 +153,11 @@ Global exception filter at [all-exceptions.filter.ts](apps/api/src/common/filter
 - **PrimaryCard:** `[primaryExpansionId, cardNumber]` - One card number per expansion
 - **RegionalExpansion:** `[primaryExpansionId, region]` - One regional code per region
 
+### Business Logic Validation
+- **Pokemon cards MUST have types:** All cards with `supertype: POKEMON` must have at least one entry in the `types` array (PokemonType enum)
+- **Type validation:** Service layer throws BadRequestException if a Pokemon card is imported without types
+- **Data mapping:** The `pokemonTypes` field from scrapers is mapped to `types` in the database
+
 ### Foreign Key Cascades
 All relationships use `onDelete: Cascade` to maintain referential integrity when deleting parents.
 
@@ -270,6 +275,7 @@ Redis TTL recommendations:
 5. **Scraper duplicates** - Check `webCardId` before inserting cards
 6. **Missing cascade deletes** - Use `onDelete: Cascade` for parent-child relations
 7. **Pagination limits** - Enforce max: 100 items per page
+8. **Pokemon cards without types** - All `supertype: POKEMON` cards MUST have at least one type in `types` array
 
 ## Key Files Reference
 

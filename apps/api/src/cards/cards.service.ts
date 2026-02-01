@@ -170,20 +170,19 @@ export class CardsService {
           .filter(Boolean)
       : [];
 
-    // Handle both 'types' and 'pokemonTypes' fields
+    // Handle both 'types' and 'pokemonTypes' fields - use first type only
     const typesArray = cardData.pokemonTypes || cardData.types || [];
-    const types = typesArray.length > 0
-      ? typesArray
-          .map(t => {
-            // First try as enum value (already in correct format)
-            if (Object.values(PokemonType).includes(t as PokemonType)) {
-              return t as PokemonType;
-            }
-            // Then try mapping from Japanese
-            return this.TYPE_MAP[t];
-          })
-          .filter(Boolean)
-      : [];
+    let type: PokemonType | null = null;
+    if (typesArray.length > 0) {
+      const firstType = typesArray[0];
+      // First try as enum value (already in correct format)
+      if (Object.values(PokemonType).includes(firstType as PokemonType)) {
+        type = firstType as PokemonType;
+      } else {
+        // Then try mapping from Japanese
+        type = this.TYPE_MAP[firstType] || null;
+      }
+    }
 
     // Handle both short codes and enum values for rarity  
     let rarity = null;
@@ -198,6 +197,14 @@ export class CardsService {
 
     const hp = cardData.hp ? parseInt(cardData.hp, 10) : null;
 
+    // Validation: Pokemon cards MUST have a type
+    if (supertype === Supertype.POKEMON && !type) {
+      throw new BadRequestException(
+        `Pokemon card ${cardData.webCardId} (${cardData.name}) must have a type. ` +
+        `Received pokemonTypes: ${JSON.stringify(cardData.pokemonTypes)}, types: ${JSON.stringify(cardData.types)}`
+      );
+    }
+
     return await this.prisma.card.upsert({
       where: { webCardId: cardData.webCardId },
       update: {
@@ -205,7 +212,7 @@ export class CardsService {
         supertype,
         subtypes: subtypes as any,
         hp,
-        types: types as any,
+        types: type as any,
         abilities: (cardData.abilities || null) as any,
         attacks: (cardData.attacks || null) as any,
         rules: cardData.rules || [],
@@ -226,7 +233,7 @@ export class CardsService {
         supertype,
         subtypes: subtypes as any,
         hp,
-        types: types as any,
+        types: type as any,
         abilities: (cardData.abilities || null) as any,
         attacks: (cardData.attacks || null) as any,
         rules: cardData.rules || [],
@@ -274,9 +281,7 @@ export class CardsService {
       where.supertype = supertype;
     }
     if (types) {
-      where.types = {
-        has: types,
-      };
+      where.types = types;
     }
     if (rarity) {
       where.rarity = rarity;

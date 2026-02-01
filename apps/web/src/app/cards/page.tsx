@@ -15,7 +15,7 @@ interface Card {
   webCardId: string;
   name: string;
   hp: number | null;
-  types: string[];
+  types: string | null;
   rarity: string | null;
   language: string;
   imageUrl: string | null;
@@ -190,13 +190,11 @@ export default function CardsPage() {
                         </td>
                         <td className="px-6 py-4 text-sm">{card.hp || '-'}</td>
                         <td className="px-6 py-4">
-                          <div className="flex gap-1">
-                            {card.types?.slice(0, 2).map((type, idx) => (
-                              <span key={idx} className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
-                                {type}
-                              </span>
-                            ))}
-                          </div>
+                          {card.types && (
+                            <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                              {card.types}
+                            </span>
+                          )}
                         </td>
                         <td className="px-6 py-4 text-sm">{card.rarity || '-'}</td>
                       </tr>

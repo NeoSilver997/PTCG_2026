@@ -21,17 +21,20 @@ async function updateCardsWithTypes() {
       });
       
       if (existingCard) {
-        // Update with types from pokemonTypes field
+        // Update with first type from pokemonTypes field
+        const firstType = cardData.pokemonTypes && cardData.pokemonTypes.length > 0 
+          ? cardData.pokemonTypes[0] 
+          : null;
         await prisma.card.update({
           where: { webCardId: cardData.webCardId },
           data: {
-            types: cardData.pokemonTypes || [],
+            types: firstType,
             supertype: cardData.supertype || null,
             rarity: cardData.rarity || null,
           }
         });
         updated++;
-        console.log(`✓ Updated ${cardData.webCardId}: ${cardData.name} - types: ${cardData.pokemonTypes?.join(', ')}`);
+        console.log(`✓ Updated ${cardData.webCardId}: ${cardData.name} - type: ${firstType}`);
       } else {
         notFound++;
         console.log(`✗ Card not found: ${cardData.webCardId}`);

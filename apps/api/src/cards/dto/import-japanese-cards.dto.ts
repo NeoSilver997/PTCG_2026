@@ -30,11 +30,11 @@ export class JapaneseCardDto {
   @ApiProperty({ example: '40', required: false })
   hp?: string;
 
-  @ApiProperty({ example: ['草'], required: false, isArray: true })
-  types?: string[];
+  @ApiProperty({ example: '草', required: false })
+  types?: string;
 
-  @ApiProperty({ example: ['GRASS'], required: false, isArray: true })
-  pokemonTypes?: string[];
+  @ApiProperty({ example: 'GRASS', required: false })
+  pokemonTypes?: string;
 
   @ApiProperty({ required: false })
   abilities?: any[];

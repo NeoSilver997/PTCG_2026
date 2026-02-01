@@ -42,12 +42,8 @@ export function CardGrid({ cards, onCardClick }: CardGridProps) {
               {card.hp && (
                 <span className="text-xs font-bold text-red-600">HP {card.hp}</span>
               )}
-              {card.types && card.types.length > 0 && (
-                <div className="flex gap-1">
-                  {card.types.slice(0, 2).map((type: string, idx: number) => (
-                    <TypeIcon key={idx} type={type} size="sm" />
-                  ))}
-                </div>
+              {card.types && (
+                <TypeIcon type={card.types} size="sm" />
               )}
             </div>
           </div>
