@@ -30,6 +30,15 @@ interface Filters {
   language: string;
   sortBy: string;
   sortOrder: string;
+  webCardId?: string;
+  subtypes?: string;
+  variantType?: string;
+  minHp?: string;
+  maxHp?: string;
+  artist?: string;
+  regulationMark?: string;
+  hasAbilities?: string;
+  hasAttacks?: string;
 }
 
 async function fetchCards(skip: number, take: number, filters: Filters) {
@@ -45,6 +54,17 @@ async function fetchCards(skip: number, take: number, filters: Filters) {
   if (filters.language) params.append('language', filters.language);
   if (filters.sortBy) params.append('sortBy', filters.sortBy);
   if (filters.sortOrder) params.append('sortOrder', filters.sortOrder);
+  
+  // Advanced filters
+  if (filters.webCardId) params.append('webCardId', filters.webCardId);
+  if (filters.subtypes) params.append('subtypes', filters.subtypes);
+  if (filters.variantType) params.append('variantType', filters.variantType);
+  if (filters.minHp) params.append('minHp', filters.minHp);
+  if (filters.maxHp) params.append('maxHp', filters.maxHp);
+  if (filters.artist) params.append('artist', filters.artist);
+  if (filters.regulationMark) params.append('regulationMark', filters.regulationMark);
+  if (filters.hasAbilities) params.append('hasAbilities', filters.hasAbilities);
+  if (filters.hasAttacks) params.append('hasAttacks', filters.hasAttacks);
   
   const { data } = await apiClient.get(`/cards?${params.toString()}`);
   return data; // Return full response with data and pagination
@@ -62,6 +82,15 @@ export default function CardsPage() {
     language: '',
     sortBy: 'createdAt',
     sortOrder: 'desc',
+    webCardId: '',
+    subtypes: '',
+    variantType: '',
+    minHp: '',
+    maxHp: '',
+    artist: '',
+    regulationMark: '',
+    hasAbilities: '',
+    hasAttacks: '',
   });
   const pageSize = 48;
 
@@ -186,6 +215,15 @@ export default function CardsPage() {
                 language: '',
                 sortBy: 'createdAt',
                 sortOrder: 'desc',
+                webCardId: '',
+                subtypes: '',
+                variantType: '',
+                minHp: '',
+                maxHp: '',
+                artist: '',
+                regulationMark: '',
+                hasAbilities: '',
+                hasAttacks: '',
               })}
               className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >
