@@ -310,6 +310,7 @@ export class CardsService {
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
     subtypes?: string;
+    evolutionStage?: string;
     ruleBox?: string;
     variantType?: string;
     minHp?: number;
@@ -340,6 +341,7 @@ export class CardsService {
       sortBy = 'createdAt',
       sortOrder = 'desc',
       subtypes,
+      evolutionStage,
       ruleBox,
       variantType,
       minHp,
@@ -351,6 +353,28 @@ export class CardsService {
     } = params;
 
     const where: any = {};
+    
+    // Handle legacy values passed as subtypes that belong to other enums
+    let actualEvolutionStage = evolutionStage;
+    let actualRuleBox = ruleBox;
+    let actualSubtypes = subtypes;
+    
+    if (subtypes) {
+      const evolutionStageValues = ['BASIC', 'STAGE_1', 'STAGE_2'];
+      const ruleBoxValues = ['EX', 'GX', 'V', 'VMAX', 'VSTAR', 'RADIANT', 'MEGA'];
+      
+      if (evolutionStageValues.includes(subtypes)) {
+        // Redirect to evolutionStage filter
+        this.logger.log(`Redirecting subtypes=${subtypes} to evolutionStage`);
+        actualEvolutionStage = subtypes;
+        actualSubtypes = undefined;
+      } else if (ruleBoxValues.includes(subtypes)) {
+        // Redirect to ruleBox filter
+        this.logger.log(`Redirecting subtypes=${subtypes} to ruleBox`);
+        actualRuleBox = subtypes;
+        actualSubtypes = undefined;
+      }
+    }
     
     // Existing filters
     if (webCardId) {
@@ -378,13 +402,16 @@ export class CardsService {
     }
 
     // New advanced filters
-    if (subtypes) {
+    if (actualSubtypes) {
       where.subtypes = {
-        hasSome: [subtypes],
+        hasSome: [actualSubtypes],
       };
     }
-    if (ruleBox) {
-      where.ruleBox = ruleBox;
+    if (actualEvolutionStage) {
+      where.evolutionStage = actualEvolutionStage;
+    }
+    if (actualRuleBox) {
+      where.ruleBox = actualRuleBox;
     }
     if (variantType) {
       where.variantType = variantType;

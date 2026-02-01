@@ -67,10 +67,15 @@ export class FindAllCardsDto {
   rarity?: string;
 
   // New advanced filters
-  @ApiProperty({ required: false, example: 'BASIC' })
+  @ApiProperty({ required: false, example: 'ITEM', description: 'Subtype filter (ITEM, SUPPORTER, STADIUM, TOOL, BASIC_ENERGY, SPECIAL_ENERGY)' })
   @IsOptional()
   @IsString()
   subtypes?: string;
+
+  @ApiProperty({ required: false, example: 'BASIC', description: 'Evolution stage filter for Pokemon (BASIC, STAGE_1, STAGE_2)' })
+  @IsOptional()
+  @IsString()
+  evolutionStage?: string;
 
   @ApiProperty({ required: false, example: 'V' })
   @IsOptional()

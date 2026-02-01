@@ -459,24 +459,31 @@ class JapaneseCardScraper:
         return None
 
     def _extract_evolution_stage(self, soup: BeautifulSoup, text: str) -> Optional[str]:
-        """Extract evolution stage"""
-        # Check for patterns with various spacing
-        patterns = [
-            ('VMAX', 'VMAX'),
-            ('VSTAR', 'VSTAR'),
-            ('M進化', 'MEGA'),
-            ('2進化', 'STAGE_2'),
-            ('2 進化', 'STAGE_2'),
-            ('1進化', 'STAGE_1'),
-            ('1 進化', 'STAGE_1'),
-            ('たね', 'BASIC')
-        ]
+        """Extract evolution stage from the specific <span class="type"> element"""
+        # Find the evolution stage in the TopInfo section
+        type_span = soup.find('span', class_='type')
+        if not type_span:
+            return 'BASIC'  # Default if no type span found
         
-        for pattern, stage in patterns:
-            if pattern in text:
-                return stage
+        stage_text = type_span.get_text(strip=True)
         
-        return 'BASIC'  # Default for Pokemon
+        # Normalize whitespace (handles &nbsp; and regular spaces)
+        stage_text = ' '.join(stage_text.split())
+        
+        # Map to database enum values
+        stage_map = {
+            'たね': 'BASIC',
+            'たねポケモン': 'BASIC',
+            '1 進化': 'STAGE_1',
+            '1進化': 'STAGE_1',
+            '2 進化': 'STAGE_2',
+            '2進化': 'STAGE_2',
+            'M進化': 'MEGA',
+            'VMAX': 'VMAX',
+            'VSTAR': 'VSTAR'
+        }
+        
+        return stage_map.get(stage_text, 'BASIC')
 
     def _extract_weakness(self, soup: BeautifulSoup) -> Tuple[Optional[str], Optional[str]]:
         """Extract weakness type and value"""

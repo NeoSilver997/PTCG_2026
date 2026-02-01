@@ -1,4 +1,4 @@
-import { PrismaClient, LanguageCode, Supertype, Subtype, PokemonType, Rarity, VariantType, Region } from '../packages/database/node_modules/.prisma/client';
+import { PrismaClient, LanguageCode, Supertype, Subtype, EvolutionStage, RuleBox, PokemonType, Rarity, VariantType, Region } from '../packages/database/node_modules/.prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
@@ -11,15 +11,32 @@ const SUPERTYPE_MAP: Record<string, Supertype> = {
 };
 
 const SUBTYPE_MAP: Record<string, Subtype> = {
-  'たねポケモン': Subtype.BASIC,
-  '1進化': Subtype.STAGE_1,
-  '2進化': Subtype.STAGE_2,
   'グッズ': Subtype.ITEM,
   'サポート': Subtype.SUPPORTER,
   'スタジアム': Subtype.STADIUM,
   'ポケモンのどうぐ': Subtype.TOOL,
   '基本エネルギー': Subtype.BASIC_ENERGY,
   '特殊エネルギー': Subtype.SPECIAL_ENERGY,
+};
+
+const EVOLUTION_STAGE_MAP: Record<string, EvolutionStage> = {
+  'たね': EvolutionStage.BASIC,
+  'たねポケモン': EvolutionStage.BASIC,
+  '1進化': EvolutionStage.STAGE_1,
+  '2進化': EvolutionStage.STAGE_2,
+  'BASIC': EvolutionStage.BASIC,
+  'STAGE_1': EvolutionStage.STAGE_1,
+  'STAGE_2': EvolutionStage.STAGE_2,
+};
+
+const RULEBOX_MAP: Record<string, RuleBox> = {
+  'EX': RuleBox.EX,
+  'GX': RuleBox.GX,
+  'V': RuleBox.V,
+  'VMAX': RuleBox.VMAX,
+  'VSTAR': RuleBox.VSTAR,
+  'RADIANT': RuleBox.RADIANT,
+  'MEGA': RuleBox.MEGA,
 };
 
 const TYPE_MAP: Record<string, PokemonType> = {
@@ -159,9 +176,25 @@ async function importCard(prisma: PrismaClient, card: any) {
     supertype = SUPERTYPE_MAP[card.supertype] || (Object.values(Supertype).includes(card.supertype as Supertype) ? card.supertype as Supertype : null);
   }
 
-  // Handle both subtypes array and single subtype string, plus evolutionStage
-  const subtypesSource = card.subtypes || (card.subtype ? [card.subtype] : card.evolutionStage ? [card.evolutionStage] : []);
-  const subtypes = subtypesSource.map(st => SUBTYPE_MAP[st] || (Object.values(Subtype).includes(st as Subtype) ? st as Subtype : null)).filter(Boolean) || [];
+  // Handle subtypes (only for Trainers/Energy - Pokemon use evolutionStage instead)
+  const subtypesSource = card.subtypes || (card.subtype ? [card.subtype] : []);
+  const subtypes = subtypesSource
+    .map(st => SUBTYPE_MAP[st] || (Object.values(Subtype).includes(st as Subtype) ? st as Subtype : null))
+    .filter(Boolean) || [];
+  
+  // Map evolutionStage (for Pokemon cards only)
+  let evolutionStage = null;
+  if (supertype === Supertype.POKEMON && card.evolutionStage) {
+    evolutionStage = EVOLUTION_STAGE_MAP[card.evolutionStage] || 
+      (Object.values(EvolutionStage).includes(card.evolutionStage as EvolutionStage) ? card.evolutionStage as EvolutionStage : null);
+  }
+  
+  // Map ruleBox (for special mechanics like EX, GX, V, etc.)
+  let ruleBox = null;
+  if (card.ruleBox) {
+    ruleBox = RULEBOX_MAP[card.ruleBox.toUpperCase()] || 
+      (Object.values(RuleBox).includes(card.ruleBox as RuleBox) ? card.ruleBox as RuleBox : null);
+  }
   
   // Handle both types and pokemonTypes fields
   const typesSource = card.pokemonTypes || card.types || [];
@@ -183,6 +216,8 @@ async function importCard(prisma: PrismaClient, card: any) {
       name: card.name,
       supertype,
       subtypes,
+      evolutionStage,
+      ruleBox,
       hp,
       types,
       abilities: card.abilities || null,
@@ -204,6 +239,8 @@ async function importCard(prisma: PrismaClient, card: any) {
       name: card.name,
       supertype,
       subtypes,
+      evolutionStage,
+      ruleBox,
       hp,
       types,
       abilities: card.abilities || null,
