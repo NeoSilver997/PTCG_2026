@@ -8,7 +8,7 @@ import { FilterPanel } from '@/components/filter-panel';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useState } from 'react';
-import { Plus, LayoutGrid, List } from 'lucide-react';
+import { Plus, LayoutGrid, List, ArrowUpDown } from 'lucide-react';
 
 interface Card {
   id: string;
@@ -28,6 +28,8 @@ interface Filters {
   types: string;
   rarity: string;
   language: string;
+  sortBy: string;
+  sortOrder: string;
 }
 
 async function fetchCards(skip: number, take: number, filters: Filters) {
@@ -41,6 +43,8 @@ async function fetchCards(skip: number, take: number, filters: Filters) {
   if (filters.types) params.append('types', filters.types);
   if (filters.rarity) params.append('rarity', filters.rarity);
   if (filters.language) params.append('language', filters.language);
+  if (filters.sortBy) params.append('sortBy', filters.sortBy);
+  if (filters.sortOrder) params.append('sortOrder', filters.sortOrder);
   
   const { data } = await apiClient.get(`/cards?${params.toString()}`);
   return data; // Return full response with data and pagination
@@ -56,6 +60,8 @@ export default function CardsPage() {
     types: '',
     rarity: '',
     language: '',
+    sortBy: 'createdAt',
+    sortOrder: 'desc',
   });
   const pageSize = 48;
 
@@ -89,6 +95,33 @@ export default function CardsPage() {
             </div>
             
             <div className="flex gap-3">
+              {/* Sorting Controls */}
+              <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200">
+                <ArrowUpDown className="w-4 h-4 text-gray-500" />
+                <select
+                  value={filters.sortBy}
+                  onChange={(e) => setFilters({ ...filters, sortBy: e.target.value })}
+                  className="border-none bg-transparent text-sm focus:outline-none focus:ring-0"
+                >
+                  <option value="createdAt">建立時間</option>
+                  <option value="updatedAt">更新時間</option>
+                  <option value="name">卡片名稱</option>
+                  <option value="hp">HP</option>
+                  <option value="rarity">稀有度</option>
+                  <option value="supertype">類型</option>
+                </select>
+                <button
+                  onClick={() => setFilters({ ...filters, sortOrder: filters.sortOrder === 'asc' ? 'desc' : 'asc' })}
+                  className={`p-1 rounded hover:bg-gray-100 ${
+                    filters.sortOrder === 'desc' ? 'rotate-180' : ''
+                  } transition-transform`}
+                  title={filters.sortOrder === 'asc' ? '升序' : '降序'}
+                >
+                  ↓
+                </button>
+              </div>
+              
+              {/* View Mode Toggle */}
               <div className="flex gap-2">
                 <button
                   onClick={() => setViewMode('grid')}
@@ -113,6 +146,7 @@ export default function CardsPage() {
                   <List className="w-5 h-5" />
                 </button>
               </div>
+              
               <Link
                 href="/cards/new"
                 className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
@@ -148,6 +182,8 @@ export default function CardsPage() {
                 types: '',
                 rarity: '',
                 language: '',
+                sortBy: 'createdAt',
+                sortOrder: 'desc',
               })}
               className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >

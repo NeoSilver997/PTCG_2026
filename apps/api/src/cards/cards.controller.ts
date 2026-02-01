@@ -15,6 +15,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiResponse, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { CardsService } from './cards.service';
 import { ImportJapaneseCardsDto } from './dto/import-japanese-cards.dto';
+import { FindAllCardsDto } from './dto/find-all-cards.dto';
 import { LanguageCode } from '@ptcg/database';
 
 @ApiTags('cards')
@@ -70,28 +71,10 @@ export class CardsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get cards with pagination and filters' })
+  @ApiOperation({ summary: 'Get cards with pagination, filters, and sorting' })
   @ApiResponse({ status: 200, description: 'Returns paginated cards' })
-  async getCards(
-    @Query('skip') skip?: number,
-    @Query('take') take?: number,
-    @Query('language') language?: LanguageCode,
-    @Query('expansionCode') expansionCode?: string,
-    @Query('name') name?: string,
-    @Query('supertype') supertype?: string,
-    @Query('types') types?: string,
-    @Query('rarity') rarity?: string,
-  ) {
-    return await this.cardsService.getCards({
-      skip: skip ? parseInt(skip.toString(), 10) : 0,
-      take: take ? parseInt(take.toString(), 10) : 50,
-      language,
-      expansionCode,
-      name,
-      supertype,
-      types,
-      rarity,
-    });
+  async getCards(@Query() query: FindAllCardsDto) {
+    return await this.cardsService.getCards(query);
   }
 
   @Get(':id')

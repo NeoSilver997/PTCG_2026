@@ -256,6 +256,17 @@ export class CardsService {
     supertype?: string;
     types?: string;
     rarity?: string;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+    subtypes?: string;
+    ruleBox?: string;
+    variantType?: string;
+    minHp?: number;
+    maxHp?: number;
+    artist?: string;
+    regulationMark?: string;
+    hasAbilities?: boolean;
+    hasAttacks?: boolean;
   }): Promise<{
     data: any[];
     pagination: {
@@ -265,9 +276,31 @@ export class CardsService {
       hasMore: boolean;
     };
   }> {
-    const { skip = 0, take = 50, language, expansionCode, name, supertype, types, rarity } = params;
+    const { 
+      skip = 0, 
+      take = 50, 
+      language, 
+      expansionCode, 
+      name, 
+      supertype, 
+      types, 
+      rarity,
+      sortBy = 'createdAt',
+      sortOrder = 'desc',
+      subtypes,
+      ruleBox,
+      variantType,
+      minHp,
+      maxHp,
+      artist,
+      regulationMark,
+      hasAbilities,
+      hasAttacks,
+    } = params;
 
     const where: any = {};
+    
+    // Existing filters
     if (language) {
       where.language = language;
     }
@@ -287,6 +320,60 @@ export class CardsService {
       where.rarity = rarity;
     }
 
+    // New advanced filters
+    if (subtypes) {
+      where.subtypes = {
+        has: subtypes,
+      };
+    }
+    if (ruleBox) {
+      where.ruleBox = ruleBox;
+    }
+    if (variantType) {
+      where.variantType = variantType;
+    }
+    if (minHp !== undefined || maxHp !== undefined) {
+      where.hp = {};
+      if (minHp !== undefined) {
+        where.hp.gte = minHp;
+      }
+      if (maxHp !== undefined) {
+        where.hp.lte = maxHp;
+      }
+    }
+    if (artist) {
+      where.artist = {
+        contains: artist,
+        mode: 'insensitive',
+      };
+    }
+    if (regulationMark) {
+      where.regulationMark = regulationMark;
+    }
+    if (hasAbilities !== undefined) {
+      if (hasAbilities) {
+        where.abilities = { not: null };
+      } else {
+        where.abilities = null;
+      }
+    }
+    if (hasAttacks !== undefined) {
+      if (hasAttacks) {
+        where.attacks = { not: null };
+      } else {
+        where.attacks = null;
+      }
+    }
+
+    // Dynamic sorting
+    const orderBy: any = {};
+    const validSortFields = ['name', 'hp', 'createdAt', 'updatedAt', 'rarity', 'supertype'];
+    if (sortBy && validSortFields.includes(sortBy)) {
+      orderBy[sortBy] = sortOrder || 'desc';
+    } else {
+      orderBy.createdAt = 'desc'; // Default sort
+    }
+
     const [cards, total] = await Promise.all([
       this.prisma.card.findMany({
         where,
@@ -295,9 +382,7 @@ export class CardsService {
         include: {
           primaryCard: true,
         },
-        orderBy: {
-          createdAt: 'desc',
-        },
+        orderBy,
       }),
       this.prisma.card.count({ where }),
     ]);
@@ -323,11 +408,38 @@ export class CardsService {
   }
 
   async getCardByWebCardId(webCardId: string): Promise<any> {
-    return await this.prisma.card.findUnique({
+    const card = await this.prisma.card.findUnique({
       where: { webCardId },
       include: {
         primaryCard: true,
       },
     });
+
+    if (!card) {
+      return null;
+    }
+
+    // Get language variants (cards with same primaryCardId)
+    const languageVariants = await this.prisma.card.findMany({
+      where: {
+        primaryCardId: card.primaryCardId,
+        NOT: {
+          id: card.id, // Exclude current card
+        },
+      },
+      select: {
+        id: true,
+        webCardId: true,
+        name: true,
+        language: true,
+        variantType: true,
+        imageUrl: true,
+      },
+    });
+
+    return {
+      ...card,
+      languageVariants,
+    };
   }
 }
