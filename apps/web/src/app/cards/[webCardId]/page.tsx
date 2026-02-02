@@ -82,7 +82,7 @@ async function fetchCardDetail(webCardId: string) {
 async function searchCardsByName(name: string) {
   try {
     const { data } = await apiClient.get('/cards', {
-      params: { name, take: 5 }
+      params: { name, take: 100 }
     });
     return data?.data || [];
   } catch (error) {
@@ -134,12 +134,23 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
   });
 
   const { data: evolvesToCards = [] } = useQuery({
-    queryKey: ['evolutionTo', card?.evolvesTo],
+    queryKey: ['evolutionTo', card?.evolvesTo, card?.webCardId],
     queryFn: async () => {
       if (!card?.evolvesTo) return [];
       const names = card.evolvesTo.split(',').map(n => n.trim());
       const results = await Promise.all(names.map(name => searchCardsByName(name)));
-      return results.flat();
+      const allCards = results.flat();
+      
+      // Remove duplicates by webCardId and exclude current card
+      const uniqueCards = Array.from(
+        new Map(
+          allCards
+            .filter((c: any) => c.webCardId !== card.webCardId)
+            .map(c => [c.webCardId, c])
+        ).values()
+      );
+      
+      return uniqueCards;
     },
     enabled: !!card?.evolvesTo,
   });
@@ -211,6 +222,12 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
               .map(c => [c.webCardId, c])
           ).values()
         );
+        
+        console.log('Evolution cards found:', uniqueCards.length);
+        console.log('Current card expansion:', card.regionalExpansion?.code);
+        uniqueCards.forEach((c: any) => {
+          console.log(`  - ${c.name} (${c.evolutionStage}): ${c.regionalExpansion?.code}`);
+        });
         
         return uniqueCards;
       } catch (error) {
@@ -355,6 +372,42 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
               </dl>
             </div>
 
+            {/* Attacks */}
+            {card.attacks && Array.isArray(card.attacks) && card.attacks.length > 0 && (
+              <div className="bg-white rounded-lg p-6 shadow-sm">
+                <h2 className="text-xl font-semibold mb-4 text-gray-900">招式</h2>
+                {card.attacks.map((attack: any, index: number) => (
+                  <div key={index} className="mb-4 last:mb-0 border-b last:border-0 pb-4 last:pb-0">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="font-semibold text-gray-900">{attack.name}</div>
+                        {(attack.effect || attack.text) && (
+                          <div className="text-sm text-gray-800 mt-1">{attack.effect || attack.text}</div>
+                        )}
+                      </div>
+                      {attack.damage && (
+                        <div className="ml-4 text-xl font-bold text-red-600">{attack.damage}</div>
+                      )}
+                    </div>
+                    {attack.cost && attack.cost.length > 0 && (
+                      <div className="flex gap-1 mt-2">
+                        {(Array.isArray(attack.cost) ? attack.cost : attack.cost.split('')).map((cost: string, idx: number) => (
+                          <span
+                            key={idx}
+                            className={`w-6 h-6 rounded-full flex items-center justify-center text-xs text-white ${
+                              TYPE_COLORS[cost] || 'bg-gray-500'
+                            }`}
+                          >
+                            {cost.charAt(0)}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* Evolution Chain */}
             {(card.evolvesFrom || card.evolvesTo || card.evolutionStage) && (
               <div className="bg-white rounded-lg p-6 shadow-sm">
@@ -373,7 +426,10 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                   <div className="flex-shrink-0">
                     <div className="text-xs font-semibold text-gray-500 mb-3 text-center">基礎</div>
                     {(() => {
-                      const basicCard = evolvesIntoThisCard.find((c: any) => c.evolutionStage === 'BASIC');
+                      const currentExpansionCode = card.regionalExpansion?.code;
+                      const basicCard = evolvesIntoThisCard.find((c: any) => 
+                        c.evolutionStage === 'BASIC' && c.regionalExpansion?.code === currentExpansionCode
+                      ) || evolvesIntoThisCard.find((c: any) => c.evolutionStage === 'BASIC');
                       if (basicCard) {
                         return (
                           <Link 
@@ -436,7 +492,10 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                   <div className="flex-shrink-0">
                     <div className="text-xs font-semibold text-gray-500 mb-3 text-center">1進化</div>
                     {(() => {
-                      const stage1Card = evolvesIntoThisCard.find((c: any) => c.evolutionStage === 'STAGE_1');
+                      const currentExpansionCode = card.regionalExpansion?.code;
+                      const stage1Card = evolvesIntoThisCard.find((c: any) => 
+                        c.evolutionStage === 'STAGE_1' && c.regionalExpansion?.code === currentExpansionCode
+                      ) || evolvesIntoThisCard.find((c: any) => c.evolutionStage === 'STAGE_1');
                       if (card.evolutionStage === 'STAGE_1') {
                         return (
                           <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-500 rounded-lg p-4 min-w-[140px]">
@@ -526,41 +585,53 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                 </div>
 
                 {/* Evolution Options */}
-                {evolvesToCards.length > 0 && (
-                  <div className="mt-6 pt-6 border-t border-gray-200">
-                    <div className="text-sm font-medium text-gray-700 mb-3">所有可進化選項：</div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                      {evolvesToCards.map((evolCard: any) => (
-                        <Link
-                          key={evolCard.webCardId}
-                          href={`/cards/${evolCard.webCardId}`}
-                          className="block bg-white border-2 border-purple-200 hover:border-purple-400 rounded-lg p-3 transition-all hover:shadow-lg"
-                        >
-                          {evolCard.imageUrl && (
-                            <img 
-                              src={evolCard.imageUrl} 
-                              alt={evolCard.name} 
-                              className="w-full h-40 object-contain mb-2 rounded"
-                            />
-                          )}
-                          <div className="text-sm font-medium text-gray-900 mb-1 truncate" title={evolCard.name}>
-                            {evolCard.name}
-                          </div>
-                          {evolCard.primaryCard?.primaryExpansion && (
-                            <div className="text-xs text-gray-600 mb-1">
-                              {evolCard.primaryCard.primaryExpansion.nameEn} #{evolCard.primaryCard.cardNumber}
+                {(() => {
+                  // Sort by webCardId descending to show newest first
+                  const sortedCards = [...evolvesToCards].sort((a, b) => 
+                    b.webCardId.localeCompare(a.webCardId)
+                  );
+                  
+                  // Show all cards (no limit) to ensure all versions are visible
+                  const displayCards = sortedCards;
+                  
+                  return displayCards.length > 0 && (
+                    <div className="mt-6 pt-6 border-t border-gray-200">
+                      <div className="text-sm font-medium text-gray-700 mb-3">
+                        所有可進化選項 ({displayCards.length} 個版本)：
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                        {displayCards.map((evolCard: any) => (
+                          <Link
+                            key={evolCard.webCardId}
+                            href={`/cards/${evolCard.webCardId}`}
+                            className="block bg-white border-2 border-purple-200 hover:border-purple-400 rounded-lg p-3 transition-all hover:shadow-lg"
+                          >
+                            {evolCard.imageUrl && (
+                              <img 
+                                src={evolCard.imageUrl} 
+                                alt={evolCard.name} 
+                                className="w-full h-40 object-contain mb-2 rounded"
+                              />
+                            )}
+                            <div className="text-sm font-medium text-gray-900 mb-1 truncate" title={evolCard.name}>
+                              {evolCard.name}
                             </div>
-                          )}
-                          {evolCard.regionalExpansion?.code && (
-                            <div className="text-xs text-purple-600 font-medium">
-                              {evolCard.regionalExpansion.code}
-                            </div>
-                          )}
-                        </Link>
-                      ))}
+                            {evolCard.primaryCard?.primaryExpansion && (
+                              <div className="text-xs text-gray-600 mb-1">
+                                {evolCard.primaryCard.primaryExpansion.nameEn} #{evolCard.primaryCard.cardNumber}
+                              </div>
+                            )}
+                            {evolCard.regionalExpansion?.code && (
+                              <div className="text-xs text-purple-600 font-medium">
+                                {evolCard.regionalExpansion.code}
+                              </div>
+                            )}
+                          </Link>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 <div className="mt-4 text-xs text-gray-500 italic">
                   {evolvesFromCards.length > 0 || evolvesToCards.length > 0 
@@ -594,42 +665,6 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                   {!card.subtypes.includes('SUPPORTER') && !card.subtypes.includes('ITEM') && !card.subtypes.includes('STADIUM') && !card.subtypes.includes('TOOL') && '效果'}
                 </h2>
                 <p className="text-gray-800 whitespace-pre-wrap leading-relaxed">{card.text}</p>
-              </div>
-            )}
-
-            {/* Attacks */}
-            {card.attacks && Array.isArray(card.attacks) && card.attacks.length > 0 && (
-              <div className="bg-white rounded-lg p-6 shadow-sm">
-                <h2 className="text-xl font-semibold mb-4 text-gray-900">招式</h2>
-                {card.attacks.map((attack: any, index: number) => (
-                  <div key={index} className="mb-4 last:mb-0 border-b last:border-0 pb-4 last:pb-0">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="font-semibold text-gray-900">{attack.name}</div>
-                        {(attack.effect || attack.text) && (
-                          <div className="text-sm text-gray-800 mt-1">{attack.effect || attack.text}</div>
-                        )}
-                      </div>
-                      {attack.damage && (
-                        <div className="ml-4 text-xl font-bold text-red-600">{attack.damage}</div>
-                      )}
-                    </div>
-                    {attack.cost && attack.cost.length > 0 && (
-                      <div className="flex gap-1 mt-2">
-                        {(Array.isArray(attack.cost) ? attack.cost : attack.cost.split('')).map((cost: string, idx: number) => (
-                          <span
-                            key={idx}
-                            className={`w-6 h-6 rounded-full flex items-center justify-center text-xs text-white ${
-                              TYPE_COLORS[cost] || 'bg-gray-500'
-                            }`}
-                          >
-                            {cost.charAt(0)}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
               </div>
             )}
 
