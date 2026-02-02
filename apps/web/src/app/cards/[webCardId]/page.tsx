@@ -314,7 +314,9 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="font-semibold text-gray-900">{attack.name}</div>
-                        <div className="text-sm text-gray-800 mt-1">{attack.text}</div>
+                        {(attack.effect || attack.text) && (
+                          <div className="text-sm text-gray-800 mt-1">{attack.effect || attack.text}</div>
+                        )}
                       </div>
                       {attack.damage && (
                         <div className="ml-4 text-xl font-bold text-red-600">{attack.damage}</div>
