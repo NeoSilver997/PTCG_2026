@@ -627,9 +627,20 @@ export class CardsService {
 
       const [cards, totalResult] = await Promise.all([
         this.prisma.$queryRawUnsafe<any[]>(`
-          SELECT c.*, pc.name as "primaryCardName", pc."skillsSignature" as "primaryCardSkillsSignature"
+          SELECT c.*, 
+                 pc.name as "primaryCardName", 
+                 pc."skillsSignature" as "primaryCardSkillsSignature",
+                 re.id as "regionalExpansion_id",
+                 re.code as "regionalExpansion_code",
+                 re.name as "regionalExpansion_name",
+                 re.region as "regionalExpansion_region",
+                 pe.id as "primaryExpansion_id",
+                 pe.code as "primaryExpansion_code",
+                 pe."nameEn" as "primaryExpansion_nameEn"
           FROM cards c
           LEFT JOIN primary_cards pc ON c."primaryCardId" = pc.id
+          LEFT JOIN regional_expansions re ON c."regionalExpansionId" = re.id
+          LEFT JOIN primary_expansions pe ON re."primaryExpansionId" = pe.id
           ${whereClause}
           ORDER BY c."${sortBy || 'createdAt'}" ${sortOrder || 'DESC'}
           LIMIT ${Math.min(take, 100)} OFFSET ${skip}
@@ -645,7 +656,17 @@ export class CardsService {
           primaryCard: {
             name: card.primaryCardName,
             skillsSignature: card.primaryCardSkillsSignature,
-          }
+          },
+          regionalExpansion: card.regionalExpansion_id ? {
+            id: card.regionalExpansion_id,
+            code: card.regionalExpansion_code,
+            name: card.regionalExpansion_name,
+            region: card.regionalExpansion_region,
+            primaryExpansion: card.primaryExpansion_id ? {
+              code: card.primaryExpansion_code,
+              nameEn: card.primaryExpansion_nameEn,
+            } : null,
+          } : null,
         })),
         pagination: {
           total: Number(totalResult[0].count),

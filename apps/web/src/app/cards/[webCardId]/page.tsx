@@ -427,9 +427,13 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                     <div className="text-xs font-semibold text-gray-500 mb-3 text-center">基礎</div>
                     {(() => {
                       const currentExpansionCode = card.regionalExpansion?.code;
-                      const basicCard = evolvesIntoThisCard.find((c: any) => 
-                        c.evolutionStage === 'BASIC' && c.regionalExpansion?.code === currentExpansionCode
-                      ) || evolvesIntoThisCard.find((c: any) => c.evolutionStage === 'BASIC');
+                      const basicCards = evolvesIntoThisCard.filter((c: any) => c.evolutionStage === 'BASIC');
+                      const basicCard = basicCards.find((c: any) => 
+                        c.regionalExpansion?.code === currentExpansionCode
+                      ) || (basicCards.length > 0 ? basicCards.sort((a, b) => 
+                        Math.abs(parseInt(a.webCardId.replace(/\D/g, '')) - parseInt(card.webCardId.replace(/\D/g, ''))) -
+                        Math.abs(parseInt(b.webCardId.replace(/\D/g, '')) - parseInt(card.webCardId.replace(/\D/g, '')))
+                      )[0] : null);
                       if (basicCard) {
                         return (
                           <Link 
@@ -493,9 +497,13 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                     <div className="text-xs font-semibold text-gray-500 mb-3 text-center">1進化</div>
                     {(() => {
                       const currentExpansionCode = card.regionalExpansion?.code;
-                      const stage1Card = evolvesIntoThisCard.find((c: any) => 
-                        c.evolutionStage === 'STAGE_1' && c.regionalExpansion?.code === currentExpansionCode
-                      ) || evolvesIntoThisCard.find((c: any) => c.evolutionStage === 'STAGE_1');
+                      const stage1Cards = evolvesIntoThisCard.filter((c: any) => c.evolutionStage === 'STAGE_1');
+                      const stage1Card = stage1Cards.find((c: any) => 
+                        c.regionalExpansion?.code === currentExpansionCode
+                      ) || (stage1Cards.length > 0 ? stage1Cards.sort((a, b) => 
+                        Math.abs(parseInt(a.webCardId.replace(/\D/g, '')) - parseInt(card.webCardId.replace(/\D/g, ''))) -
+                        Math.abs(parseInt(b.webCardId.replace(/\D/g, '')) - parseInt(card.webCardId.replace(/\D/g, '')))
+                      )[0] : null);
                       if (card.evolutionStage === 'STAGE_1') {
                         return (
                           <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-500 rounded-lg p-4 min-w-[140px]">
@@ -551,31 +559,44 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                         <div className="text-xs text-blue-700">當前卡片</div>
                       </div>
                     ) : card.evolvesTo ? (
-                      evolvesToCards.length > 0 ? (
-                        <Link
-                          href={`/cards/${evolvesToCards[0].webCardId}`}
-                          className="block bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-300 hover:border-purple-400 rounded-lg p-4 min-w-[140px] max-w-[200px] transition-all hover:shadow-md"
-                        >
-                          {evolvesToCards[0].imageUrl && (
-                            <img src={evolvesToCards[0].imageUrl} alt={evolvesToCards[0].name} className="w-full h-32 object-contain mb-2 rounded" />
-                          )}
-                          <div className="text-sm font-medium text-gray-900 mb-1 truncate" title={evolvesToCards[0].name}>
-                            {evolvesToCards[0].name}
+                      (() => {
+                        const currentExpansionCode = card.regionalExpansion?.code;
+                        // Filter to STAGE_2 cards only
+                        const stage2Cards = evolvesToCards.filter((c: any) => c.evolutionStage === 'STAGE_2');
+                        // Prioritize same expansion code, then nearest webCardId
+                        const stage2Card = stage2Cards.find((c: any) => 
+                          c.regionalExpansion?.code === currentExpansionCode
+                        ) || (stage2Cards.length > 0 ? stage2Cards.sort((a, b) => 
+                          Math.abs(parseInt(a.webCardId.replace(/\D/g, '')) - parseInt(card.webCardId.replace(/\D/g, ''))) -
+                          Math.abs(parseInt(b.webCardId.replace(/\D/g, '')) - parseInt(card.webCardId.replace(/\D/g, '')))
+                        )[0] : null);
+                        
+                        return stage2Card ? (
+                          <Link
+                            href={`/cards/${stage2Card.webCardId}`}
+                            className="block bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-300 hover:border-purple-400 rounded-lg p-4 min-w-[140px] max-w-[200px] transition-all hover:shadow-md"
+                          >
+                            {stage2Card.imageUrl && (
+                              <img src={stage2Card.imageUrl} alt={stage2Card.name} className="w-full h-32 object-contain mb-2 rounded" />
+                            )}
+                            <div className="text-sm font-medium text-gray-900 mb-1 truncate" title={stage2Card.name}>
+                              {stage2Card.name}
+                            </div>
+                            <div className="text-xs text-purple-700">
+                              {stage2Cards.length > 1 ? `點擊查看 (${stage2Cards.length} 種)` : '點擊查看 →'}
+                            </div>
+                          </Link>
+                        ) : (
+                          <div className="bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-300 rounded-lg p-4 min-w-[140px] max-w-[200px]">
+                            <div className="text-sm font-medium text-gray-900 mb-1 truncate" title={card.evolvesTo}>
+                              {card.evolvesTo.split(',')[0].trim()}
+                            </div>
+                            <div className="text-xs text-gray-600">
+                              {card.evolvesTo.split(',').length > 1 ? `+${card.evolvesTo.split(',').length - 1} 更多` : '可進化'}
+                            </div>
                           </div>
-                          <div className="text-xs text-purple-700">
-                            {evolvesToCards.length > 1 ? `點擊查看 (${evolvesToCards.length} 種)` : '點擊查看 →'}
-                          </div>
-                        </Link>
-                      ) : (
-                        <div className="bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-300 rounded-lg p-4 min-w-[140px] max-w-[200px]">
-                          <div className="text-sm font-medium text-gray-900 mb-1 truncate" title={card.evolvesTo}>
-                            {card.evolvesTo.split(',')[0].trim()}
-                          </div>
-                          <div className="text-xs text-gray-600">
-                            {card.evolvesTo.split(',').length > 1 ? `+${card.evolvesTo.split(',').length - 1} 更多` : '可進化'}
-                          </div>
-                        </div>
-                      )
+                        );
+                      })()
                     ) : (
                       <div className="bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg p-4 min-w-[140px]">
                         <div className="text-xs text-gray-400 text-center">—</div>
