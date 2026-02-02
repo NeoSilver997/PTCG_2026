@@ -280,7 +280,7 @@ export default function DeckStudioPage() {
                     <div className="grid grid-cols-3 gap-2 text-center">
                       <div className="bg-blue-50 rounded-lg p-2">
                         <div className="text-lg font-bold text-blue-600">{deck.pokemonCount}</div>
-                        <div className="text-xs text-blue-600">Pokemon</div>
+                        <div className="text-xs text-blue-600">Pokémon</div>
                       </div>
                       <div className="bg-green-50 rounded-lg p-2">
                         <div className="text-lg font-bold text-green-600">{deck.trainerCount}</div>
