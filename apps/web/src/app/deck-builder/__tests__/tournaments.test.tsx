@@ -14,8 +14,8 @@ describe('DeckBuilderTournamentsPage', () => {
   it('renders tournament list UI', () => {
     render(<DeckBuilderTournamentsPage />);
 
-    expect(screen.getByText('賽事牌組')).toBeInTheDocument();
+    expect(screen.getByText('Deck Builder')).toBeInTheDocument();
     expect(screen.getByText('2025 香港大師賽')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('搜尋賽事名稱')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('搜尋賽事或地區')).toBeInTheDocument();
   });
 });
