@@ -586,12 +586,29 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
 
                 {/* Evolution Options */}
                 {(() => {
+                  // Determine next evolution stage
+                  const nextStage = card.evolutionStage === 'BASIC' ? 'STAGE_1' : 
+                                   card.evolutionStage === 'STAGE_1' ? 'STAGE_2' : null;
+                  
+                  // Filter to only show next evolution level
+                  const nextLevelCards = nextStage ? 
+                    evolvesToCards.filter((c: any) => c.evolutionStage === nextStage) : 
+                    [];
+                  
+                  // Group by primaryCardId to show only one variant per card
+                  const primaryCardMap = new Map();
+                  nextLevelCards.forEach((card: any) => {
+                    if (!primaryCardMap.has(card.primaryCard?.id)) {
+                      primaryCardMap.set(card.primaryCard?.id, card);
+                    }
+                  });
+                  
                   // Sort by webCardId descending to show newest first
-                  const sortedCards = [...evolvesToCards].sort((a, b) => 
+                  const sortedCards = Array.from(primaryCardMap.values()).sort((a, b) => 
                     b.webCardId.localeCompare(a.webCardId)
                   );
                   
-                  // Show all cards (no limit) to ensure all versions are visible
+                  // Show all unique primary cards from next evolution level
                   const displayCards = sortedCards;
                   
                   return displayCards.length > 0 && (
