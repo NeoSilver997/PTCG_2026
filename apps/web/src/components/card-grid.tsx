@@ -74,7 +74,7 @@ function RarityBadge({ rarity }: { rarity: string }) {
   );
 }
 
-function TypeIcon({ type, size = 'md' }: { type: string; size?: 'sm' | 'md' | 'lg' }) {
+function TypeIcon({ type, size = 'md' }: { type: string | string[]; size?: 'sm' | 'md' | 'lg' }) {
   const typeColors: Record<string, string> = {
     COLORLESS: 'bg-gray-400',
     DARKNESS: 'bg-gray-800',
@@ -95,12 +95,14 @@ function TypeIcon({ type, size = 'md' }: { type: string; size?: 'sm' | 'md' | 'l
     lg: 'w-8 h-8 text-sm',
   };
   
-  const color = typeColors[type] || 'bg-gray-300';
+  const mainType = Array.isArray(type) ? type[0] : type;
+  const color = mainType ? typeColors[mainType] || 'bg-gray-300' : 'bg-gray-300';
   const sizeClass = sizeClasses[size];
+  const label = mainType ? mainType[0] : '';
   
   return (
     <div className={`${color} ${sizeClass} rounded-full flex items-center justify-center text-white font-bold`}>
-      {type[0]}
+      {label}
     </div>
   );
 }

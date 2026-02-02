@@ -15,7 +15,7 @@ interface Card {
   webCardId: string;
   name: string;
   hp: number | null;
-  types: string | null;
+  types: string[] | string | null;
   rarity: string | null;
   language: string;
   imageUrl: string | null;
@@ -225,6 +225,7 @@ export default function CardsPage() {
                 maxHp: '',
                 artist: '',
                 regulationMark: '',
+                expansionCode: '',
                 hasAbilities: '',
                 hasAttackText: '',
               })}
@@ -271,7 +272,7 @@ export default function CardsPage() {
                         <td className="px-6 py-4">
                           {card.types && (
                             <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
-                              {card.types}
+                              {Array.isArray(card.types) ? card.types.join(', ') : card.types}
                             </span>
                           )}
                         </td>

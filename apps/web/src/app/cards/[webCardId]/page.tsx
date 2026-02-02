@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/api-client';
 import { Navbar } from '@/components/navbar';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ExternalLink } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { use } from 'react';
 
@@ -13,7 +13,7 @@ interface CardDetail {
   webCardId: string;
   name: string;
   hp: number | null;
-  types: string | null;
+  types: string[] | string | null;
   supertype: string;
   subtypes: string[];
   rarity: string | null;
@@ -156,6 +156,21 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
               </div>
             )}
 
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <Link
+                href={`/cards/${card.webCardId}/edit`}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                編輯卡片資訊
+              </Link>
+              <Link
+                href="/deck-builder/tournaments"
+                className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+              >
+                查看賽事牌組
+              </Link>
+            </div>
+
             {/* Language Variants */}
             {card.languageVariants && card.languageVariants.length > 0 && (
               <div className="mt-6">
@@ -188,8 +203,8 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                   {SUPERTYPE_LABELS[card.supertype] || card.supertype}
                 </span>
                 {card.types && (
-                  <span className={`px-3 py-1 text-white text-sm rounded-full ${TYPE_COLORS[card.types] || 'bg-gray-500'}`}>
-                    {card.types}
+                  <span className={`px-3 py-1 text-white text-sm rounded-full ${TYPE_COLORS[Array.isArray(card.types) ? card.types[0] : card.types] || 'bg-gray-500'}`}>
+                    {Array.isArray(card.types) ? card.types.join(', ') : card.types}
                   </span>
                 )}
                 {card.rarity && (
@@ -375,6 +390,35 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                   <dd className="font-medium text-gray-900">{new Date(card.createdAt).toLocaleDateString('zh-TW')}</dd>
                 </div>
               </dl>
+              <div className="mt-4 text-sm text-gray-600 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span>關聯卡片</span>
+                  <Link
+                    href={`/cards/${card.webCardId}/edit`}
+                    className="text-blue-600 hover:text-blue-800"
+                  >
+                    編輯關聯
+                  </Link>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>進化鏈</span>
+                  <Link
+                    href={`/cards/${card.webCardId}/edit`}
+                    className="text-blue-600 hover:text-blue-800"
+                  >
+                    編輯進化
+                  </Link>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>賽事使用</span>
+                  <Link
+                    href={`/cards/${card.webCardId}/edit`}
+                    className="text-blue-600 hover:text-blue-800"
+                  >
+                    編輯紀錄
+                  </Link>
+                </div>
+              </div>
             </div>
           </div>
         </div>
