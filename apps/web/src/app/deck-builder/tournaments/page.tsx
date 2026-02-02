@@ -61,7 +61,7 @@ export default function DeckBuilderTournamentsPage() {
               <PenSquare className="h-8 w-8 text-blue-600" />
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Deck Builder</h1>
-                <p className="text-sm text-gray-600">賽事牌組與構築參考</p>
+                <p className="text-sm text-gray-600">Tournament deck references</p>
               </div>
             </div>
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
@@ -80,7 +80,7 @@ export default function DeckBuilderTournamentsPage() {
                 <span>Deck Studio</span>
               </Link>
               <div className="text-sm text-gray-500">
-                {tournaments.length} 場賽事
+                {tournaments.length} events
               </div>
             </div>
           </div>
@@ -92,7 +92,7 @@ export default function DeckBuilderTournamentsPage() {
           <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-4 rounded-lg">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-blue-100">賽事總數</p>
+                <p className="text-blue-100">Total Events</p>
                 <p className="text-2xl font-bold">{tournaments.length}</p>
               </div>
               <Calendar className="h-8 w-8 text-blue-200" />
@@ -101,7 +101,7 @@ export default function DeckBuilderTournamentsPage() {
           <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-4 rounded-lg">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-green-100">參賽人數</p>
+                <p className="text-green-100">Total Players</p>
                 <p className="text-2xl font-bold">{totalPlayers}</p>
               </div>
               <Users className="h-8 w-8 text-green-200" />
@@ -110,7 +110,7 @@ export default function DeckBuilderTournamentsPage() {
           <div className="bg-gradient-to-r from-purple-500 to-purple-600 text-white p-4 rounded-lg">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-purple-100">賽制類型</p>
+                <p className="text-purple-100">Formats</p>
                 <p className="text-2xl font-bold">{formatCount}</p>
               </div>
               <BarChart3 className="h-8 w-8 text-purple-200" />
@@ -123,13 +123,13 @@ export default function DeckBuilderTournamentsPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input
               type="text"
-              placeholder="搜尋賽事或地區"
+              placeholder="Search tournaments or location"
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
             />
           </div>
-          <div className="text-sm text-gray-500">顯示 {filteredTournaments.length} 筆結果</div>
+          <div className="text-sm text-gray-500">Showing {filteredTournaments.length} results</div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -148,23 +148,23 @@ export default function DeckBuilderTournamentsPage() {
                     {tournament.format}
                   </span>
                 </div>
-                <div className="text-sm text-gray-600 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span>日期</span>
-                    <span className="font-medium">{tournament.date}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>地點</span>
-                    <span className="font-medium">{tournament.location}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>參賽</span>
-                    <span className="font-medium">{tournament.players}</span>
+                  <div className="text-sm text-gray-600 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span>Date</span>
+                      <span className="font-medium">{tournament.date}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Location</span>
+                      <span className="font-medium">{tournament.location}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Players</span>
+                      <span className="font-medium">{tournament.players}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
               <div className="p-5 bg-gray-50">
-                <div className="text-xs text-gray-500 mb-2">熱門牌組</div>
+                <div className="text-xs text-gray-500 mb-2">Top Decks</div>
                 <div className="flex flex-wrap gap-2 mb-4">
                   {tournament.topDecks.map((deck, index) => (
                     <span
@@ -176,7 +176,7 @@ export default function DeckBuilderTournamentsPage() {
                   ))}
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">冠軍</span>
+                  <span className="text-gray-600">Champion</span>
                   <span className="font-semibold text-gray-900">{tournament.champion}</span>
                 </div>
               </div>
@@ -185,7 +185,7 @@ export default function DeckBuilderTournamentsPage() {
                   href="/deck-studio"
                   className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800"
                 >
-                  開啟 Deck Studio
+                  Open Deck Studio
                   <ArrowUpRight className="h-4 w-4" />
                 </Link>
               </div>

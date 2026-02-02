@@ -134,7 +134,7 @@ export default function DeckStudioPage() {
               <Package className="h-8 w-8 text-purple-600" />
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Deck Studio</h1>
-                <p className="text-sm text-gray-600">管理牌組與構築流程</p>
+                <p className="text-sm text-gray-600">Manage deck building workflows</p>
               </div>
             </div>
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
@@ -185,7 +185,7 @@ export default function DeckStudioPage() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-bold text-gray-900">Deck Manager</h2>
-                <p className="text-gray-600">Manage your Pokemon TCG decks and collections</p>
+                <p className="text-gray-600">Manage your Pokémon TCG decks and collections</p>
               </div>
               <div className="flex gap-2">
                 <button className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg">
@@ -225,7 +225,7 @@ export default function DeckStudioPage() {
                   type="text"
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="搜尋牌組"
+                  placeholder="Search decks"
                   className="flex-1 text-sm focus:outline-none"
                 />
               </div>
@@ -280,7 +280,7 @@ export default function DeckStudioPage() {
                     <div className="grid grid-cols-3 gap-2 text-center">
                       <div className="bg-blue-50 rounded-lg p-2">
                         <div className="text-lg font-bold text-blue-600">{deck.pokemonCount}</div>
-                        <div className="text-xs text-blue-600">Pokémon</div>
+                        <div className="text-xs text-blue-600">Pokemon</div>
                       </div>
                       <div className="bg-green-50 rounded-lg p-2">
                         <div className="text-lg font-bold text-green-600">{deck.trainerCount}</div>
@@ -371,7 +371,7 @@ export default function DeckStudioPage() {
                   <label className="block text-xs font-medium text-gray-700 mb-1">Deck Name</label>
                   <input
                     type="text"
-                    placeholder="例如：噴火龍 EX"
+                  placeholder="e.g. Charizard EX"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                   />
                 </div>
@@ -390,6 +390,7 @@ export default function DeckStudioPage() {
                     <option value="CONTROL">Control</option>
                     <option value="COMBO">Combo</option>
                     <option value="TOOLBOX">Toolbox</option>
+                    <option value="OTHER">Other</option>
                   </select>
                 </div>
               </div>
