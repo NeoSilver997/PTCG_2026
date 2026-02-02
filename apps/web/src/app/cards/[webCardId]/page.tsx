@@ -31,6 +31,7 @@ interface CardDetail {
   retreatCost: any;
   evolvesFrom: string | null;
   evolvesTo: string | null;
+  evolutionStage: string | null;
   region: string | null;
   scrapedAt: string | null;
   createdAt: string;
@@ -78,6 +79,17 @@ async function fetchCardDetail(webCardId: string) {
   return data;
 }
 
+async function searchCardsByName(name: string) {
+  try {
+    const { data } = await apiClient.get('/cards', {
+      params: { name, take: 5 }
+    });
+    return data?.data || [];
+  } catch (error) {
+    return [];
+  }
+}
+
 const LANGUAGE_LABELS: Record<string, string> = {
   JA_JP: '日文',
   ZH_HK: '繁體中文',
@@ -112,6 +124,101 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
   const { data: card, isLoading, error } = useQuery<CardDetail>({
     queryKey: ['card', webCardId],
     queryFn: () => fetchCardDetail(webCardId),
+  });
+
+  // Fetch evolution-related cards
+  const { data: evolvesFromCards = [] } = useQuery({
+    queryKey: ['evolutionFrom', card?.evolvesFrom],
+    queryFn: () => searchCardsByName(card!.evolvesFrom!),
+    enabled: !!card?.evolvesFrom,
+  });
+
+  const { data: evolvesToCards = [] } = useQuery({
+    queryKey: ['evolutionTo', card?.evolvesTo],
+    queryFn: async () => {
+      if (!card?.evolvesTo) return [];
+      const names = card.evolvesTo.split(',').map(n => n.trim());
+      const results = await Promise.all(names.map(name => searchCardsByName(name)));
+      return results.flat();
+    },
+    enabled: !!card?.evolvesTo,
+  });
+
+  // Reverse lookup: find cards that evolve INTO this card using the new API filters
+  const { data: evolvesIntoThisCard = [] } = useQuery({
+    queryKey: ['evolutionReverse', card?.name],
+    queryFn: async () => {
+      if (!card?.name) return [];
+      try {
+        const allEvolutionCards: any[] = [];
+        
+        // Search for BASIC cards that evolve to this Pokemon
+        try {
+          const { data: basicData } = await apiClient.get('/cards', {
+            params: {
+              evolvesTo: card.name,
+              evolutionStage: 'BASIC',
+              supertype: 'POKEMON',
+              take: 100
+            }
+          });
+          if (basicData?.data) {
+            allEvolutionCards.push(...basicData.data);
+          }
+        } catch (err) {
+          console.error('Error fetching BASIC cards:', err);
+        }
+        
+        // Search for STAGE_1 cards that evolve to this Pokemon
+        try {
+          const { data: stage1Data } = await apiClient.get('/cards', {
+            params: {
+              evolvesTo: card.name,
+              evolutionStage: 'STAGE_1',
+              supertype: 'POKEMON',
+              take: 100
+            }
+          });
+          if (stage1Data?.data) {
+            allEvolutionCards.push(...stage1Data.data);
+          }
+        } catch (err) {
+          console.error('Error fetching STAGE_1 cards:', err);
+        }
+        
+        // Search for STAGE_2 cards that evolve to this Pokemon (alternate forms)
+        try {
+          const { data: stage2Data } = await apiClient.get('/cards', {
+            params: {
+              evolvesTo: card.name,
+              evolutionStage: 'STAGE_2',
+              supertype: 'POKEMON',
+              take: 50
+            }
+          });
+          if (stage2Data?.data) {
+            allEvolutionCards.push(...stage2Data.data);
+          }
+        } catch (err) {
+          console.error('Error fetching STAGE_2 cards:', err);
+        }
+        
+        // Remove duplicates and exclude current card
+        const uniqueCards = Array.from(
+          new Map(
+            allEvolutionCards
+              .filter((c: any) => c.webCardId !== card.webCardId)
+              .map(c => [c.webCardId, c])
+          ).values()
+        );
+        
+        return uniqueCards;
+      } catch (error) {
+        console.error('Evolution search error:', error);
+        return [];
+      }
+    },
+    enabled: !!card?.name,
   });
 
   if (isLoading) {
@@ -248,22 +355,218 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
               </dl>
             </div>
 
-            {/* Evolution */}
-            {(card.evolvesFrom || card.evolvesTo) && (
+            {/* Evolution Chain */}
+            {(card.evolvesFrom || card.evolvesTo || card.evolutionStage) && (
               <div className="bg-white rounded-lg p-6 shadow-sm">
-                <h2 className="text-xl font-semibold mb-4 text-gray-900">進化</h2>
-                {card.evolvesFrom && (
-                  <div className="mb-2">
-                    <span className="text-sm text-gray-600">進化自：</span>
-                    <span className="ml-2 font-medium text-gray-900">{card.evolvesFrom}</span>
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-semibold text-gray-900">進化鏈</h2>
+                  <Link
+                    href={`/cards/${card.webCardId}/edit-evolution`}
+                    className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                  >
+                    編輯進化資訊
+                  </Link>
+                </div>
+                
+                <div className="flex items-center gap-6 overflow-x-auto pb-4">
+                  {/* Basic Stage */}
+                  <div className="flex-shrink-0">
+                    <div className="text-xs font-semibold text-gray-500 mb-3 text-center">基礎</div>
+                    {(() => {
+                      const basicCard = evolvesIntoThisCard.find((c: any) => c.evolutionStage === 'BASIC');
+                      if (basicCard) {
+                        return (
+                          <Link 
+                            href={`/cards/${basicCard.webCardId}`}
+                            className="block bg-gradient-to-br from-green-50 to-green-100 border-2 border-green-300 hover:border-green-400 rounded-lg p-4 min-w-[140px] transition-all hover:shadow-md"
+                          >
+                            {basicCard.imageUrl && (
+                              <img src={basicCard.imageUrl} alt={basicCard.name} className="w-full h-32 object-contain mb-2 rounded" />
+                            )}
+                            <div className="text-sm font-medium text-gray-900 mb-1">{basicCard.name}</div>
+                            <div className="text-xs text-green-700">點擊查看 →</div>
+                          </Link>
+                        );
+                      } else if (card.evolvesFrom) {
+                        if (evolvesFromCards.length > 0) {
+                          return (
+                            <Link 
+                              href={`/cards/${evolvesFromCards[0].webCardId}`}
+                              className="block bg-gradient-to-br from-green-50 to-green-100 border-2 border-green-300 hover:border-green-400 rounded-lg p-4 min-w-[140px] transition-all hover:shadow-md"
+                            >
+                              {evolvesFromCards[0].imageUrl && (
+                                <img src={evolvesFromCards[0].imageUrl} alt={evolvesFromCards[0].name} className="w-full h-32 object-contain mb-2 rounded" />
+                              )}
+                              <div className="text-sm font-medium text-gray-900 mb-1">{card.evolvesFrom}</div>
+                              <div className="text-xs text-green-700">點擊查看 →</div>
+                            </Link>
+                          );
+                        } else {
+                          return (
+                            <div className="bg-gradient-to-br from-green-50 to-green-100 border-2 border-green-300 rounded-lg p-4 min-w-[140px]">
+                              <div className="text-sm font-medium text-gray-900 mb-1">{card.evolvesFrom}</div>
+                              <div className="text-xs text-gray-600">たね</div>
+                            </div>
+                          );
+                        }
+                      } else if (card.evolutionStage === 'BASIC') {
+                        return (
+                          <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-500 rounded-lg p-4 min-w-[140px]">
+                            {card.imageUrl && (
+                              <img src={card.imageUrl} alt={card.name} className="w-full h-32 object-contain mb-2 rounded" />
+                            )}
+                            <div className="text-sm font-bold text-blue-900 mb-1">{card.name}</div>
+                            <div className="text-xs text-blue-700">當前卡片</div>
+                          </div>
+                        );
+                      } else {
+                        return (
+                          <div className="bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg p-4 min-w-[140px]">
+                            <div className="text-xs text-gray-400 text-center">未知</div>
+                          </div>
+                        );
+                      }
+                    })()}
+                  </div>
+
+                  {/* Arrow */}
+                  <div className="flex-shrink-0 text-2xl text-gray-400">→</div>
+
+                  {/* Stage 1 */}
+                  <div className="flex-shrink-0">
+                    <div className="text-xs font-semibold text-gray-500 mb-3 text-center">1進化</div>
+                    {(() => {
+                      const stage1Card = evolvesIntoThisCard.find((c: any) => c.evolutionStage === 'STAGE_1');
+                      if (card.evolutionStage === 'STAGE_1') {
+                        return (
+                          <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-500 rounded-lg p-4 min-w-[140px]">
+                            {card.imageUrl && (
+                              <img src={card.imageUrl} alt={card.name} className="w-full h-32 object-contain mb-2 rounded" />
+                            )}
+                            <div className="text-sm font-bold text-blue-900 mb-1">{card.name}</div>
+                            <div className="text-xs text-blue-700">當前卡片</div>
+                          </div>
+                        );
+                      } else if (stage1Card) {
+                        return (
+                          <Link 
+                            href={`/cards/${stage1Card.webCardId}`}
+                            className="block bg-gradient-to-br from-green-50 to-green-100 border-2 border-green-300 hover:border-green-400 rounded-lg p-4 min-w-[140px] transition-all hover:shadow-md"
+                          >
+                            {stage1Card.imageUrl && (
+                              <img src={stage1Card.imageUrl} alt={stage1Card.name} className="w-full h-32 object-contain mb-2 rounded" />
+                            )}
+                            <div className="text-sm font-medium text-gray-900 mb-1">{stage1Card.name}</div>
+                            <div className="text-xs text-green-700">點擊查看 →</div>
+                          </Link>
+                        );
+                      } else if (card.evolutionStage === 'STAGE_2' && card.evolvesFrom) {
+                        return (
+                          <div className="bg-gradient-to-br from-green-50 to-green-100 border-2 border-green-300 rounded-lg p-4 min-w-[140px]">
+                            <div className="text-sm font-medium text-gray-900 mb-1">?</div>
+                            <div className="text-xs text-gray-600">進化階段</div>
+                          </div>
+                        );
+                      } else {
+                        return (
+                          <div className="bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg p-4 min-w-[140px]">
+                            <div className="text-xs text-gray-400 text-center">—</div>
+                          </div>
+                        );
+                      }
+                    })()}
+                  </div>
+
+                  {/* Arrow */}
+                  <div className="flex-shrink-0 text-2xl text-gray-400">→</div>
+
+                  {/* Stage 2 */}
+                  <div className="flex-shrink-0">
+                    <div className="text-xs font-semibold text-gray-500 mb-3 text-center">2進化</div>
+                    {card.evolutionStage === 'STAGE_2' ? (
+                      <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-500 rounded-lg p-4 min-w-[140px]">
+                        {card.imageUrl && (
+                          <img src={card.imageUrl} alt={card.name} className="w-full h-32 object-contain mb-2 rounded" />
+                        )}
+                        <div className="text-sm font-bold text-blue-900 mb-1">{card.name}</div>
+                        <div className="text-xs text-blue-700">當前卡片</div>
+                      </div>
+                    ) : card.evolvesTo ? (
+                      evolvesToCards.length > 0 ? (
+                        <Link
+                          href={`/cards/${evolvesToCards[0].webCardId}`}
+                          className="block bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-300 hover:border-purple-400 rounded-lg p-4 min-w-[140px] max-w-[200px] transition-all hover:shadow-md"
+                        >
+                          {evolvesToCards[0].imageUrl && (
+                            <img src={evolvesToCards[0].imageUrl} alt={evolvesToCards[0].name} className="w-full h-32 object-contain mb-2 rounded" />
+                          )}
+                          <div className="text-sm font-medium text-gray-900 mb-1 truncate" title={evolvesToCards[0].name}>
+                            {evolvesToCards[0].name}
+                          </div>
+                          <div className="text-xs text-purple-700">
+                            {evolvesToCards.length > 1 ? `點擊查看 (${evolvesToCards.length} 種)` : '點擊查看 →'}
+                          </div>
+                        </Link>
+                      ) : (
+                        <div className="bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-300 rounded-lg p-4 min-w-[140px] max-w-[200px]">
+                          <div className="text-sm font-medium text-gray-900 mb-1 truncate" title={card.evolvesTo}>
+                            {card.evolvesTo.split(',')[0].trim()}
+                          </div>
+                          <div className="text-xs text-gray-600">
+                            {card.evolvesTo.split(',').length > 1 ? `+${card.evolvesTo.split(',').length - 1} 更多` : '可進化'}
+                          </div>
+                        </div>
+                      )
+                    ) : (
+                      <div className="bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg p-4 min-w-[140px]">
+                        <div className="text-xs text-gray-400 text-center">—</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Evolution Options */}
+                {evolvesToCards.length > 0 && (
+                  <div className="mt-6 pt-6 border-t border-gray-200">
+                    <div className="text-sm font-medium text-gray-700 mb-3">所有可進化選項：</div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                      {evolvesToCards.map((evolCard: any) => (
+                        <Link
+                          key={evolCard.webCardId}
+                          href={`/cards/${evolCard.webCardId}`}
+                          className="block bg-white border-2 border-purple-200 hover:border-purple-400 rounded-lg p-3 transition-all hover:shadow-lg"
+                        >
+                          {evolCard.imageUrl && (
+                            <img 
+                              src={evolCard.imageUrl} 
+                              alt={evolCard.name} 
+                              className="w-full h-40 object-contain mb-2 rounded"
+                            />
+                          )}
+                          <div className="text-sm font-medium text-gray-900 mb-1 truncate" title={evolCard.name}>
+                            {evolCard.name}
+                          </div>
+                          {evolCard.primaryCard?.primaryExpansion && (
+                            <div className="text-xs text-gray-600 mb-1">
+                              {evolCard.primaryCard.primaryExpansion.nameEn} #{evolCard.primaryCard.cardNumber}
+                            </div>
+                          )}
+                          {evolCard.regionalExpansion?.code && (
+                            <div className="text-xs text-purple-600 font-medium">
+                              {evolCard.regionalExpansion.code}
+                            </div>
+                          )}
+                        </Link>
+                      ))}
+                    </div>
                   </div>
                 )}
-                {card.evolvesTo && (
-                  <div>
-                    <span className="text-sm text-gray-600">可進化為：</span>
-                    <span className="ml-2 font-medium text-gray-900">{card.evolvesTo}</span>
-                  </div>
-                )}
+
+                <div className="mt-4 text-xs text-gray-500 italic">
+                  {evolvesFromCards.length > 0 || evolvesToCards.length > 0 
+                    ? '點擊卡片名稱以查看詳細資訊'
+                    : '提示：點擊「編輯進化資訊」以連結實際卡片'}
+                </div>
               </div>
             )}
 

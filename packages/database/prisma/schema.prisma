@@ -235,6 +235,10 @@ model Card {
   text           String?     // Trainer/Energy card effect text
   flavorText     String?     // Pokemon flavor text (height, weight, description)
   
+  // Evolution information
+  evolvesFrom    String?     // Name of Pokemon this evolves from
+  evolvesTo      String?     // Name of Pokemon this evolves into
+  
   // Card metadata
   artist         String?
   rarity         Rarity?

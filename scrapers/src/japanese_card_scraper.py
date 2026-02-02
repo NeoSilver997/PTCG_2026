@@ -316,6 +316,9 @@ class JapaneseCardScraper:
             attacks = self._extract_attacks(soup) if supertype == 'POKEMON' else []
             abilities = self._extract_abilities(soup) if supertype == 'POKEMON' else []
             
+            # Evolution information
+            evolves_from, evolves_to = self._extract_evolution_info(soup, evolution_stage) if supertype == 'POKEMON' else (None, None)
+            
             # Card metadata
             image_url = self._extract_image_url(soup)
             collector_number = self._extract_collector_number(soup, page_text)
@@ -356,6 +359,8 @@ class JapaneseCardScraper:
                 "hp": hp,
                 "pokemonTypes": [pokemon_type] if pokemon_type else None,
                 "evolutionStage": evolution_stage,
+                "evolvesFrom": evolves_from,
+                "evolvesTo": evolves_to,
                 "ruleBox": self._extract_rulebox(card_name),
                 "pokedexNumber": pokedex_number,
                 
@@ -813,6 +818,54 @@ class JapaneseCardScraper:
                     parts.append(desc)
         
         return ' '.join(parts) if parts else None
+
+    def _extract_evolution_info(self, soup: BeautifulSoup, evolution_stage: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
+        """
+        Extract evolution information from the page
+        
+        Returns:
+            Tuple of (evolvesFrom, evolvesTo)
+        """
+        evolves_from = None
+        evolves_to = None
+        
+        # Look for the "進化" (Evolution) section heading
+        evolution_section = soup.find('h2', string='進化')
+        if not evolution_section:
+            return None, None
+        
+        # Get all evolution boxes after the heading
+        # The structure is: <h2>進化</h2><div class="evolution evbox">...</div>
+        evolution_boxes = []
+        current = evolution_section.find_next_sibling()
+        
+        # Collect all evolution divs
+        while current and (current.name == 'div' and 'evolution' in current.get('class', [])):
+            evolution_boxes.append(current)
+            current = current.find_next_sibling()
+        
+        # Extract evolvesTo from the evolution boxes
+        # For Basic Pokemon: shows what they evolve into (Stage 1)
+        # For Stage 1: shows what they evolve into (Stage 2)
+        # For Stage 2: may show alternate Stage 2 forms
+        evolves_to_list = []
+        for box in evolution_boxes:
+            links = box.find_all('a')
+            for link in links:
+                card_name = link.get_text(strip=True)
+                if card_name and len(card_name) > 1:
+                    evolves_to_list.append(card_name)
+        
+        if evolves_to_list:
+            # Join multiple evolution options with comma
+            evolves_to = ', '.join(evolves_to_list[:5])  # Limit to first 5
+        
+        # For evolvesFrom, we need to look at the evolution stage
+        # Stage 1 typically evolves from Basic Pokemon
+        # We can try to extract from the page, but it's not always shown
+        # For now, leave it empty - could be populated later via card name patterns
+        
+        return evolves_from, evolves_to
 
     def _determine_subtype(
         self, 

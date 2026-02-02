@@ -2,6 +2,7 @@ import {
   Controller, 
   Post, 
   Get, 
+  Patch,
   Body, 
   Param, 
   Query,
@@ -98,5 +99,16 @@ export class CardsController {
   @ApiResponse({ status: 404, description: 'Card not found' })
   async getCardByWebCardId(@Param('webCardId') webCardId: string) {
     return await this.cardsService.getCardByWebCardId(webCardId);
+  }
+
+  @Patch('web/:webCardId/evolution')
+  @ApiOperation({ summary: 'Update card evolution information' })
+  @ApiResponse({ status: 200, description: 'Evolution information updated successfully' })
+  @ApiResponse({ status: 404, description: 'Card not found' })
+  async updateEvolution(
+    @Param('webCardId') webCardId: string,
+    @Body() dto: { evolvesFrom?: string; evolvesTo?: string }
+  ) {
+    return await this.cardsService.updateEvolution(webCardId, dto);
   }
 }
