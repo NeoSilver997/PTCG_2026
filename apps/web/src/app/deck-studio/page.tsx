@@ -225,7 +225,7 @@ export default function DeckStudioPage() {
                   type="text"
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="Search decks"
+                  placeholder="搜尋牌組"
                   className="flex-1 text-sm focus:outline-none"
                 />
               </div>
