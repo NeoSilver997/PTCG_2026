@@ -80,7 +80,7 @@ export default function DeckBuilderTournamentsPage() {
                 <span>Deck Studio</span>
               </Link>
               <div className="text-sm text-gray-500">
-                {tournaments.length} events
+                {tournaments.length} 場賽事
               </div>
             </div>
           </div>
