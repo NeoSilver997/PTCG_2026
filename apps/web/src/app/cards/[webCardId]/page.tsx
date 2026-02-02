@@ -61,6 +61,15 @@ interface CardDetail {
     language: string;
     variantType: string;
     imageUrl: string | null;
+    regionalExpansion: {
+      code: string;
+      name: string;
+      region: string;
+      primaryExpansion: {
+        code: string;
+        nameEn: string;
+      };
+    } | null;
   }>;
 }
 
@@ -171,26 +180,6 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
               </Link>
             </div>
 
-            {/* Language Variants */}
-            {card.languageVariants && card.languageVariants.length > 0 && (
-              <div className="mt-6">
-                <h3 className="text-lg font-semibold mb-3 text-gray-900">語言版本</h3>
-                <div className="grid grid-cols-3 gap-3">
-                  {card.languageVariants.map((variant) => (
-                    <Link
-                      key={variant.id}
-                      href={`/cards/${variant.webCardId}`}
-                      className="block p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                    >
-                      <div className="text-xs text-gray-600 mb-1">
-                        {LANGUAGE_LABELS[variant.language] || variant.language}
-                      </div>
-                      <div className="text-sm font-medium truncate">{variant.name}</div>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Card Details */}
@@ -422,6 +411,59 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                 </div>
               </div>
             </div>
+
+            {/* Language Variants / Different Versions */}
+            {card.languageVariants && card.languageVariants.length > 0 && (
+              <div className="bg-white rounded-lg p-6 shadow-sm">
+                <h2 className="text-xl font-semibold mb-4 text-gray-900">
+                  其他版本 ({card.languageVariants.length})
+                </h2>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                  {card.languageVariants.slice(0, 10).map((variant) => (
+                    <Link
+                      key={variant.id}
+                      href={`/cards/${variant.webCardId}`}
+                      className="group"
+                    >
+                      <div className="border rounded-lg overflow-hidden hover:shadow-lg transition-shadow">
+                        {variant.imageUrl ? (
+                          <img
+                            src={variant.imageUrl}
+                            alt={variant.name}
+                            className="w-full h-auto object-cover"
+                          />
+                        ) : (
+                          <div className="w-full aspect-[2/3] bg-gray-200 flex items-center justify-center">
+                            <span className="text-gray-400 text-xs">無圖片</span>
+                          </div>
+                        )}
+                        <div className="p-2 bg-gray-50">
+                          <div className="text-xs font-semibold text-blue-700 mb-1">
+                            {variant.regionalExpansion?.primaryExpansion?.code || variant.regionalExpansion?.code || 'N/A'}
+                          </div>
+                          <div className="text-xs text-gray-600 truncate">
+                            {LANGUAGE_LABELS[variant.language] || variant.language}
+                          </div>
+                          <div className="text-xs font-medium text-gray-900 truncate">
+                            {variant.webCardId}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {variant.variantType}
+                          </div>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+                {card.languageVariants.length > 10 && (
+                  <div className="mt-4 text-center">
+                    <span className="text-sm text-gray-600">
+                      顯示前 10 個，共 {card.languageVariants.length} 個版本
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

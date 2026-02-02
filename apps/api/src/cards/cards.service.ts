@@ -720,7 +720,24 @@ export class CardsService {
         language: true,
         variantType: true,
         imageUrl: true,
+        regionalExpansion: {
+          select: {
+            code: true,
+            name: true,
+            region: true,
+            primaryExpansion: {
+              select: {
+                code: true,
+                nameEn: true,
+              },
+            },
+          },
+        },
       },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      take: 10,
     });
 
     return {
