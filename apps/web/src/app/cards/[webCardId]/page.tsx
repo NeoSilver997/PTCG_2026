@@ -238,6 +238,57 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
     enabled: !!card?.name,
   });
 
+  // Find cards with same name (other variants)
+  const { data: sameNameCards = [] } = useQuery({
+    queryKey: ['sameName', card?.name, card?.webCardId],
+    queryFn: async () => {
+      if (!card?.name) return [];
+      const cards = await searchCardsByName(card.name);
+      // Filter to exact name matches only and exclude current card
+      return cards.filter((c: any) =>
+        c.name === card.name && c.webCardId !== card.webCardId
+      );
+    },
+    enabled: !!card?.name,
+  });
+
+  // Find cards with same attack names
+  const { data: sameAttackCards = [] } = useQuery({
+    queryKey: ['sameAttacks', card?.attacks, card?.webCardId],
+    queryFn: async () => {
+      if (!card?.attacks || !Array.isArray(card.attacks) || card.attacks.length === 0) return [];
+      try {
+        const attackNames = card.attacks.map((a: any) => a.name).filter(Boolean);
+        if (attackNames.length === 0) return [];
+
+        // Use the new attackName API filter for exact matching
+        const results = await Promise.all(
+          attackNames.map(async (attackName: string) => {
+            const { data } = await apiClient.get('/cards', {
+              params: { attackName, take: 100 }
+            });
+            return data?.data || [];
+          })
+        );
+        const allCards = results.flat();
+
+        // Remove duplicates and current card
+        const uniqueCards = Array.from(
+          new Map(
+            allCards
+              .filter((c: any) => c.webCardId !== card.webCardId)
+              .map(c => [c.webCardId, c])
+          ).values()
+        );
+
+        return uniqueCards;
+      } catch (error) {
+        return [];
+      }
+    },
+    enabled: !!card?.attacks,
+  });
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -374,10 +425,10 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
 
             {/* Attacks */}
             {card.attacks && Array.isArray(card.attacks) && card.attacks.length > 0 && (
-              <div className="bg-white rounded-lg p-6 shadow-sm">
-                <h2 className="text-xl font-semibold mb-4 text-gray-900">招式</h2>
+              <div className="bg-white rounded-lg p-3 shadow-sm">
+                <h2 className="text-xl font-semibold mb-3 text-gray-900">招式</h2>
                 {card.attacks.map((attack: any, index: number) => (
-                  <div key={index} className="mb-4 last:mb-0 border-b last:border-0 pb-4 last:pb-0">
+                  <div key={index} className="mb-3 last:mb-0 border-b last:border-0 pb-3 last:pb-0">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="font-semibold text-gray-900">{attack.name}</div>
@@ -410,8 +461,8 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
 
             {/* Evolution Chain */}
             {(card.evolvesFrom || card.evolvesTo || card.evolutionStage) && (
-              <div className="bg-white rounded-lg p-6 shadow-sm">
-                <div className="flex items-center justify-between mb-6">
+              <div className="bg-white rounded-lg p-3 shadow-sm">
+                <div className="flex items-center justify-between mb-3">
                   <h2 className="text-xl font-semibold text-gray-900">進化鏈</h2>
                   <Link
                     href={`/cards/${card.webCardId}/edit-evolution`}
@@ -421,7 +472,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                   </Link>
                 </div>
                 
-                <div className="flex items-center gap-6 overflow-x-auto pb-4">
+                <div className="flex items-center gap-3 overflow-x-auto pb-2">
                   {/* Basic Stage */}
                   <div className="flex-shrink-0">
                     <div className="text-xs font-semibold text-gray-500 mb-3 text-center">基礎</div>
@@ -634,9 +685,9 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                   
                   return displayCards.length > 0 && (
                     <div className="mt-6 pt-6 border-t border-gray-200">
-                      <div className="text-sm font-medium text-gray-700 mb-3">
+                      <h4 className="text-sm font-medium text-gray-700 mb-3">
                         所有可進化選項 ({displayCards.length} 個版本)：
-                      </div>
+                      </h4>
                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                         {displayCards.map((evolCard: any) => (
                           <Link
@@ -679,10 +730,90 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
               </div>
             )}
 
+            {/* Same Name / Same Attack Cards */}
+            {(sameNameCards.length > 0 || sameAttackCards.length > 0) && (
+              <div className="bg-white rounded-lg p-3 shadow-sm">
+                <h2 className="text-xl font-semibold mb-3 text-gray-900">相關卡片</h2>
+                
+                {/* Same Name Cards */}
+                {sameNameCards.length > 0 && (
+                  <div className="mb-3">
+                    <div className="text-sm font-medium text-gray-700 mb-2">
+                      同名卡片 ({sameNameCards.length} 個版本)：
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
+                      {sameNameCards.slice(0, 10).map((relatedCard: any) => (
+                        <Link
+                          key={relatedCard.webCardId}
+                          href={`/cards/${relatedCard.webCardId}`}
+                          className="block bg-white border-2 border-blue-200 hover:border-blue-400 rounded-lg p-2 transition-all hover:shadow-lg"
+                        >
+                          {relatedCard.imageUrl && (
+                            <img 
+                              src={relatedCard.imageUrl} 
+                              alt={relatedCard.name} 
+                              className="w-full h-24 object-contain mb-1 rounded"
+                            />
+                          )}
+                          <div className="text-sm font-medium text-gray-900 mb-1 truncate" title={relatedCard.name}>
+                            {relatedCard.name}
+                          </div>
+                          {relatedCard.variantType && (
+                            <div className="text-xs text-blue-600 font-medium">
+                              {relatedCard.variantType}
+                            </div>
+                          )}
+                          {relatedCard.regionalExpansion?.code && (
+                            <div className="text-xs text-gray-600">
+                              {relatedCard.regionalExpansion.code}
+                            </div>
+                          )}
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Same Attack Cards */}
+                {sameAttackCards.length > 0 && (
+                  <div>
+                    <div className="text-sm font-medium text-gray-700 mb-3">
+                      相同招式卡片 ({sameAttackCards.length} 張)：
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
+                      {sameAttackCards.slice(0, 10).map((relatedCard: any) => (
+                        <Link
+                          key={relatedCard.webCardId}
+                          href={`/cards/${relatedCard.webCardId}`}
+                          className="block bg-white border-2 border-green-200 hover:border-green-400 rounded-lg p-2 transition-all hover:shadow-lg"
+                        >
+                          {relatedCard.imageUrl && (
+                            <img 
+                              src={relatedCard.imageUrl} 
+                              alt={relatedCard.name} 
+                              className="w-full h-24 object-contain mb-1 rounded"
+                            />
+                          )}
+                          <div className="text-sm font-medium text-gray-900 mb-1 truncate" title={relatedCard.name}>
+                            {relatedCard.name}
+                          </div>
+                          {relatedCard.regionalExpansion?.code && (
+                            <div className="text-xs text-gray-600">
+                              {relatedCard.regionalExpansion.code}
+                            </div>
+                          )}
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Abilities */}
             {card.abilities && Array.isArray(card.abilities) && card.abilities.length > 0 && (
-              <div className="bg-white rounded-lg p-6 shadow-sm">
-                <h2 className="text-xl font-semibold mb-4 text-gray-900">特性</h2>
+              <div className="bg-white rounded-lg p-3 shadow-sm">
+                <h2 className="text-xl font-semibold mb-3 text-gray-900">特性</h2>
                 {card.abilities.map((ability: any, index: number) => (
                   <div key={index} className="mb-4 last:mb-0">
                     <div className="font-semibold text-blue-700">{ability.name}</div>
@@ -694,8 +825,8 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
 
             {/* Trainer Card Text/Description */}
             {card.supertype === 'TRAINER' && card.text && (
-              <div className="bg-white rounded-lg p-6 shadow-sm">
-                <h2 className="text-xl font-semibold mb-4 text-gray-900">
+              <div className="bg-white rounded-lg p-3 shadow-sm">
+                <h2 className="text-xl font-semibold mb-3 text-gray-900">
                   {card.subtypes.includes('SUPPORTER') && '效果 (Supporter Effect)'}
                   {card.subtypes.includes('ITEM') && '效果 (Item Effect)'}
                   {card.subtypes.includes('STADIUM') && '效果 (Stadium Effect)'}
@@ -709,8 +840,8 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
             {/* Weaknesses & Resistances */}
             {((card.weaknesses && Array.isArray(card.weaknesses) && card.weaknesses.length > 0) ||
               (card.resistances && Array.isArray(card.resistances) && card.resistances.length > 0)) && (
-              <div className="bg-white rounded-lg p-6 shadow-sm">
-                <h2 className="text-xl font-semibold mb-4 text-gray-900">弱點與抵抗</h2>
+              <div className="bg-white rounded-lg p-3 shadow-sm">
+                <h2 className="text-xl font-semibold mb-3 text-gray-900">弱點與抵抗</h2>
                 {card.weaknesses && card.weaknesses.length > 0 && (
                   <div className="mb-3">
                     <span className="text-sm text-gray-600">弱點：</span>
