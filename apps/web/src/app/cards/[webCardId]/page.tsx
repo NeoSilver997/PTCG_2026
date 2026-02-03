@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/api-client';
 import { Navbar } from '@/components/navbar';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Edit2, Save, X, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Edit2, Save, X } from 'lucide-react';
 import Link from 'next/link';
 import { use, useState } from 'react';
 import { toast } from 'sonner';
@@ -25,11 +25,11 @@ interface CardDetail {
   regulationMark: string | null;
   ruleBox: string | null;
   text: string | null;
-  abilities: any;
-  attacks: any;
-  weaknesses: any;
-  resistances: any;
-  retreatCost: any;
+  abilities: unknown;
+  attacks: unknown;
+  weaknesses: unknown;
+  resistances: unknown;
+  retreatCost: unknown;
   evolvesFrom: string | null;
   evolvesTo: string | null;
   evolutionStage: string | null;
@@ -126,36 +126,12 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
   const [isEditMode, setIsEditMode] = useState(false);
   const [editedCard, setEditedCard] = useState<Partial<CardDetail> | null>(null);
 
-  const { data: card, isLoading, error } = useQuery<CardDetail>({
+  const { data: card, isLoading } = useQuery<CardDetail>({
     queryKey: ['card', webCardId],
     queryFn: () => fetchCardDetail(webCardId),
   });
 
-  // Fetch evolution-related cards
-  const { data: evolvesFromCards = [] } = useQuery({
-    queryKey: ['evolutionFrom', card?.evolvesFrom],
-    queryFn: () => searchCardsByName(card!.evolvesFrom!),
-    enabled: !!card?.evolvesFrom,
-  });
-
-  const { data: evolvesToCards = [] } = useQuery({
-    queryKey: ['evolutionTo', card?.evolvesTo, card?.webCardId],
-    queryFn: async () => {
-      if (!card?.evolvesTo) return [];
-      const names = card.evolvesTo.split(',').map(n => n.trim());
-      const results = await Promise.all(names.map(name => searchCardsByName(name)));
-      const allCards = results.flat();
-      const uniqueCards = Array.from(
-        new Map(
-          allCards
-            .filter((c: any) => c.webCardId !== card.webCardId)
-            .map(c => [c.webCardId, c])
-        ).values()
-      );
-      return uniqueCards;
-    },
-    enabled: !!card?.evolvesTo,
-  });
+  // Note: Evolution-related cards queries removed for compact view
 
   // Save mutation
   const saveMutation = useMutation({
@@ -169,7 +145,8 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
       setEditedCard(null);
       toast.success('卡片更新成功');
     },
-    onError: (error: any) => {
+    onError: (err: unknown) => {
+      const error = err as { response?: { data?: { message?: string } } };
       toast.error(error?.response?.data?.message || '更新失敗');
     },
   });
@@ -192,7 +169,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
     }
   };
 
-  const handleFieldChange = (field: string, value: any) => {
+  const handleFieldChange = (field: string, value: unknown) => {
     setEditedCard(prev => prev ? { ...prev, [field]: value } : null);
   };
 
@@ -271,6 +248,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
           <div className="lg:col-span-1">
             <div className="bg-white rounded-lg p-4 shadow-sm">
               {displayCard?.imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={displayCard.imageUrl}
                   alt={displayCard.name || ''}
@@ -525,7 +503,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                 ) : (
                   displayCard?.abilities && Array.isArray(displayCard.abilities) && displayCard.abilities.length > 0 && (
                     <div className="space-y-2">
-                      {displayCard.abilities.map((ability: any, index: number) => (
+                      {(displayCard.abilities as Array<{ name: string; text: string }>).map((ability, index: number) => (
                         <div key={index} className="text-sm">
                           <div className="font-semibold text-blue-700">{ability.name}</div>
                           <div className="text-gray-800">{ability.text}</div>
@@ -556,7 +534,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                 ) : (
                   displayCard?.attacks && Array.isArray(displayCard.attacks) && displayCard.attacks.length > 0 && (
                     <div className="space-y-2">
-                      {displayCard.attacks.map((attack: any, index: number) => (
+                      {(displayCard.attacks as Array<{ name: string; damage?: string; effect?: string; text?: string }>).map((attack, index: number) => (
                         <div key={index} className="pb-2 border-b last:border-0 last:pb-0">
                           <div className="flex justify-between items-start">
                             <div className="flex-1">
@@ -633,20 +611,20 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                   </div>
                 ) : (
                   <div className="text-sm space-y-1">
-                    {displayCard?.weaknesses && displayCard.weaknesses.length > 0 && (
+                    {displayCard?.weaknesses && Array.isArray(displayCard.weaknesses) && displayCard.weaknesses.length > 0 && (
                       <div>
                         <span className="text-gray-600">弱點：</span>
-                        {displayCard.weaknesses.map((w: any, i: number) => (
+                        {(displayCard.weaknesses as Array<{ type: string; value: string }>).map((w, i: number) => (
                           <span key={i} className="ml-2 font-medium">
                             {w.type} {w.value}
                           </span>
                         ))}
                       </div>
                     )}
-                    {displayCard?.resistances && displayCard.resistances.length > 0 && (
+                    {displayCard?.resistances && Array.isArray(displayCard.resistances) && displayCard.resistances.length > 0 && (
                       <div>
                         <span className="text-gray-600">抵抗：</span>
-                        {displayCard.resistances.map((r: any, i: number) => (
+                        {(displayCard.resistances as Array<{ type: string; value: string }>).map((r, i: number) => (
                           <span key={i} className="ml-2 font-medium">
                             {r.type} {r.value}
                           </span>
@@ -672,6 +650,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                       className="group border rounded hover:shadow-md transition-shadow"
                     >
                       {variant.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={variant.imageUrl}
                           alt={variant.name}
