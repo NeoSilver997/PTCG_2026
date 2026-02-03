@@ -126,6 +126,8 @@ interface JapaneseCard {
   imageUrl?: string;
   imageUrlHiRes?: string;
   variantType?: string;
+  evolvesFrom?: string;
+  evolvesTo?: string;
 }
 
 function generateSkillsSignature(card: any): string {
@@ -256,6 +258,8 @@ async function importCard(prisma: PrismaClient, card: any) {
       supertype,
       subtypes,
       evolutionStage,
+      evolvesFrom: card.evolvesFrom || null,
+      evolvesTo: card.evolvesTo || null,
       ruleBox,
       hp,
       types,
@@ -281,6 +285,8 @@ async function importCard(prisma: PrismaClient, card: any) {
       supertype,
       subtypes,
       evolutionStage,
+      evolvesFrom: card.evolvesFrom || null,
+      evolvesTo: card.evolvesTo || null,
       ruleBox,
       hp,
       types,

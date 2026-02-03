@@ -130,4 +130,9 @@ export class FindAllCardsDto {
   })
   @IsBoolean()
   hasAttackText?: boolean;
+
+  @ApiProperty({ required: false, description: 'Filter for cards that evolve into this Pokemon name' })
+  @IsOptional()
+  @IsString()
+  evolvesTo?: string;
 }

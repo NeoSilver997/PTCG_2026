@@ -57,7 +57,6 @@ export function FilterPanel({ filters, onFilterChange }: FilterPanelProps) {
     filters.rarity || filters.language || filters.webCardId || filters.subtypes ||
     filters.variantType || filters.minHp || filters.maxHp || filters.artist ||
     filters.regulationMark || filters.expansionCode || filters.hasAbilities || filters.hasAttackText;
-    filters.regulationMark || filters.hasAbilities || filters.hasAttackText;
   
   return (
     <div className="bg-white rounded-lg shadow-md p-4 mb-6">
@@ -299,19 +298,6 @@ export function FilterPanel({ filters, onFilterChange }: FilterPanelProps) {
                 placeholder="例: F, G, H"
                 value={filters.regulationMark || ''}
                 onChange={(e) => updateFilter('regulationMark', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-              />
-            </div>
-            {/* Expansion Code */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                擴展包
-              </label>
-              <input
-                type="text"
-                placeholder="例: sv9, sv10"
-                value={filters.expansionCode || ''}
-                onChange={(e) => updateFilter('expansionCode', e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
               />
             </div>

@@ -8,6 +8,12 @@ jest.mock('@/lib/api-client');
 jest.mock('@/components/navbar', () => ({
   Navbar: () => <div data-testid="navbar">Navbar</div>,
 }));
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: jest.fn(),
+    back: jest.fn(),
+  }),
+}));
 jest.mock('next/link', () => ({
   __esModule: true,
   default: ({ children, href }: any) => <a href={href}>{children}</a>,
@@ -85,8 +91,8 @@ describe('CardsPage', () => {
       expect(screen.getByText('ピカチュウ')).toBeInTheDocument();
     });
     
-    expect(screen.getByText('jp45657')).toBeInTheDocument();
-    expect(screen.getByText('jp45658')).toBeInTheDocument();
+    expect(screen.queryByText('jp45657')).not.toBeInTheDocument();
+    expect(screen.queryByText('jp45658')).not.toBeInTheDocument();
   });
 
   it('should display error state on API failure', async () => {
@@ -115,7 +121,7 @@ describe('CardsPage', () => {
     render(<CardsPage />, { wrapper: createWrapper() });
     
     await waitFor(() => {
-      expect(screen.getByText('沒有找到卡片')).toBeInTheDocument();
+      expect(screen.getByText('沒有找到符合條件的卡片')).toBeInTheDocument();
     });
   });
 
@@ -148,7 +154,7 @@ describe('CardsPage', () => {
       expect(screen.getByText('基本鋼エネルギー')).toBeInTheDocument();
     });
     
-    const supertypeSelect = screen.getAllByRole('combobox')[0];
+    const supertypeSelect = screen.getAllByRole('combobox')[1];
     fireEvent.change(supertypeSelect, { target: { value: 'POKEMON' } });
     
     await waitFor(() => {
@@ -167,7 +173,7 @@ describe('CardsPage', () => {
       expect(screen.getByText('基本鋼エネルギー')).toBeInTheDocument();
     });
     
-    const raritySelect = screen.getAllByRole('combobox')[2];
+    const raritySelect = screen.getAllByRole('combobox')[3];
     fireEvent.change(raritySelect, { target: { value: 'COMMON' } });
     
     await waitFor(() => {
@@ -186,7 +192,7 @@ describe('CardsPage', () => {
       expect(screen.getByText('基本鋼エネルギー')).toBeInTheDocument();
     });
     
-    const typesSelect = screen.getAllByRole('combobox')[1];
+    const typesSelect = screen.getAllByRole('combobox')[2];
     fireEvent.change(typesSelect, { target: { value: 'FIRE' } });
     
     await waitFor(() => {
@@ -205,7 +211,7 @@ describe('CardsPage', () => {
       expect(screen.getByText('基本鋼エネルギー')).toBeInTheDocument();
     });
     
-    const languageSelect = screen.getAllByRole('combobox')[3];
+    const languageSelect = screen.getAllByRole('combobox')[4];
     fireEvent.change(languageSelect, { target: { value: 'EN_US' } });
     
     await waitFor(() => {
@@ -285,7 +291,7 @@ describe('CardsPage', () => {
     render(<CardsPage />, { wrapper: createWrapper() });
     
     await waitFor(() => {
-      expect(screen.getByText('顯示 1 - 2 筆資料')).toBeInTheDocument();
+      expect(screen.getByText('顯示 1 - 2 / 共 2 筆')).toBeInTheDocument();
     });
   });
 
@@ -298,9 +304,7 @@ describe('CardsPage', () => {
       expect(screen.getByText('基本鋼エネルギー')).toBeInTheDocument();
     });
     
-    // Check that cards have links
-    const allLinks = screen.getAllByRole('link');
-    expect(allLinks.length).toBeGreaterThan(2); // At least view and edit links per card + new button
+    expect(screen.getByRole('link', { name: '新增卡片' })).toBeInTheDocument();
   });
 
   it('should combine multiple filters', async () => {
@@ -317,11 +321,11 @@ describe('CardsPage', () => {
     fireEvent.change(searchInput, { target: { value: 'ピカチュウ' } });
     
     // Set supertype
-    const supertypeSelect = screen.getAllByRole('combobox')[0];
+    const supertypeSelect = screen.getAllByRole('combobox')[1];
     fireEvent.change(supertypeSelect, { target: { value: 'POKEMON' } });
     
-    // Set language (4th dropdown: supertype, types, rarity, language)
-    const languageSelect = screen.getAllByRole('combobox')[3];
+    // Set language (supertype, types, rarity, language)
+    const languageSelect = screen.getAllByRole('combobox')[4];
     fireEvent.change(languageSelect, { target: { value: 'JA_JP' } });
     
     await waitFor(() => {

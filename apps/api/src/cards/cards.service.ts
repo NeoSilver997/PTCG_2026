@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { 
   LanguageCode, 
@@ -397,6 +397,7 @@ export class CardsService {
     regulationMark?: string;
     hasAbilities?: boolean;
     hasAttackText?: boolean;
+    evolvesTo?: string;
   }): Promise<{
     data: any[];
     pagination: {
@@ -428,6 +429,7 @@ export class CardsService {
       regulationMark,
       hasAbilities,
       hasAttackText,
+      evolvesTo,
     } = params;
 
     const where: any = {};
@@ -512,6 +514,7 @@ export class CardsService {
     if (regulationMark) {
       where.regulationMark = regulationMark;
     }
+    // Note: evolvesTo filter handled via raw SQL WHERE clause below for exact CSV matching
     if (expansionCode) {
       where.regionalExpansion = {
         code: {
@@ -554,9 +557,10 @@ export class CardsService {
 
     let countQuery = this.prisma.card.count({ where });
 
-    // Apply hasAbilities or hasAttackText filter using raw SQL if specified
-    // Both require raw SQL due to Prisma JSON field limitations
-    if (hasAbilities !== undefined || hasAttackText !== undefined) {
+    // Apply hasAbilities, hasAttackText, or evolvesTo filter using raw SQL if specified
+    // hasAbilities and hasAttackText require raw SQL due to Prisma JSON field limitations
+    // evolvesTo requires raw SQL for exact CSV value matching
+    if (hasAbilities !== undefined || hasAttackText !== undefined || evolvesTo) {
       const jsonFieldConditions: string[] = [];
       
       // For JSON fields: null (JSON null) is different from NULL (SQL null)
@@ -576,6 +580,19 @@ export class CardsService {
           ? `(c.attacks IS NOT NULL AND c.attacks != 'null'::jsonb)`
           : `c.attacks = 'null'::jsonb`;
         jsonFieldConditions.push(attackCondition);
+      }
+      
+      // evolvesTo is a comma-separated string, check if the exact name appears in the CSV
+      // Using PostgreSQL string functions to split and check for exact match
+      if (evolvesTo) {
+        // Split by comma and trim whitespace, then check if the value exists
+        // This ensures "リザード" doesn't match "メガリザードン"
+        // Also handles NULL evolvesTo by checking IS NOT NULL first
+        const evolvesToCondition = `(c."evolvesTo" IS NOT NULL AND EXISTS (
+          SELECT 1 FROM unnest(string_to_array(c."evolvesTo", ',')) AS evo
+          WHERE trim(evo) = '${evolvesTo.replace(/'/g, "''")}'
+        ))`;
+        jsonFieldConditions.push(evolvesToCondition);
       }
       
       const baseWhereConditions = Object.entries(where)
@@ -602,13 +619,28 @@ export class CardsService {
       
       // Add JSON field conditions
       baseWhereConditions.push(...jsonFieldConditions);
-      const whereClause = `WHERE ${baseWhereConditions.join(' AND ')}`;
+      
+      // Build WHERE clause only if there are conditions
+      const whereClause = baseWhereConditions.length > 0 
+        ? `WHERE ${baseWhereConditions.join(' AND ')}` 
+        : '';
 
       const [cards, totalResult] = await Promise.all([
         this.prisma.$queryRawUnsafe<any[]>(`
-          SELECT c.*, pc.name as "primaryCardName", pc."skillsSignature" as "primaryCardSkillsSignature"
+          SELECT c.*, 
+                 pc.name as "primaryCardName", 
+                 pc."skillsSignature" as "primaryCardSkillsSignature",
+                 re.id as "regionalExpansion_id",
+                 re.code as "regionalExpansion_code",
+                 re.name as "regionalExpansion_name",
+                 re.region as "regionalExpansion_region",
+                 pe.id as "primaryExpansion_id",
+                 pe.code as "primaryExpansion_code",
+                 pe."nameEn" as "primaryExpansion_nameEn"
           FROM cards c
           LEFT JOIN primary_cards pc ON c."primaryCardId" = pc.id
+          LEFT JOIN regional_expansions re ON c."regionalExpansionId" = re.id
+          LEFT JOIN primary_expansions pe ON re."primaryExpansionId" = pe.id
           ${whereClause}
           ORDER BY c."${sortBy || 'createdAt'}" ${sortOrder || 'DESC'}
           LIMIT ${Math.min(take, 100)} OFFSET ${skip}
@@ -624,7 +656,17 @@ export class CardsService {
           primaryCard: {
             name: card.primaryCardName,
             skillsSignature: card.primaryCardSkillsSignature,
-          }
+          },
+          regionalExpansion: card.regionalExpansion_id ? {
+            id: card.regionalExpansion_id,
+            code: card.regionalExpansion_code,
+            name: card.regionalExpansion_name,
+            region: card.regionalExpansion_region,
+            primaryExpansion: card.primaryExpansion_id ? {
+              code: card.primaryExpansion_code,
+              nameEn: card.primaryExpansion_nameEn,
+            } : null,
+          } : null,
         })),
         pagination: {
           total: Number(totalResult[0].count),
@@ -720,12 +762,50 @@ export class CardsService {
         language: true,
         variantType: true,
         imageUrl: true,
+        regionalExpansion: {
+          select: {
+            code: true,
+            name: true,
+            region: true,
+            primaryExpansion: {
+              select: {
+                code: true,
+                nameEn: true,
+              },
+            },
+          },
+        },
       },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      take: 10,
     });
 
     return {
       ...card,
       languageVariants,
     };
+  }
+
+  async updateEvolution(
+    webCardId: string,
+    dto: { evolvesFrom?: string; evolvesTo?: string }
+  ) {
+    const card = await this.prisma.card.findUnique({
+      where: { webCardId },
+    });
+
+    if (!card) {
+      throw new NotFoundException(`Card with webCardId ${webCardId} not found`);
+    }
+
+    return await this.prisma.card.update({
+      where: { webCardId },
+      data: {
+        evolvesFrom: dto.evolvesFrom || null,
+        evolvesTo: dto.evolvesTo || null,
+      },
+    });
   }
 }
