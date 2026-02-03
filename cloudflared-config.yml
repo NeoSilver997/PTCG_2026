@@ -1,0 +1,37 @@
+# Cloudflare Tunnel Configuration for ptcg002.tcghk.trade
+# This allows you to expose your local development server to the internet
+
+# Tunnel configuration
+tunnel: <YOUR_TUNNEL_ID>
+credentials-file: /root/.cloudflared/<YOUR_TUNNEL_ID>.json
+
+# Ingress rules - Route traffic to your local services
+ingress:
+  # Route root domain and web paths to Next.js web app
+  - hostname: ptcg002.tcghk.trade
+    path: ^/((?!api).)*$
+    service: http://192.168.50.56:3001
+    originRequest:
+      noTLSVerify: true
+      connectTimeout: 30s
+      
+  # Route /api/* paths to NestJS API server
+  - hostname: ptcg002.tcghk.trade
+    path: /api/*
+    service: http://192.168.50.56:4000
+    originRequest:
+      noTLSVerify: true
+      connectTimeout: 30s
+
+  # Catch-all rule (required)
+  - service: http_status:404
+
+# Optional: Enable tunnel features
+warp-routing:
+  enabled: false
+
+# Logging
+loglevel: info
+
+# Metrics server (optional)
+metrics: 0.0.0.0:9090

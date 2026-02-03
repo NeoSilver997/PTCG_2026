@@ -808,4 +808,43 @@ export class CardsService {
       },
     });
   }
+
+  async updateCard(webCardId: string, updateData: any) {
+    const card = await this.prisma.card.findUnique({
+      where: { webCardId },
+    });
+
+    if (!card) {
+      throw new NotFoundException(`Card with webCardId ${webCardId} not found`);
+    }
+
+    // Filter out fields that shouldn't be updated directly
+    const { id, webCardId: _, primaryCardId, createdAt, updatedAt, primaryCard, regionalExpansion, languageVariants, ...allowedUpdates } = updateData;
+
+    return await this.prisma.card.update({
+      where: { webCardId },
+      data: allowedUpdates,
+      include: {
+        primaryCard: {
+          include: {
+            primaryExpansion: true,
+          },
+        },
+        regionalExpansion: {
+          include: {
+            primaryExpansion: true,
+          },
+        },
+        languageVariants: {
+          include: {
+            regionalExpansion: {
+              include: {
+                primaryExpansion: true,
+              },
+            },
+          },
+        },
+      },
+    });
+  }
 }
