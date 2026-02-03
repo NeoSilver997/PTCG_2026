@@ -135,4 +135,9 @@ export class FindAllCardsDto {
   @IsOptional()
   @IsString()
   evolvesTo?: string;
+
+  @ApiProperty({ required: false, example: 'でんきショック', description: 'Filter for cards with this attack name' })
+  @IsOptional()
+  @IsString()
+  attackName?: string;
 }

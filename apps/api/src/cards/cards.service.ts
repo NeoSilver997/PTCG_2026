@@ -398,6 +398,7 @@ export class CardsService {
     hasAbilities?: boolean;
     hasAttackText?: boolean;
     evolvesTo?: string;
+    attackName?: string;
   }): Promise<{
     data: any[];
     pagination: {
@@ -430,6 +431,7 @@ export class CardsService {
       hasAbilities,
       hasAttackText,
       evolvesTo,
+      attackName,
     } = params;
 
     const where: any = {};
@@ -557,10 +559,10 @@ export class CardsService {
 
     let countQuery = this.prisma.card.count({ where });
 
-    // Apply hasAbilities, hasAttackText, or evolvesTo filter using raw SQL if specified
-    // hasAbilities and hasAttackText require raw SQL due to Prisma JSON field limitations
+    // Apply hasAbilities, hasAttackText, evolvesTo, or attackName filter using raw SQL if specified
+    // hasAbilities, hasAttackText, and attackName require raw SQL due to Prisma JSON field limitations
     // evolvesTo requires raw SQL for exact CSV value matching
-    if (hasAbilities !== undefined || hasAttackText !== undefined || evolvesTo) {
+    if (hasAbilities !== undefined || hasAttackText !== undefined || evolvesTo || attackName) {
       const jsonFieldConditions: string[] = [];
       
       // For JSON fields: null (JSON null) is different from NULL (SQL null)
@@ -593,6 +595,16 @@ export class CardsService {
           WHERE trim(evo) = '${evolvesTo.replace(/'/g, "''")}'
         ))`;
         jsonFieldConditions.push(evolvesToCondition);
+      }
+      
+      // attackName filter: search for cards with attacks array containing an attack with matching name
+      // Uses PostgreSQL's jsonb_array_elements to expand the attacks array and check each attack's name
+      if (attackName) {
+        const attackNameCondition = `(c.attacks IS NOT NULL AND c.attacks != 'null'::jsonb AND EXISTS (
+          SELECT 1 FROM jsonb_array_elements(c.attacks) AS attack
+          WHERE attack->>'name' = '${attackName.replace(/'/g, "''")}'
+        ))`;
+        jsonFieldConditions.push(attackNameCondition);
       }
       
       const baseWhereConditions = Object.entries(where)
