@@ -14,6 +14,16 @@ const nextConfig: NextConfig = {
         port: '4000',
         pathname: '/api/v1/cards/image/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'ptcg002.tcghk.trade',
+        pathname: '/api/v1/cards/image/**',
+      },
+      {
+        protocol: 'http',
+        hostname: 'ptcg002.tcghk.trade',
+        pathname: '/api/v1/cards/image/**',
+      },
     ],
   },
 };

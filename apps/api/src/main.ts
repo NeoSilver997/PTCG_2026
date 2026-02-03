@@ -26,6 +26,8 @@ async function bootstrap() {
       'http://127.0.0.1:3333',
       'http://localhost:3334',
       'http://127.0.0.1:3334',
+      'https://ptcg002.tcghk.trade',
+      'http://ptcg002.tcghk.trade',
     ],
     credentials: true,
   });
