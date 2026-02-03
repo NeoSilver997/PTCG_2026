@@ -111,4 +111,15 @@ export class CardsController {
   ) {
     return await this.cardsService.updateEvolution(webCardId, dto);
   }
+
+  @Patch('web/:webCardId')
+  @ApiOperation({ summary: 'Update card information (admin)' })
+  @ApiResponse({ status: 200, description: 'Card updated successfully' })
+  @ApiResponse({ status: 404, description: 'Card not found' })
+  async updateCard(
+    @Param('webCardId') webCardId: string,
+    @Body() updateData: any
+  ) {
+    return await this.cardsService.updateCard(webCardId, updateData);
+  }
 }

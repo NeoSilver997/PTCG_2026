@@ -1,12 +1,13 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/api-client';
 import { Navbar } from '@/components/navbar';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Edit2, Save, X, Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
-import { use } from 'react';
+import { use, useState } from 'react';
+import { toast } from 'sonner';
 
 interface CardDetail {
   id: string;
@@ -23,7 +24,7 @@ interface CardDetail {
   artist: string | null;
   regulationMark: string | null;
   ruleBox: string | null;
-  text: string | null; // For Trainer/Energy card text/description
+  text: string | null;
   abilities: any;
   attacks: any;
   weaknesses: any;
@@ -92,9 +93,9 @@ async function searchCardsByName(name: string) {
 
 const LANGUAGE_LABELS: Record<string, string> = {
   JA_JP: '日文',
-  ZH_HK: '繁體中文',
+  ZH_HK: '繁中',
   EN_US: '英文',
-  ZH_TW: '繁體中文',
+  ZH_TW: '繁中',
   KO_KR: '韓文',
 };
 
@@ -121,6 +122,10 @@ const TYPE_COLORS: Record<string, string> = {
 export default function CardDetailPage({ params }: { params: Promise<{ webCardId: string }> }) {
   const router = useRouter();
   const { webCardId } = use(params);
+  const queryClient = useQueryClient();
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editedCard, setEditedCard] = useState<Partial<CardDetail> | null>(null);
+
   const { data: card, isLoading, error } = useQuery<CardDetail>({
     queryKey: ['card', webCardId],
     queryFn: () => fetchCardDetail(webCardId),
@@ -140,8 +145,6 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
       const names = card.evolvesTo.split(',').map(n => n.trim());
       const results = await Promise.all(names.map(name => searchCardsByName(name)));
       const allCards = results.flat();
-      
-      // Remove duplicates by webCardId and exclude current card
       const uniqueCards = Array.from(
         new Map(
           allCards
@@ -149,100 +152,57 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
             .map(c => [c.webCardId, c])
         ).values()
       );
-      
       return uniqueCards;
     },
     enabled: !!card?.evolvesTo,
   });
 
-  // Reverse lookup: find cards that evolve INTO this card using the new API filters
-  const { data: evolvesIntoThisCard = [] } = useQuery({
-    queryKey: ['evolutionReverse', card?.name],
-    queryFn: async () => {
-      if (!card?.name) return [];
-      try {
-        const allEvolutionCards: any[] = [];
-        
-        // Search for BASIC cards that evolve to this Pokemon
-        try {
-          const { data: basicData } = await apiClient.get('/cards', {
-            params: {
-              evolvesTo: card.name,
-              evolutionStage: 'BASIC',
-              supertype: 'POKEMON',
-              take: 100
-            }
-          });
-          if (basicData?.data) {
-            allEvolutionCards.push(...basicData.data);
-          }
-        } catch (err) {
-          console.error('Error fetching BASIC cards:', err);
-        }
-        
-        // Search for STAGE_1 cards that evolve to this Pokemon
-        try {
-          const { data: stage1Data } = await apiClient.get('/cards', {
-            params: {
-              evolvesTo: card.name,
-              evolutionStage: 'STAGE_1',
-              supertype: 'POKEMON',
-              take: 100
-            }
-          });
-          if (stage1Data?.data) {
-            allEvolutionCards.push(...stage1Data.data);
-          }
-        } catch (err) {
-          console.error('Error fetching STAGE_1 cards:', err);
-        }
-        
-        // Search for STAGE_2 cards that evolve to this Pokemon (alternate forms)
-        try {
-          const { data: stage2Data } = await apiClient.get('/cards', {
-            params: {
-              evolvesTo: card.name,
-              evolutionStage: 'STAGE_2',
-              supertype: 'POKEMON',
-              take: 50
-            }
-          });
-          if (stage2Data?.data) {
-            allEvolutionCards.push(...stage2Data.data);
-          }
-        } catch (err) {
-          console.error('Error fetching STAGE_2 cards:', err);
-        }
-        
-        // Remove duplicates and exclude current card
-        const uniqueCards = Array.from(
-          new Map(
-            allEvolutionCards
-              .filter((c: any) => c.webCardId !== card.webCardId)
-              .map(c => [c.webCardId, c])
-          ).values()
-        );
-        
-        console.log('Evolution cards found:', uniqueCards.length);
-        console.log('Current card expansion:', card.regionalExpansion?.code);
-        uniqueCards.forEach((c: any) => {
-          console.log(`  - ${c.name} (${c.evolutionStage}): ${c.regionalExpansion?.code}`);
-        });
-        
-        return uniqueCards;
-      } catch (error) {
-        console.error('Evolution search error:', error);
-        return [];
-      }
+  // Save mutation
+  const saveMutation = useMutation({
+    mutationFn: async (updatedData: Partial<CardDetail>) => {
+      const { data } = await apiClient.patch(`/cards/web/${webCardId}`, updatedData);
+      return data;
     },
-    enabled: !!card?.name,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['card', webCardId] });
+      setIsEditMode(false);
+      setEditedCard(null);
+      toast.success('卡片更新成功');
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.message || '更新失敗');
+    },
   });
+
+  const handleEditToggle = () => {
+    if (isEditMode) {
+      // Cancel edit
+      setEditedCard(null);
+      setIsEditMode(false);
+    } else {
+      // Start edit
+      setEditedCard(card ? { ...card } : null);
+      setIsEditMode(true);
+    }
+  };
+
+  const handleSave = () => {
+    if (editedCard) {
+      saveMutation.mutate(editedCard);
+    }
+  };
+
+  const handleFieldChange = (field: string, value: any) => {
+    setEditedCard(prev => prev ? { ...prev, [field]: value } : null);
+  };
+
+  const displayCard = isEditMode && editedCard ? editedCard : card;
 
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Navbar />
-        <div className="max-w-6xl mx-auto px-6 py-8">
+        <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="text-center">載入中...</div>
         </div>
       </div>
@@ -253,7 +213,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
     return (
       <div className="min-h-screen bg-gray-50">
         <Navbar />
-        <div className="max-w-6xl mx-auto px-6 py-8">
+        <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="text-center text-red-600">找不到卡片資料</div>
         </div>
       </div>
@@ -264,580 +224,472 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
     <div className="min-h-screen bg-gray-50">
       <Navbar />
       
-      <div className="max-w-6xl mx-auto px-6 py-8">
-        {/* Back Button */}
-        <button
-          onClick={() => router.back()}
-          className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6"
-        >
-          <ArrowLeft className="w-5 h-5" />
-          返回列表
-        </button>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Card Image */}
-          <div className="bg-white rounded-lg p-6 shadow-sm">
-            {card.imageUrl ? (
-              <img
-                src={card.imageUrl}
-                alt={card.name}
-                className="w-full h-auto rounded-lg"
-              />
+      <div className="max-w-7xl mx-auto px-4 py-4">
+        {/* Compact Header */}
+        <div className="flex items-center justify-between mb-3">
+          <button
+            onClick={() => router.back()}
+            className="inline-flex items-center gap-1 text-gray-600 hover:text-gray-900 text-sm"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            返回
+          </button>
+          
+          <div className="flex gap-2">
+            {isEditMode ? (
+              <>
+                <button
+                  onClick={handleEditToggle}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 text-gray-700 rounded hover:bg-gray-50"
+                >
+                  <X className="w-4 h-4" />
+                  取消
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={saveMutation.isPending}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4" />
+                  {saveMutation.isPending ? '儲存中...' : '儲存'}
+                </button>
+              </>
             ) : (
-              <div className="aspect-[2.5/3.5] bg-gray-100 rounded-lg flex items-center justify-center">
-                <span className="text-gray-400">無圖片</span>
+              <button
+                onClick={handleEditToggle}
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                <Edit2 className="w-4 h-4" />
+                編輯模式
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Left Column: Card Image & Quick Actions */}
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-lg p-4 shadow-sm">
+              {displayCard?.imageUrl ? (
+                <img
+                  src={displayCard.imageUrl}
+                  alt={displayCard.name || ''}
+                  className="w-full h-auto rounded"
+                />
+              ) : (
+                <div className="aspect-[2.5/3.5] bg-gray-100 rounded flex items-center justify-center">
+                  <span className="text-gray-400 text-sm">無圖片</span>
+                </div>
+              )}
+
+              {isEditMode && (
+                <div className="mt-3">
+                  <label className="block text-xs text-gray-600 mb-1">圖片 URL</label>
+                  <input
+                    type="text"
+                    value={editedCard?.imageUrl || ''}
+                    onChange={(e) => handleFieldChange('imageUrl', e.target.value)}
+                    className="w-full px-2 py-1 text-sm border rounded"
+                    placeholder="圖片網址"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Middle & Right Columns: Card Details - Compact Layout */}
+          <div className="lg:col-span-2 space-y-4">
+            {/* Basic Info - Compact */}
+            <div className="bg-white rounded-lg p-4 shadow-sm">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* Name */}
+                <div className="md:col-span-2">
+                  <label className="block text-xs text-gray-600 mb-1">卡片名稱</label>
+                  {isEditMode ? (
+                    <input
+                      type="text"
+                      value={editedCard?.name || ''}
+                      onChange={(e) => handleFieldChange('name', e.target.value)}
+                      className="w-full px-2 py-1 text-lg font-bold border rounded"
+                    />
+                  ) : (
+                    <h1 className="text-2xl font-bold text-gray-900">{displayCard?.name}</h1>
+                  )}
+                </div>
+
+                {/* Type & Supertype */}
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">類型</label>
+                  {isEditMode ? (
+                    <input
+                      type="text"
+                      value={editedCard?.supertype || ''}
+                      onChange={(e) => handleFieldChange('supertype', e.target.value)}
+                      className="w-full px-2 py-1 text-sm border rounded"
+                    />
+                  ) : (
+                    <span className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 text-sm rounded">
+                      {SUPERTYPE_LABELS[displayCard?.supertype || ''] || displayCard?.supertype}
+                    </span>
+                  )}
+                </div>
+
+                {/* HP */}
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">HP</label>
+                  {isEditMode ? (
+                    <input
+                      type="number"
+                      value={editedCard?.hp || ''}
+                      onChange={(e) => handleFieldChange('hp', parseInt(e.target.value) || null)}
+                      className="w-full px-2 py-1 text-sm border rounded"
+                    />
+                  ) : (
+                    <div className="text-sm font-medium">{displayCard?.hp || '—'}</div>
+                  )}
+                </div>
+
+                {/* Types */}
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">屬性</label>
+                  {isEditMode ? (
+                    <input
+                      type="text"
+                      value={Array.isArray(editedCard?.types) ? editedCard.types.join(', ') : editedCard?.types || ''}
+                      onChange={(e) => handleFieldChange('types', e.target.value.split(',').map(t => t.trim()))}
+                      className="w-full px-2 py-1 text-sm border rounded"
+                      placeholder="GRASS, FIRE"
+                    />
+                  ) : (
+                    displayCard?.types && (
+                      <span className={`inline-block px-2 py-0.5 text-white text-sm rounded ${TYPE_COLORS[Array.isArray(displayCard.types) ? displayCard.types[0] : displayCard.types] || 'bg-gray-500'}`}>
+                        {Array.isArray(displayCard.types) ? displayCard.types.join(', ') : displayCard.types}
+                      </span>
+                    )
+                  )}
+                </div>
+
+                {/* Rarity */}
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">稀有度</label>
+                  {isEditMode ? (
+                    <input
+                      type="text"
+                      value={editedCard?.rarity || ''}
+                      onChange={(e) => handleFieldChange('rarity', e.target.value)}
+                      className="w-full px-2 py-1 text-sm border rounded"
+                    />
+                  ) : (
+                    <div className="text-sm">{displayCard?.rarity || '—'}</div>
+                  )}
+                </div>
+
+                {/* Evolution Stage */}
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">進化階段</label>
+                  {isEditMode ? (
+                    <input
+                      type="text"
+                      value={editedCard?.evolutionStage || ''}
+                      onChange={(e) => handleFieldChange('evolutionStage', e.target.value)}
+                      className="w-full px-2 py-1 text-sm border rounded"
+                    />
+                  ) : (
+                    <div className="text-sm">{displayCard?.evolutionStage || '—'}</div>
+                  )}
+                </div>
+
+                {/* Evolves From */}
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">進化自</label>
+                  {isEditMode ? (
+                    <input
+                      type="text"
+                      value={editedCard?.evolvesFrom || ''}
+                      onChange={(e) => handleFieldChange('evolvesFrom', e.target.value)}
+                      className="w-full px-2 py-1 text-sm border rounded"
+                    />
+                  ) : (
+                    <div className="text-sm">{displayCard?.evolvesFrom || '—'}</div>
+                  )}
+                </div>
+
+                {/* Evolves To */}
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">可進化成</label>
+                  {isEditMode ? (
+                    <input
+                      type="text"
+                      value={editedCard?.evolvesTo || ''}
+                      onChange={(e) => handleFieldChange('evolvesTo', e.target.value)}
+                      className="w-full px-2 py-1 text-sm border rounded"
+                      placeholder="多個用逗號分隔"
+                    />
+                  ) : (
+                    <div className="text-sm">{displayCard?.evolvesTo || '—'}</div>
+                  )}
+                </div>
+
+                {/* Artist */}
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">繪師</label>
+                  {isEditMode ? (
+                    <input
+                      type="text"
+                      value={editedCard?.artist || ''}
+                      onChange={(e) => handleFieldChange('artist', e.target.value)}
+                      className="w-full px-2 py-1 text-sm border rounded"
+                    />
+                  ) : (
+                    <div className="text-sm">{displayCard?.artist || '—'}</div>
+                  )}
+                </div>
+
+                {/* Regulation Mark */}
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">規格標記</label>
+                  {isEditMode ? (
+                    <input
+                      type="text"
+                      value={editedCard?.regulationMark || ''}
+                      onChange={(e) => handleFieldChange('regulationMark', e.target.value)}
+                      className="w-full px-2 py-1 text-sm border rounded"
+                    />
+                  ) : (
+                    <div className="text-sm">{displayCard?.regulationMark || '—'}</div>
+                  )}
+                </div>
+
+                {/* Language */}
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">語言</label>
+                  {isEditMode ? (
+                    <input
+                      type="text"
+                      value={editedCard?.language || ''}
+                      onChange={(e) => handleFieldChange('language', e.target.value)}
+                      className="w-full px-2 py-1 text-sm border rounded"
+                    />
+                  ) : (
+                    <div className="text-sm">{LANGUAGE_LABELS[displayCard?.language || ''] || displayCard?.language}</div>
+                  )}
+                </div>
+
+                {/* Variant Type */}
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">變體類型</label>
+                  {isEditMode ? (
+                    <input
+                      type="text"
+                      value={editedCard?.variantType || ''}
+                      onChange={(e) => handleFieldChange('variantType', e.target.value)}
+                      className="w-full px-2 py-1 text-sm border rounded"
+                    />
+                  ) : (
+                    <div className="text-sm">{displayCard?.variantType}</div>
+                  )}
+                </div>
+
+                {/* Expansion Info */}
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">擴展包</label>
+                  <div className="text-sm">
+                    {displayCard?.regionalExpansion?.primaryExpansion?.code || displayCard?.regionalExpansion?.code || '—'}
+                  </div>
+                </div>
+
+                {/* Card Number */}
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">卡號</label>
+                  <div className="text-sm font-mono">{displayCard?.webCardId}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Abilities - Compact */}
+            {(displayCard?.abilities || isEditMode) && (
+              <div className="bg-white rounded-lg p-4 shadow-sm">
+                <h2 className="text-sm font-semibold mb-2 text-gray-900">特性</h2>
+                {isEditMode ? (
+                  <textarea
+                    value={JSON.stringify(editedCard?.abilities, null, 2)}
+                    onChange={(e) => {
+                      try {
+                        handleFieldChange('abilities', JSON.parse(e.target.value));
+                      } catch {}
+                    }}
+                    className="w-full px-2 py-1 text-xs border rounded font-mono"
+                    rows={4}
+                    placeholder='[{"name": "特性名", "text": "效果描述"}]'
+                  />
+                ) : (
+                  displayCard?.abilities && Array.isArray(displayCard.abilities) && displayCard.abilities.length > 0 && (
+                    <div className="space-y-2">
+                      {displayCard.abilities.map((ability: any, index: number) => (
+                        <div key={index} className="text-sm">
+                          <div className="font-semibold text-blue-700">{ability.name}</div>
+                          <div className="text-gray-800">{ability.text}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                )}
               </div>
             )}
 
-            <div className="mt-6 flex flex-wrap items-center gap-3">
-              <Link
-                href={`/cards/${card.webCardId}/edit`}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
-                編輯卡片資訊
-              </Link>
-              <Link
-                href="/deck-builder/tournaments"
-                className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-              >
-                查看賽事牌組
-              </Link>
-            </div>
-
-          </div>
-
-          {/* Card Details */}
-          <div className="space-y-6">
-            {/* Basic Info */}
-            <div className="bg-white rounded-lg p-6 shadow-sm">
-              <h1 className="text-3xl font-bold mb-2 text-gray-900">{card.name}</h1>
-              <div className="flex items-center gap-3 mb-4">
-                <span className="px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-full">
-                  {SUPERTYPE_LABELS[card.supertype] || card.supertype}
-                </span>
-                {card.types && (
-                  <span className={`px-3 py-1 text-white text-sm rounded-full ${TYPE_COLORS[Array.isArray(card.types) ? card.types[0] : card.types] || 'bg-gray-500'}`}>
-                    {Array.isArray(card.types) ? card.types.join(', ') : card.types}
-                  </span>
-                )}
-                {card.rarity && (
-                  <span className="px-3 py-1 bg-yellow-100 text-yellow-800 text-sm rounded-full">
-                    {card.rarity}
-                  </span>
+            {/* Attacks - Compact */}
+            {(displayCard?.attacks || isEditMode) && (
+              <div className="bg-white rounded-lg p-4 shadow-sm">
+                <h2 className="text-sm font-semibold mb-2 text-gray-900">招式</h2>
+                {isEditMode ? (
+                  <textarea
+                    value={JSON.stringify(editedCard?.attacks, null, 2)}
+                    onChange={(e) => {
+                      try {
+                        handleFieldChange('attacks', JSON.parse(e.target.value));
+                      } catch {}
+                    }}
+                    className="w-full px-2 py-1 text-xs border rounded font-mono"
+                    rows={6}
+                    placeholder='[{"name": "招式名", "cost": ["GRASS"], "damage": "30", "text": "效果"}]'
+                  />
+                ) : (
+                  displayCard?.attacks && Array.isArray(displayCard.attacks) && displayCard.attacks.length > 0 && (
+                    <div className="space-y-2">
+                      {displayCard.attacks.map((attack: any, index: number) => (
+                        <div key={index} className="pb-2 border-b last:border-0 last:pb-0">
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <div className="font-semibold text-sm">{attack.name}</div>
+                              {(attack.effect || attack.text) && (
+                                <div className="text-xs text-gray-700 mt-0.5">{attack.effect || attack.text}</div>
+                              )}
+                            </div>
+                            {attack.damage && (
+                              <div className="ml-2 text-base font-bold text-red-600">{attack.damage}</div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )
                 )}
               </div>
+            )}
 
-              <dl className="grid grid-cols-2 gap-4">
-                <div>
-                  <dt className="text-sm text-gray-600">卡號</dt>
-                  <dd className="font-medium text-gray-900">{card.webCardId}</dd>
-                </div>
-                {card.regionalExpansion && (
-                  <div>
-                    <dt className="text-sm text-gray-600">擴展包</dt>
-                    <dd className="font-medium text-gray-900">
-                      {card.regionalExpansion.primaryExpansion?.code || card.regionalExpansion.code}
-                      {card.regionalExpansion.name && (
-                        <span className="text-sm text-gray-600 ml-1">({card.regionalExpansion.name})</span>
-                      )}
-                    </dd>
-                  </div>
+            {/* Trainer Card Text */}
+            {(displayCard?.supertype === 'TRAINER' && displayCard?.text) || (isEditMode && editedCard?.supertype === 'TRAINER') ? (
+              <div className="bg-white rounded-lg p-4 shadow-sm">
+                <h2 className="text-sm font-semibold mb-2 text-gray-900">效果</h2>
+                {isEditMode ? (
+                  <textarea
+                    value={editedCard?.text || ''}
+                    onChange={(e) => handleFieldChange('text', e.target.value)}
+                    className="w-full px-2 py-1 text-sm border rounded"
+                    rows={3}
+                  />
+                ) : (
+                  <p className="text-sm text-gray-800 whitespace-pre-wrap">{displayCard?.text}</p>
                 )}
-                {card.hp && (
-                  <div>
-                    <dt className="text-sm text-gray-600">HP</dt>
-                    <dd className="font-medium text-gray-900">{card.hp}</dd>
-                  </div>
-                )}
-                <div>
-                  <dt className="text-sm text-gray-600">語言</dt>
-                  <dd className="font-medium text-gray-900">{LANGUAGE_LABELS[card.language] || card.language}</dd>
-                </div>
-                <div>
-                  <dt className="text-sm text-gray-600">變體類型</dt>
-                  <dd className="font-medium text-gray-900">{card.variantType}</dd>
-                </div>
-                {card.artist && (
-                  <div className="col-span-2">
-                    <dt className="text-sm text-gray-600">繪師</dt>
-                    <dd className="font-medium text-gray-900">{card.artist}</dd>
-                  </div>
-                )}
-                {card.regulationMark && (
-                  <div>
-                    <dt className="text-sm text-gray-600">規格標記</dt>
-                    <dd className="font-medium text-gray-900">{card.regulationMark}</dd>
-                  </div>
-                )}
-              </dl>
-            </div>
+              </div>
+            ) : null}
 
-            {/* Attacks */}
-            {card.attacks && Array.isArray(card.attacks) && card.attacks.length > 0 && (
-              <div className="bg-white rounded-lg p-6 shadow-sm">
-                <h2 className="text-xl font-semibold mb-4 text-gray-900">招式</h2>
-                {card.attacks.map((attack: any, index: number) => (
-                  <div key={index} className="mb-4 last:mb-0 border-b last:border-0 pb-4 last:pb-0">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="font-semibold text-gray-900">{attack.name}</div>
-                        {(attack.effect || attack.text) && (
-                          <div className="text-sm text-gray-800 mt-1">{attack.effect || attack.text}</div>
-                        )}
-                      </div>
-                      {attack.damage && (
-                        <div className="ml-4 text-xl font-bold text-red-600">{attack.damage}</div>
-                      )}
+            {/* Weaknesses & Resistances - Compact */}
+            {((displayCard?.weaknesses && Array.isArray(displayCard.weaknesses) && displayCard.weaknesses.length > 0) ||
+              (displayCard?.resistances && Array.isArray(displayCard.resistances) && displayCard.resistances.length > 0) ||
+              isEditMode) && (
+              <div className="bg-white rounded-lg p-4 shadow-sm">
+                <h2 className="text-sm font-semibold mb-2 text-gray-900">弱點與抵抗</h2>
+                {isEditMode ? (
+                  <div className="space-y-2">
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-1">弱點 (JSON)</label>
+                      <textarea
+                        value={JSON.stringify(editedCard?.weaknesses, null, 2)}
+                        onChange={(e) => {
+                          try {
+                            handleFieldChange('weaknesses', JSON.parse(e.target.value));
+                          } catch {}
+                        }}
+                        className="w-full px-2 py-1 text-xs border rounded font-mono"
+                        rows={2}
+                        placeholder='[{"type": "FIRE", "value": "×2"}]'
+                      />
                     </div>
-                    {attack.cost && attack.cost.length > 0 && (
-                      <div className="flex gap-1 mt-2">
-                        {(Array.isArray(attack.cost) ? attack.cost : attack.cost.split('')).map((cost: string, idx: number) => (
-                          <span
-                            key={idx}
-                            className={`w-6 h-6 rounded-full flex items-center justify-center text-xs text-white ${
-                              TYPE_COLORS[cost] || 'bg-gray-500'
-                            }`}
-                          >
-                            {cost.charAt(0)}
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-1">抵抗 (JSON)</label>
+                      <textarea
+                        value={JSON.stringify(editedCard?.resistances, null, 2)}
+                        onChange={(e) => {
+                          try {
+                            handleFieldChange('resistances', JSON.parse(e.target.value));
+                          } catch {}
+                        }}
+                        className="w-full px-2 py-1 text-xs border rounded font-mono"
+                        rows={2}
+                        placeholder='[{"type": "WATER", "value": "-30"}]'
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm space-y-1">
+                    {displayCard?.weaknesses && displayCard.weaknesses.length > 0 && (
+                      <div>
+                        <span className="text-gray-600">弱點：</span>
+                        {displayCard.weaknesses.map((w: any, i: number) => (
+                          <span key={i} className="ml-2 font-medium">
+                            {w.type} {w.value}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {displayCard?.resistances && displayCard.resistances.length > 0 && (
+                      <div>
+                        <span className="text-gray-600">抵抗：</span>
+                        {displayCard.resistances.map((r: any, i: number) => (
+                          <span key={i} className="ml-2 font-medium">
+                            {r.type} {r.value}
                           </span>
                         ))}
                       </div>
                     )}
                   </div>
-                ))}
-              </div>
-            )}
-
-            {/* Evolution Chain */}
-            {(card.evolvesFrom || card.evolvesTo || card.evolutionStage) && (
-              <div className="bg-white rounded-lg p-6 shadow-sm">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-xl font-semibold text-gray-900">進化鏈</h2>
-                  <Link
-                    href={`/cards/${card.webCardId}/edit-evolution`}
-                    className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
-                  >
-                    編輯進化資訊
-                  </Link>
-                </div>
-                
-                <div className="flex items-center gap-6 overflow-x-auto pb-4">
-                  {/* Basic Stage */}
-                  <div className="flex-shrink-0">
-                    <div className="text-xs font-semibold text-gray-500 mb-3 text-center">基礎</div>
-                    {(() => {
-                      const currentExpansionCode = card.regionalExpansion?.code;
-                      const basicCards = evolvesIntoThisCard.filter((c: any) => c.evolutionStage === 'BASIC');
-                      const basicCard = basicCards.find((c: any) => 
-                        c.regionalExpansion?.code === currentExpansionCode
-                      ) || (basicCards.length > 0 ? basicCards.sort((a, b) => 
-                        Math.abs(parseInt(a.webCardId.replace(/\D/g, '')) - parseInt(card.webCardId.replace(/\D/g, ''))) -
-                        Math.abs(parseInt(b.webCardId.replace(/\D/g, '')) - parseInt(card.webCardId.replace(/\D/g, '')))
-                      )[0] : null);
-                      if (basicCard) {
-                        return (
-                          <Link 
-                            href={`/cards/${basicCard.webCardId}`}
-                            className="block bg-gradient-to-br from-green-50 to-green-100 border-2 border-green-300 hover:border-green-400 rounded-lg p-4 min-w-[140px] transition-all hover:shadow-md"
-                          >
-                            {basicCard.imageUrl && (
-                              <img src={basicCard.imageUrl} alt={basicCard.name} className="w-full h-32 object-contain mb-2 rounded" />
-                            )}
-                            <div className="text-sm font-medium text-gray-900 mb-1">{basicCard.name}</div>
-                            <div className="text-xs text-green-700">點擊查看 →</div>
-                          </Link>
-                        );
-                      } else if (card.evolvesFrom) {
-                        if (evolvesFromCards.length > 0) {
-                          return (
-                            <Link 
-                              href={`/cards/${evolvesFromCards[0].webCardId}`}
-                              className="block bg-gradient-to-br from-green-50 to-green-100 border-2 border-green-300 hover:border-green-400 rounded-lg p-4 min-w-[140px] transition-all hover:shadow-md"
-                            >
-                              {evolvesFromCards[0].imageUrl && (
-                                <img src={evolvesFromCards[0].imageUrl} alt={evolvesFromCards[0].name} className="w-full h-32 object-contain mb-2 rounded" />
-                              )}
-                              <div className="text-sm font-medium text-gray-900 mb-1">{card.evolvesFrom}</div>
-                              <div className="text-xs text-green-700">點擊查看 →</div>
-                            </Link>
-                          );
-                        } else {
-                          return (
-                            <div className="bg-gradient-to-br from-green-50 to-green-100 border-2 border-green-300 rounded-lg p-4 min-w-[140px]">
-                              <div className="text-sm font-medium text-gray-900 mb-1">{card.evolvesFrom}</div>
-                              <div className="text-xs text-gray-600">たね</div>
-                            </div>
-                          );
-                        }
-                      } else if (card.evolutionStage === 'BASIC') {
-                        return (
-                          <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-500 rounded-lg p-4 min-w-[140px]">
-                            {card.imageUrl && (
-                              <img src={card.imageUrl} alt={card.name} className="w-full h-32 object-contain mb-2 rounded" />
-                            )}
-                            <div className="text-sm font-bold text-blue-900 mb-1">{card.name}</div>
-                            <div className="text-xs text-blue-700">當前卡片</div>
-                          </div>
-                        );
-                      } else {
-                        return (
-                          <div className="bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg p-4 min-w-[140px]">
-                            <div className="text-xs text-gray-400 text-center">未知</div>
-                          </div>
-                        );
-                      }
-                    })()}
-                  </div>
-
-                  {/* Arrow */}
-                  <div className="flex-shrink-0 text-2xl text-gray-400">→</div>
-
-                  {/* Stage 1 */}
-                  <div className="flex-shrink-0">
-                    <div className="text-xs font-semibold text-gray-500 mb-3 text-center">1進化</div>
-                    {(() => {
-                      const currentExpansionCode = card.regionalExpansion?.code;
-                      const stage1Cards = evolvesIntoThisCard.filter((c: any) => c.evolutionStage === 'STAGE_1');
-                      const stage1Card = stage1Cards.find((c: any) => 
-                        c.regionalExpansion?.code === currentExpansionCode
-                      ) || (stage1Cards.length > 0 ? stage1Cards.sort((a, b) => 
-                        Math.abs(parseInt(a.webCardId.replace(/\D/g, '')) - parseInt(card.webCardId.replace(/\D/g, ''))) -
-                        Math.abs(parseInt(b.webCardId.replace(/\D/g, '')) - parseInt(card.webCardId.replace(/\D/g, '')))
-                      )[0] : null);
-                      if (card.evolutionStage === 'STAGE_1') {
-                        return (
-                          <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-500 rounded-lg p-4 min-w-[140px]">
-                            {card.imageUrl && (
-                              <img src={card.imageUrl} alt={card.name} className="w-full h-32 object-contain mb-2 rounded" />
-                            )}
-                            <div className="text-sm font-bold text-blue-900 mb-1">{card.name}</div>
-                            <div className="text-xs text-blue-700">當前卡片</div>
-                          </div>
-                        );
-                      } else if (stage1Card) {
-                        return (
-                          <Link 
-                            href={`/cards/${stage1Card.webCardId}`}
-                            className="block bg-gradient-to-br from-green-50 to-green-100 border-2 border-green-300 hover:border-green-400 rounded-lg p-4 min-w-[140px] transition-all hover:shadow-md"
-                          >
-                            {stage1Card.imageUrl && (
-                              <img src={stage1Card.imageUrl} alt={stage1Card.name} className="w-full h-32 object-contain mb-2 rounded" />
-                            )}
-                            <div className="text-sm font-medium text-gray-900 mb-1">{stage1Card.name}</div>
-                            <div className="text-xs text-green-700">點擊查看 →</div>
-                          </Link>
-                        );
-                      } else if (card.evolutionStage === 'STAGE_2' && card.evolvesFrom) {
-                        return (
-                          <div className="bg-gradient-to-br from-green-50 to-green-100 border-2 border-green-300 rounded-lg p-4 min-w-[140px]">
-                            <div className="text-sm font-medium text-gray-900 mb-1">?</div>
-                            <div className="text-xs text-gray-600">進化階段</div>
-                          </div>
-                        );
-                      } else {
-                        return (
-                          <div className="bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg p-4 min-w-[140px]">
-                            <div className="text-xs text-gray-400 text-center">—</div>
-                          </div>
-                        );
-                      }
-                    })()}
-                  </div>
-
-                  {/* Arrow */}
-                  <div className="flex-shrink-0 text-2xl text-gray-400">→</div>
-
-                  {/* Stage 2 */}
-                  <div className="flex-shrink-0">
-                    <div className="text-xs font-semibold text-gray-500 mb-3 text-center">2進化</div>
-                    {card.evolutionStage === 'STAGE_2' ? (
-                      <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-500 rounded-lg p-4 min-w-[140px]">
-                        {card.imageUrl && (
-                          <img src={card.imageUrl} alt={card.name} className="w-full h-32 object-contain mb-2 rounded" />
-                        )}
-                        <div className="text-sm font-bold text-blue-900 mb-1">{card.name}</div>
-                        <div className="text-xs text-blue-700">當前卡片</div>
-                      </div>
-                    ) : card.evolvesTo ? (
-                      (() => {
-                        const currentExpansionCode = card.regionalExpansion?.code;
-                        // Filter to STAGE_2 cards only
-                        const stage2Cards = evolvesToCards.filter((c: any) => c.evolutionStage === 'STAGE_2');
-                        // Prioritize same expansion code, then nearest webCardId
-                        const stage2Card = stage2Cards.find((c: any) => 
-                          c.regionalExpansion?.code === currentExpansionCode
-                        ) || (stage2Cards.length > 0 ? stage2Cards.sort((a, b) => 
-                          Math.abs(parseInt(a.webCardId.replace(/\D/g, '')) - parseInt(card.webCardId.replace(/\D/g, ''))) -
-                          Math.abs(parseInt(b.webCardId.replace(/\D/g, '')) - parseInt(card.webCardId.replace(/\D/g, '')))
-                        )[0] : null);
-                        
-                        return stage2Card ? (
-                          <Link
-                            href={`/cards/${stage2Card.webCardId}`}
-                            className="block bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-300 hover:border-purple-400 rounded-lg p-4 min-w-[140px] max-w-[200px] transition-all hover:shadow-md"
-                          >
-                            {stage2Card.imageUrl && (
-                              <img src={stage2Card.imageUrl} alt={stage2Card.name} className="w-full h-32 object-contain mb-2 rounded" />
-                            )}
-                            <div className="text-sm font-medium text-gray-900 mb-1 truncate" title={stage2Card.name}>
-                              {stage2Card.name}
-                            </div>
-                            <div className="text-xs text-purple-700">
-                              {stage2Cards.length > 1 ? `點擊查看 (${stage2Cards.length} 種)` : '點擊查看 →'}
-                            </div>
-                          </Link>
-                        ) : (
-                          <div className="bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-300 rounded-lg p-4 min-w-[140px] max-w-[200px]">
-                            <div className="text-sm font-medium text-gray-900 mb-1 truncate" title={card.evolvesTo}>
-                              {card.evolvesTo.split(',')[0].trim()}
-                            </div>
-                            <div className="text-xs text-gray-600">
-                              {card.evolvesTo.split(',').length > 1 ? `+${card.evolvesTo.split(',').length - 1} 更多` : '可進化'}
-                            </div>
-                          </div>
-                        );
-                      })()
-                    ) : (
-                      <div className="bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg p-4 min-w-[140px]">
-                        <div className="text-xs text-gray-400 text-center">—</div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Evolution Options */}
-                {(() => {
-                  // Determine next evolution stage
-                  const nextStage = card.evolutionStage === 'BASIC' ? 'STAGE_1' : 
-                                   card.evolutionStage === 'STAGE_1' ? 'STAGE_2' : null;
-                  
-                  // Filter to only show next evolution level
-                  const nextLevelCards = nextStage ? 
-                    evolvesToCards.filter((c: any) => c.evolutionStage === nextStage) : 
-                    [];
-                  
-                  // Group by primaryCardId to show only one variant per card
-                  const primaryCardMap = new Map();
-                  nextLevelCards.forEach((card: any) => {
-                    if (!primaryCardMap.has(card.primaryCard?.id)) {
-                      primaryCardMap.set(card.primaryCard?.id, card);
-                    }
-                  });
-                  
-                  // Sort by webCardId descending to show newest first
-                  const sortedCards = Array.from(primaryCardMap.values()).sort((a, b) => 
-                    b.webCardId.localeCompare(a.webCardId)
-                  );
-                  
-                  // Show all unique primary cards from next evolution level
-                  const displayCards = sortedCards;
-                  
-                  return displayCards.length > 0 && (
-                    <div className="mt-6 pt-6 border-t border-gray-200">
-                      <div className="text-sm font-medium text-gray-700 mb-3">
-                        所有可進化選項 ({displayCards.length} 個版本)：
-                      </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                        {displayCards.map((evolCard: any) => (
-                          <Link
-                            key={evolCard.webCardId}
-                            href={`/cards/${evolCard.webCardId}`}
-                            className="block bg-white border-2 border-purple-200 hover:border-purple-400 rounded-lg p-3 transition-all hover:shadow-lg"
-                          >
-                            {evolCard.imageUrl && (
-                              <img 
-                                src={evolCard.imageUrl} 
-                                alt={evolCard.name} 
-                                className="w-full h-40 object-contain mb-2 rounded"
-                              />
-                            )}
-                            <div className="text-sm font-medium text-gray-900 mb-1 truncate" title={evolCard.name}>
-                              {evolCard.name}
-                            </div>
-                            {evolCard.primaryCard?.primaryExpansion && (
-                              <div className="text-xs text-gray-600 mb-1">
-                                {evolCard.primaryCard.primaryExpansion.nameEn} #{evolCard.primaryCard.cardNumber}
-                              </div>
-                            )}
-                            {evolCard.regionalExpansion?.code && (
-                              <div className="text-xs text-purple-600 font-medium">
-                                {evolCard.regionalExpansion.code}
-                              </div>
-                            )}
-                          </Link>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                <div className="mt-4 text-xs text-gray-500 italic">
-                  {evolvesFromCards.length > 0 || evolvesToCards.length > 0 
-                    ? '點擊卡片名稱以查看詳細資訊'
-                    : '提示：點擊「編輯進化資訊」以連結實際卡片'}
-                </div>
-              </div>
-            )}
-
-            {/* Abilities */}
-            {card.abilities && Array.isArray(card.abilities) && card.abilities.length > 0 && (
-              <div className="bg-white rounded-lg p-6 shadow-sm">
-                <h2 className="text-xl font-semibold mb-4 text-gray-900">特性</h2>
-                {card.abilities.map((ability: any, index: number) => (
-                  <div key={index} className="mb-4 last:mb-0">
-                    <div className="font-semibold text-blue-700">{ability.name}</div>
-                    <div className="text-sm text-gray-800 mt-1">{ability.text}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Trainer Card Text/Description */}
-            {card.supertype === 'TRAINER' && card.text && (
-              <div className="bg-white rounded-lg p-6 shadow-sm">
-                <h2 className="text-xl font-semibold mb-4 text-gray-900">
-                  {card.subtypes.includes('SUPPORTER') && '效果 (Supporter Effect)'}
-                  {card.subtypes.includes('ITEM') && '效果 (Item Effect)'}
-                  {card.subtypes.includes('STADIUM') && '效果 (Stadium Effect)'}
-                  {card.subtypes.includes('TOOL') && '效果 (Tool Effect)'}
-                  {!card.subtypes.includes('SUPPORTER') && !card.subtypes.includes('ITEM') && !card.subtypes.includes('STADIUM') && !card.subtypes.includes('TOOL') && '效果'}
-                </h2>
-                <p className="text-gray-800 whitespace-pre-wrap leading-relaxed">{card.text}</p>
-              </div>
-            )}
-
-            {/* Weaknesses & Resistances */}
-            {((card.weaknesses && Array.isArray(card.weaknesses) && card.weaknesses.length > 0) ||
-              (card.resistances && Array.isArray(card.resistances) && card.resistances.length > 0)) && (
-              <div className="bg-white rounded-lg p-6 shadow-sm">
-                <h2 className="text-xl font-semibold mb-4 text-gray-900">弱點與抵抗</h2>
-                {card.weaknesses && card.weaknesses.length > 0 && (
-                  <div className="mb-3">
-                    <span className="text-sm text-gray-600">弱點：</span>
-                    {card.weaknesses.map((weakness: any, index: number) => (
-                      <span key={index} className="ml-2 font-medium">
-                        {weakness.type} {weakness.value}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {card.resistances && card.resistances.length > 0 && (
-                  <div>
-                    <span className="text-sm text-gray-600">抵抗：</span>
-                    {card.resistances.map((resistance: any, index: number) => (
-                      <span key={index} className="ml-2 font-medium">
-                        {resistance.type} {resistance.value}
-                      </span>
-                    ))}
-                  </div>
                 )}
               </div>
             )}
 
-            {/* Metadata */}
-            <div className="bg-white rounded-lg p-6 shadow-sm">
-              <h2 className="text-xl font-semibold mb-4 text-gray-900">資料</h2>
-              <dl className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <dt className="text-gray-600">擴展包</dt>
-                  <dd className="font-medium text-gray-900">{card.primaryCard.expansionId}</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-gray-600">卡片編號</dt>
-                  <dd className="font-medium text-gray-900">{card.primaryCard.cardNumber}</dd>
-                </div>
-                {card.region && (
-                  <div className="flex justify-between">
-                    <dt className="text-gray-600">地區</dt>
-                    <dd className="font-medium text-gray-900">{card.region}</dd>
-                  </div>
-                )}
-                <div className="flex justify-between">
-                  <dt className="text-gray-600">建立時間</dt>
-                  <dd className="font-medium text-gray-900">{new Date(card.createdAt).toLocaleDateString('zh-TW')}</dd>
-                </div>
-              </dl>
-              <div className="mt-4 text-sm text-gray-600 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span>關聯卡片</span>
-                  <Link
-                    href={`/cards/${card.webCardId}/edit`}
-                    className="text-blue-600 hover:text-blue-800"
-                  >
-                    編輯關聯
-                  </Link>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>進化鏈</span>
-                  <Link
-                    href={`/cards/${card.webCardId}/edit`}
-                    className="text-blue-600 hover:text-blue-800"
-                  >
-                    編輯進化
-                  </Link>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>賽事使用</span>
-                  <Link
-                    href={`/cards/${card.webCardId}/edit`}
-                    className="text-blue-600 hover:text-blue-800"
-                  >
-                    編輯紀錄
-                  </Link>
-                </div>
-              </div>
-            </div>
-
-            {/* Language Variants / Different Versions */}
+            {/* Language Variants - Compact Grid */}
             {card.languageVariants && card.languageVariants.length > 0 && (
-              <div className="bg-white rounded-lg p-6 shadow-sm">
-                <h2 className="text-xl font-semibold mb-4 text-gray-900">
+              <div className="bg-white rounded-lg p-4 shadow-sm">
+                <h2 className="text-sm font-semibold mb-2 text-gray-900">
                   其他版本 ({card.languageVariants.length})
                 </h2>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                  {card.languageVariants.slice(0, 10).map((variant) => (
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                  {card.languageVariants.slice(0, 12).map((variant) => (
                     <Link
                       key={variant.id}
                       href={`/cards/${variant.webCardId}`}
-                      className="group"
+                      className="group border rounded hover:shadow-md transition-shadow"
                     >
-                      <div className="border rounded-lg overflow-hidden hover:shadow-lg transition-shadow">
-                        {variant.imageUrl ? (
-                          <img
-                            src={variant.imageUrl}
-                            alt={variant.name}
-                            className="w-full h-auto object-cover"
-                          />
-                        ) : (
-                          <div className="w-full aspect-[2/3] bg-gray-200 flex items-center justify-center">
-                            <span className="text-gray-400 text-xs">無圖片</span>
-                          </div>
-                        )}
-                        <div className="p-2 bg-gray-50">
-                          <div className="text-xs font-semibold text-blue-700 mb-1">
-                            {variant.regionalExpansion?.primaryExpansion?.code || variant.regionalExpansion?.code || 'N/A'}
-                          </div>
-                          <div className="text-xs text-gray-600 truncate">
-                            {LANGUAGE_LABELS[variant.language] || variant.language}
-                          </div>
-                          <div className="text-xs font-medium text-gray-900 truncate">
-                            {variant.webCardId}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            {variant.variantType}
-                          </div>
+                      {variant.imageUrl ? (
+                        <img
+                          src={variant.imageUrl}
+                          alt={variant.name}
+                          className="w-full h-auto rounded-t"
+                        />
+                      ) : (
+                        <div className="w-full aspect-[2/3] bg-gray-200 flex items-center justify-center rounded-t">
+                          <span className="text-gray-400 text-xs">無圖</span>
+                        </div>
+                      )}
+                      <div className="p-1 bg-gray-50 text-center">
+                        <div className="text-xs text-gray-600 truncate">
+                          {LANGUAGE_LABELS[variant.language] || variant.language}
                         </div>
                       </div>
                     </Link>
                   ))}
                 </div>
-                {card.languageVariants.length > 10 && (
-                  <div className="mt-4 text-center">
-                    <span className="text-sm text-gray-600">
-                      顯示前 10 個，共 {card.languageVariants.length} 個版本
-                    </span>
-                  </div>
-                )}
               </div>
             )}
           </div>
