@@ -1,5 +1,10 @@
 # PTCG CardDB - Requirements Specification
 
+## 🚀 Quick Links
+- **Deployment Guide**: See [DEPLOYMENT.md](./DEPLOYMENT.md) for deploying to `ptcg002.tcghk.trade`
+- **Quick Start**: See [QUICKSTART.md](./QUICKSTART.md) for fast deployment commands
+- **Deployment Summary**: See [DEPLOYMENT_SUMMARY.md](./DEPLOYMENT_SUMMARY.md) for configuration overview
+
 ## Functional Requirements (FR)
 
 ### FR-1: Authentication Module
