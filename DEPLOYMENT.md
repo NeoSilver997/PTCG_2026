@@ -12,7 +12,31 @@ The application consists of:
 
 ## Deployment Options
 
-### Option 1: Reverse Proxy (Recommended)
+### Option 1: Cloudflare Tunnel (Recommended for Local Development)
+
+**Perfect for exposing your local server at `192.168.50.56:3001` to the internet!**
+
+Use Cloudflare Tunnel to create a secure connection from your local machine to Cloudflare's network. No need for a public server, port forwarding, or complex networking.
+
+**Quick Start:**
+```bash
+./setup-cloudflare-tunnel.sh  # Linux/macOS
+./setup-cloudflare-tunnel.ps1 # Windows
+```
+
+**See [CLOUDFLARE_TUNNEL.md](./CLOUDFLARE_TUNNEL.md) for complete guide.**
+
+**Benefits:**
+- ✅ Runs on your local machine (no server needed)
+- ✅ Automatic HTTPS/SSL encryption
+- ✅ No port forwarding required
+- ✅ Free with Cloudflare
+- ✅ DDoS protection included
+- ✅ Perfect for development and testing
+
+---
+
+### Option 2: Reverse Proxy (Traditional Server Deployment)
 
 Use Nginx or Caddy to serve both applications under the same domain:
 - `https://ptcg002.tcghk.trade/` → Web App (port 3001)
@@ -20,7 +44,7 @@ Use Nginx or Caddy to serve both applications under the same domain:
 
 See `nginx.conf` for a complete configuration example.
 
-### Option 2: Separate Subdomains
+### Option 3: Separate Subdomains
 
 - `https://ptcg002.tcghk.trade` → Web App
 - `https://api.ptcg002.tcghk.trade` → API Server

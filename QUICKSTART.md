@@ -2,7 +2,35 @@
 
 This guide provides quick commands to deploy the PTCG CardDB application to `ptcg002.tcghk.trade`.
 
-## 🚀 Quick Deploy with Docker (Recommended)
+## 🚀 Quick Deploy Options
+
+### Option 1: Cloudflare Tunnel (Easiest - Recommended for Local Development)
+
+**Perfect for exposing local server (`http://192.168.50.56:3001`) to the internet!**
+
+```bash
+# 1. Run the automated setup script
+./setup-cloudflare-tunnel.sh
+
+# 2. Start the tunnel
+cloudflared tunnel run ptcg-tunnel
+
+# 3. Visit your site
+# https://ptcg002.tcghk.trade
+```
+
+See [CLOUDFLARE_TUNNEL.md](./CLOUDFLARE_TUNNEL.md) for detailed instructions.
+
+**Benefits:**
+- ✅ No server needed - runs on your local machine
+- ✅ Automatic HTTPS/SSL
+- ✅ No port forwarding required
+- ✅ Free with Cloudflare
+- ✅ Perfect for development and testing
+
+---
+
+### Option 2: Docker Deployment (Production)
 
 ```bash
 # 1. Clone repository
