@@ -217,7 +217,7 @@ class JapaneseCardScraper:
             cache_path = self.html_dir / f"{card_id}.html" if card_id and cache_html else None
             html_text = None
 
-            # Try cache first
+    # Try cache first
             if cache_path and cache_path.exists() and not refresh_cache:
                 if not self.quiet:
                     logger.info(f"Using cached HTML for card {card_id}")
