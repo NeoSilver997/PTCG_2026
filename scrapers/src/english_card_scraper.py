@@ -210,9 +210,6 @@ class EnglishCardScraper:
         
         page_text = soup.get_text()
         
-        card_id = self._extract_card_id_from_url(url)
-        web_card_id = self._format_web_card_id(card_id)
-        
         rarity = self._extract_rarity(soup)
         collector_number = self._extract_collector_number(soup, page_text)
         expansion_code = self._extract_expansion_code(soup)
@@ -223,6 +220,23 @@ class EnglishCardScraper:
         
         # Extract Pokemon type from main info section
         pokemon_type = self._extract_pokemon_type(soup) if supertype == 'POKEMON' else None
+        
+        # Extract image URL first to get the real card ID
+        image_url = self._extract_image_url(soup)
+        
+        # Extract actual card ID from imageUrl (e.g., en00012716.png -> 12716)
+        actual_card_id = None
+        if image_url:
+            match = re.search(r'en(\d+)\.png', image_url)
+            if match:
+                actual_card_id = str(int(match.group(1)))  # Remove leading zeros
+        
+        # Fallback to URL-based extraction if image URL doesn't have ID
+        if not actual_card_id:
+            actual_card_id = self._extract_card_id_from_url(url)
+        
+        web_card_id = self._format_web_card_id(actual_card_id)
+        source_url = f"https://asia.pokemon-card.com/hk-en/card-search/detail/{actual_card_id}/"
         
         data = {
             'webCardId': web_card_id,
@@ -235,8 +249,8 @@ class EnglishCardScraper:
             'rarity': RARITY_MAP.get(rarity, 'COMMON') if rarity else 'COMMON',
             'expansionCode': expansion_code,
             'collectorNumber': collector_number,
-            'imageUrl': self._extract_image_url(soup),
-            'sourceUrl': url,
+            'imageUrl': image_url,
+            'sourceUrl': source_url,
             'scrapedAt': datetime.now().isoformat(),
             'rawRarity': rarity 
         }

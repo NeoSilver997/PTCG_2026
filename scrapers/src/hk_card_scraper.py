@@ -219,10 +219,28 @@ class HkCardScraper:
             if card_id and (cache_html or cache_only) and not refresh_cache:
                 cache_path = self._get_cached_html(card_id)
                 if cache_path:
-                    if not self.quiet:
-                        logger.info(f"Cache hit: {cache_path.relative_to(self.html_dir)}")
-                    html_text = cache_path.read_text(encoding='utf-8')
-                    self.cache_hits += 1
+                    # Quick check: peek at HTML to see if it's hk-en (English) content
+                    should_use_cache = True
+                    if not cache_only:
+                        with open(cache_path, 'r', encoding='utf-8') as f:
+                            sample = f.read(4096)  # Read first 4KB
+                            # If HTML contains hk-en in image URLs but cache_path is in wrong location, re-scrape
+                            if '/hk-en/card-img/' in sample and '/hk/card-search/' in card_url:
+                                if not self.quiet:
+                                    logger.warning(f"Cache {card_id} has EN content but URL is HK, re-scraping")
+                                should_use_cache = False
+                            elif '/hk/card-img/' in sample and '/hk-en/card-search/' in card_url:
+                                if not self.quiet:
+                                    logger.warning(f"Cache {card_id} has HK content but URL is EN, re-scraping")
+                                should_use_cache = False
+                    
+                    if should_use_cache:
+                        if not self.quiet:
+                            logger.info(f"Cache hit: {cache_path.relative_to(self.html_dir)}")
+                        html_text = cache_path.read_text(encoding='utf-8')
+                        self.cache_hits += 1
+                    else:
+                        self.cache_misses += 1
                 elif cache_only:
                     if not self.quiet:
                         logger.warning(f"Cache miss for {card_id}, skipping (cache-only mode)")
@@ -286,10 +304,6 @@ class HkCardScraper:
         
         page_text = soup.get_text()
         
-        # Basic extraction
-        card_id = self._extract_card_id_from_url(url)
-        web_card_id = self._format_web_card_id(card_id)
-        
         # Enhanced Rarity Logic
         rarity = self._extract_rarity(soup)
         
@@ -307,11 +321,40 @@ class HkCardScraper:
         # Extract Pokemon type from main info section
         pokemon_type = self._extract_pokemon_type(soup) if supertype == 'POKEMON' else None
         
+        # Extract image URL first to get the real card ID
+        image_url = self._extract_image_url(soup)
+        
+        # Detect language and region from image URL
+        language = 'ZH_TW'
+        region = 'HK'
+        if image_url and '/hk-en/' in image_url:
+            language = 'EN_US'
+            region = 'EN'
+        
+        # Extract actual card ID from imageUrl (e.g., hk00012716.png -> 12716)
+        actual_card_id = None
+        if image_url:
+            match = re.search(r'(?:hk|default)(\d+)\.png', image_url)
+            if match:
+                actual_card_id = str(int(match.group(1)))  # Remove leading zeros
+        
+        # Fallback to URL-based extraction if image URL doesn't have ID
+        if not actual_card_id:
+            actual_card_id = self._extract_card_id_from_url(url)
+        
+        web_card_id = self._format_web_card_id(actual_card_id, region)
+        
+        # Build sourceUrl based on detected language
+        if language == 'EN_US':
+            source_url = f"https://asia.pokemon-card.com/hk-en/card-search/detail/{actual_card_id}/"
+        else:
+            source_url = f"https://asia.pokemon-card.com/hk/card-search/detail/{actual_card_id}/"
+        
         data = {
             'webCardId': web_card_id,
             'name': card_name,
-            'language': 'ZH_TW',
-            'region': 'HK',
+            'language': language,
+            'region': region,
             'supertype': supertype,
             'subtype': subtype,
             'variantType': self._determine_variant_type(rarity, collector_number),
@@ -319,8 +362,8 @@ class HkCardScraper:
             'expansionCode': expansion_code,
             'collectorNumber': collector_number,
             'regulationMark': regulation_mark,
-            'imageUrl': self._extract_image_url(soup),
-            'sourceUrl': url,
+            'imageUrl': image_url,
+            'sourceUrl': source_url,
             'scrapedAt': datetime.now().isoformat(),
             'rawRarity': rarity 
         }
@@ -393,8 +436,11 @@ class HkCardScraper:
         match = re.search(r'/(?:detail|card)/(\d+)', url)
         return match.group(1) if match else None
 
-    def _format_web_card_id(self, card_id: Optional[str]) -> Optional[str]:
-        return f"hk{int(card_id)}" if card_id and card_id.isdigit() else None
+    def _format_web_card_id(self, card_id: Optional[str], region: str = 'HK') -> Optional[str]:
+        if not card_id or not card_id.isdigit():
+            return None
+        prefix = 'en' if region == 'EN' else 'hk'
+        return f"{prefix}{int(card_id)}"
 
     def _clean_empty_values(self, data: Any) -> Any:
         if isinstance(data, dict):
@@ -516,25 +562,45 @@ class HkCardScraper:
         return None
 
     def _extract_expansion_code(self, soup: BeautifulSoup) -> Optional[str]:
-        logo = soup.select_one('img.img-regulation[alt]')
-        if logo: return (logo.get('alt') or '').strip().lower()
-        link = soup.select_one('a[href^="/ex/"]')
-        if link and link.get('href'):
-            match = re.search(r'^/ex/([^/]+)/', link['href'])
-            if match: return match.group(1).lower()
+        # First priority: Try expansion link with expansionCodes parameter (most reliable)
+        exp_link = soup.select_one('a[href*="expansionCodes="]')
+        if exp_link and exp_link.get('href'):
+            match = re.search(r'expansionCodes=([A-Za-z0-9]+)', exp_link['href'])
+            if match:
+                return match.group(1).lower()
         
-        # Fallback: check expansion column
+        # Second priority: Try expansion symbol image
+        exp_symbol = soup.find('span', class_='expansionSymbol')
+        if exp_symbol:
+            img = exp_symbol.find('img')
+            if img and img.get('src'):
+                # Extract from filename like expansion_mark_SV5K.png
+                filename = img['src'].split('/')[-1]
+                match = re.search(r'expansion_mark_([A-Za-z0-9]+)\.png', filename)
+                if match:
+                    return match.group(1).lower()
+        
+        # Fallback: old logo method
+        logo = soup.select_one('img.img-regulation[alt]')
+        if logo:
+            alt_text = (logo.get('alt') or '').strip()
+            if alt_text and alt_text != 'expansion':
+                return alt_text.lower()
+        
+        # Fallback: check expansion column for other images
         exp_col = soup.find('section', class_='expansionColumn')
         if exp_col:
             img = exp_col.find('img')
             if img and img.get('src'):
-                # Extract from filename like M2F_exp.png
+                # Extract from filename like M2F_exp.png or SV5K.png
                 filename = img['src'].split('/')[-1]
-                code = filename.split('_')[0]
-                # Remove last char if it indicates set A/B (e.g. M2F -> M2) - heuristic
-                if code.endswith('F') or code.endswith('L') or code.endswith('S'):
-                     return code # actually return the full code for now to be safe
-                return code.lower()
+                # Try pattern: CODE_exp.png or CODE.png
+                match = re.search(r'^([A-Za-z0-9]+)(?:_exp)?\.png', filename)
+                if match:
+                    code = match.group(1)
+                    if code.lower() != 'expansion':
+                        return code.lower()
+        
         return None
 
     def _extract_regulation_mark(self, soup: BeautifulSoup) -> Optional[str]:
