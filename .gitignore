@@ -52,4 +52,24 @@ scrapers/__pycache__/
 scrapers/*.pyc
 scrapers/.venv/
 scrapers/failed_*.txt
-data/cards/japan/*.json
+
+# Python cache (all locations)
+**/__pycache__/
+**/*.pyc
+
+# Card data (all regions)
+data/cards/**/*.json
+
+# Expansion metadata
+data/expansions_*.json
+
+# Root-level JSON data files (exclude config files)
+/*.json
+!package.json
+!tsconfig.json
+!turbo.json
+!**/package.json
+!**/.eslintrc.json
+
+# Scraper HTML cache
+data/html/**/*.html
