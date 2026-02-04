@@ -44,23 +44,23 @@ _BS4_PARSER = 'lxml' if importlib.util.find_spec('lxml') else 'html.parser'
 # MAPPING CONSTANTS (Inherited from Japanese Scraper but adapted for HK)
 # ============================================================================
 
-# Energy cost icons to symbols (HK uses same icons usually)
+# Energy cost icons to symbols (using Japanese symbols for consistency)
 ICON_COST_MAP = {
-    'icon-fire': 'Fire',
-    'icon-water': 'Water',
-    'icon-lightning': 'Lightning',
-    'icon-electric': 'Lightning',
-    'icon-grass': 'Grass',
-    'icon-fighting': 'Fighting',
-    'icon-psychic': 'Psychic',
-    'icon-darkness': 'Darkness',
-    'icon-dark': 'Darkness',
-    'icon-metal': 'Metal',
-    'icon-steel': 'Metal',
-    'icon-none': 'Colorless',
-    'icon-colorless': 'Colorless',
-    'icon-fairy': 'Fairy',
-    'icon-dragon': 'Dragon'
+    'icon-fire': '炎',
+    'icon-water': '水',
+    'icon-lightning': '雷',
+    'icon-electric': '雷',
+    'icon-grass': '草',
+    'icon-fighting': '闘',
+    'icon-psychic': '超',
+    'icon-darkness': '悪',
+    'icon-dark': '悪',
+    'icon-metal': '鋼',
+    'icon-steel': '鋼',
+    'icon-none': '無',
+    'icon-colorless': '無',
+    'icon-fairy': 'フェアリー',
+    'icon-dragon': 'ドラゴン'
 }
 
 # Element icons to database enum values
@@ -295,10 +295,14 @@ class HkCardScraper:
         
         collector_number = self._extract_collector_number(soup, page_text)
         expansion_code = self._extract_expansion_code(soup)
+        regulation_mark = self._extract_regulation_mark(soup)
         
         supertype = self._extract_supertype(soup, card_name, page_text)
         evolution_stage = self._extract_evolution_stage_from_marker(evolution_stage_text) if supertype == 'POKEMON' else None
-        subtype = self._determine_subtype(supertype, evolution_stage, soup, page_text)
+        
+        # Extract abilities early for Pokemon to check for Terastal
+        abilities = self._extract_abilities(soup) if supertype == 'POKEMON' else []
+        subtype = self._determine_subtype(supertype, evolution_stage, soup, page_text, abilities)
         
         # Extract Pokemon type from main info section
         pokemon_type = self._extract_pokemon_type(soup) if supertype == 'POKEMON' else None
@@ -314,6 +318,7 @@ class HkCardScraper:
             'rarity': RARITY_MAP.get(rarity, 'COMMON') if rarity else 'COMMON',
             'expansionCode': expansion_code,
             'collectorNumber': collector_number,
+            'regulationMark': regulation_mark,
             'imageUrl': self._extract_image_url(soup),
             'sourceUrl': url,
             'scrapedAt': datetime.now().isoformat(),
@@ -322,17 +327,19 @@ class HkCardScraper:
 
         if supertype == 'POKEMON':
             weakness_type, weakness_value = self._extract_weakness(soup)
+            attacks = self._extract_attacks(soup)
+            # abilities already extracted earlier for subtype determination
             
             data.update({
                 'hp': self._extract_hp(soup),
                 'pokemonTypes': [pokemon_type] if pokemon_type else [],
                 'evolutionStage': evolution_stage,
                 'evolvesTo': self._extract_evolves_to(soup),
-                'attacks': self._extract_attacks(soup),
-                'abilities': self._extract_abilities(soup),
+                'attacks': attacks,
+                'abilities': abilities,
                 'weakness': {'type': weakness_type, 'value': weakness_value} if weakness_type else None,
                 'retreatCost': self._extract_retreat_cost(soup),
-                'ruleBox': self._extract_rulebox(card_name),
+                'ruleBox': self._extract_rulebox(card_name, attacks, abilities),
                 'pokedexNumber': self._extract_pokedex_number(soup),
                 'flavorText': self._extract_flavor_text(soup)
             })
@@ -470,8 +477,25 @@ class HkCardScraper:
         
         return 'BASIC'
 
-    def _determine_subtype(self, supertype: str, evolution_stage: Optional[str], soup: BeautifulSoup, page_text: str) -> Optional[str]:
-        if supertype == 'POKEMON': return None
+    def _determine_subtype(self, supertype: str, evolution_stage: Optional[str], soup: BeautifulSoup, page_text: str, abilities: List[Dict[str, str]] = None) -> Optional[str]:
+        if supertype == 'POKEMON':
+            # Check for Terastal (太晶) in skill names directly from soup
+            skill_info = soup.find('div', class_='skillInformation')
+            if skill_info:
+                for skill_div in skill_info.find_all('div', class_='skill'):
+                    name_span = skill_div.find('span', class_='skillName')
+                    if name_span:
+                        name_text = name_span.get_text(strip=True)
+                        # Check if this is Terastal
+                        if name_text == '太晶' or name_text == 'テラスタル':
+                            return 'TERA'
+                        # Also check for bench protection text in effect
+                        effect_p = skill_div.find('p', class_='skillEffect')
+                        if effect_p:
+                            effect_text = effect_p.get_text(strip=True)
+                            if '這隻寶可夢在備戰區時，不會受到招式的傷害。' in effect_text or '這隻寶可夢在備戰區時' in effect_text:
+                                return 'TERA'
+            return None
         if supertype == 'ENERGY': return 'BASIC_ENERGY' if '基本' in page_text or 'Basic' in page_text else 'SPECIAL_ENERGY'
         
         section_titles = ' '.join(tag.get_text(strip=True) for tag in soup.select('h2,h3') if tag)
@@ -513,6 +537,24 @@ class HkCardScraper:
                 return code.lower()
         return None
 
+    def _extract_regulation_mark(self, soup: BeautifulSoup) -> Optional[str]:
+        """Extract regulation mark (single letter A-I) from span.alpha element."""
+        # Try span.alpha first
+        alpha_span = soup.find('span', class_='alpha')
+        if alpha_span:
+            text = alpha_span.get_text(strip=True)
+            if text and len(text) == 1 and text.isalpha():
+                return text.upper()
+        
+        # Try span.regulationMark as fallback
+        regulation_span = soup.find('span', class_='regulationMark')
+        if regulation_span:
+            text = regulation_span.get_text(strip=True)
+            if text and len(text) == 1 and text.isalpha():
+                return text.upper()
+        
+        return None
+
     def _extract_image_url(self, soup: BeautifulSoup) -> Optional[str]:
         img_elem = soup.select_one('img[src*="/card-img/"]')
         if img_elem:
@@ -537,6 +579,10 @@ class HkCardScraper:
             if '[特性]' in name or '[Ability]' in name:
                 continue
             
+            # Skip if this is Terastal (太晶) - it's actually an ability
+            if name == '太晶' or name == 'テラスタル':
+                continue
+            
             # Damage
             dmg_span = skill_div.find('span', class_='skillDamage')
             damage = dmg_span.get_text(strip=True) if dmg_span else None
@@ -553,31 +599,34 @@ class HkCardScraper:
             
         return attacks
 
-    def _extract_attack_cost(self, attack_elem: BeautifulSoup) -> Optional[str]:
+    def _extract_attack_cost(self, attack_elem: BeautifulSoup) -> Optional[List[str]]:
         symbols = []
         for img in attack_elem.find_all('img'):
             src = img.get('src', '')
+            matched = False
             for key, val in ICON_COST_MAP.items():
                 if key.replace('icon-', '') in src.lower(): # Loose matching on filename
                      symbols.append(val)
+                     matched = True
                      break
-            # Fallback based on image filename
-            if 'Grass' in src: symbols.append('Grass')
-            elif 'Fire' in src: symbols.append('Fire')
-            elif 'Water' in src: symbols.append('Water')
-            elif 'Lightning' in src: symbols.append('Lightning')
-            elif 'Psychic' in src: symbols.append('Psychic')
-            elif 'Fighting' in src: symbols.append('Fighting')
-            elif 'Darkness' in src: symbols.append('Darkness')
-            elif 'Metal' in src: symbols.append('Metal')
-            elif 'Fairy' in src: symbols.append('Fairy')
-            elif 'Dragon' in src: symbols.append('Dragon')
-            elif 'Colorless' in src: symbols.append('Colorless')
+            # Fallback based on image filename (only if not already matched)
+            if not matched:
+                if 'Grass' in src: symbols.append('草')
+                elif 'Fire' in src: symbols.append('炎')
+                elif 'Water' in src: symbols.append('水')
+                elif 'Lightning' in src: symbols.append('雷')
+                elif 'Psychic' in src: symbols.append('超')
+                elif 'Fighting' in src: symbols.append('闘')
+                elif 'Darkness' in src: symbols.append('悪')
+                elif 'Metal' in src: symbols.append('鋼')
+                elif 'Fairy' in src: symbols.append('フェアリー')
+                elif 'Dragon' in src: symbols.append('ドラゴン')
+                elif 'Colorless' in src: symbols.append('無')
 
-        return ''.join(symbols) if symbols else None
+        return symbols if symbols else None
 
     def _extract_abilities(self, soup: BeautifulSoup) -> List[Dict[str, str]]:
-        """Extract abilities (identified by [特性] or [Ability] prefix)"""
+        """Extract abilities (identified by [特性] or [Ability] prefix, excluding Terastal which goes to subtype)"""
         abilities = []
         skill_info = soup.find('div', class_='skillInformation')
         if not skill_info: return abilities
@@ -587,6 +636,10 @@ class HkCardScraper:
             if not name_span: continue
             
             name_text = name_span.get_text(strip=True)
+            
+            # Skip Terastal (太晶) - it's stored in subtype, not abilities
+            if name_text == '太晶' or name_text == 'テラスタル':
+                continue
             
             # Check if this is an ability (has [特性] or [Ability] prefix)
             if '[特性]' in name_text or '[Ability]' in name_text:
@@ -638,9 +691,32 @@ class HkCardScraper:
         if not escape_td: return 0
         return len(escape_td.find_all('img'))
 
-    def _extract_rulebox(self, card_name: str) -> Optional[str]:
-        for pattern_name, pattern in RULE_BOX_PATTERNS.items():
-            if re.search(pattern, card_name): return pattern_name
+    def _extract_rulebox(self, card_name: str, attacks: List[Dict[str, Any]] = None, abilities: List[Dict[str, Any]] = None) -> Optional[str]:
+        """Identify rule box type based on card name, attacks, and abilities"""
+        name_upper = card_name.upper()
+        if 'EX' in name_upper or 'ＥＸ' in card_name: return 'EX'
+        if 'GX' in name_upper or 'ＧＸ' in card_name: return 'GX'
+        if 'V-UNION' in name_upper: return 'V_UNION'
+        if 'VSTAR' in name_upper or 'ＶＳＴＡＲ' in card_name: return 'VSTAR'
+        if 'VMAX' in name_upper or 'ＶＭＡＸ' in card_name: return 'VMAX'
+        if name_upper.endswith(' V') or name_upper.endswith('Ｖ'): return 'V'
+        if 'RADIANT' in name_upper or '光輝' in card_name: return 'RADIANT'
+        if 'ULTRA BEAST' in name_upper or '異獸' in card_name: return 'ULTRA_BEAST'
+        
+        # Check for Terastal (太晶) - bench protection ability
+        if abilities:
+            for ability in abilities:
+                ability_desc = ability.get('description', '')
+                # Chinese: 這隻寶可夢在備戰區時，不會受到招式的傷害。
+                if '這隻寶可夢在備戰區時，不會受到招式的傷害。' in ability_desc or '這隻寶可夢在備戰區時' in ability_desc:
+                    return 'TERA'
+        
+        # Check for Terastal (太晶) in attack names
+        if attacks:
+            for attack in attacks:
+                if '太晶' in attack.get('name', '') or 'Tera' in attack.get('name', ''):
+                    return 'TERA'
+        
         return None
 
     def _is_valid_card_data(self, data: Dict[str, Any]) -> bool:

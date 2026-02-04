@@ -43,23 +43,23 @@ _BS4_PARSER = 'lxml' if importlib.util.find_spec('lxml') else 'html.parser'
 # MAPPING CONSTANTS
 # ============================================================================
 
-# Energy cost icons to symbols
+# Energy cost icons to symbols (using Japanese symbols for consistency)
 ICON_COST_MAP = {
-    'icon-fire': 'Fire',
-    'icon-water': 'Water',
-    'icon-lightning': 'Lightning',
-    'icon-electric': 'Lightning',
-    'icon-grass': 'Grass',
-    'icon-fighting': 'Fighting',
-    'icon-psychic': 'Psychic',
-    'icon-darkness': 'Darkness',
-    'icon-dark': 'Darkness',
-    'icon-metal': 'Metal',
-    'icon-steel': 'Metal',
-    'icon-none': 'Colorless',
-    'icon-colorless': 'Colorless',
-    'icon-fairy': 'Fairy',
-    'icon-dragon': 'Dragon'
+    'icon-fire': '炎',
+    'icon-water': '水',
+    'icon-lightning': '雷',
+    'icon-electric': '雷',
+    'icon-grass': '草',
+    'icon-fighting': '闘',
+    'icon-psychic': '超',
+    'icon-darkness': '悪',
+    'icon-dark': '悪',
+    'icon-metal': '鋼',
+    'icon-steel': '鋼',
+    'icon-none': '無',
+    'icon-colorless': '無',
+    'icon-fairy': 'フェアリー',
+    'icon-dragon': 'ドラゴン'
 }
 
 # Element icons to database enum values
@@ -243,17 +243,19 @@ class EnglishCardScraper:
 
         if supertype == 'POKEMON':
             weakness_type, weakness_value = self._extract_weakness(soup)
+            attacks = self._extract_attacks(soup)
+            abilities = self._extract_abilities(soup)
             
             data.update({
                 'hp': self._extract_hp(soup),
                 'pokemonTypes': [pokemon_type] if pokemon_type else [],
                 'evolutionStage': evolution_stage,
                 'evolvesTo': self._extract_evolves_to(soup),
-                'attacks': self._extract_attacks(soup),
-                'abilities': self._extract_abilities(soup),
+                'attacks': attacks,
+                'abilities': abilities,
                 'weakness': {'type': weakness_type, 'value': weakness_value} if weakness_type else None,
                 'retreatCost': self._extract_retreat_cost(soup),
-                'ruleBox': self._extract_rulebox(card_name),
+                'ruleBox': self._extract_rulebox(card_name, attacks, abilities),
                 'pokedexNumber': self._extract_pokedex_number(soup),
                 'flavorText': self._extract_flavor_text(soup)
             })
@@ -454,28 +456,31 @@ class EnglishCardScraper:
             
         return attacks
 
-    def _extract_attack_cost(self, attack_elem: BeautifulSoup) -> Optional[str]:
+    def _extract_attack_cost(self, attack_elem: BeautifulSoup) -> Optional[List[str]]:
         symbols = []
         for img in attack_elem.find_all('img'):
             src = img.get('src', '')
+            matched = False
             for key, val in ICON_COST_MAP.items():
                 if key.replace('icon-', '') in src.lower(): # Loose matching on filename
                      symbols.append(val)
+                     matched = True
                      break
-            # Fallback based on image filename
-            if 'Grass' in src: symbols.append('Grass')
-            elif 'Fire' in src: symbols.append('Fire')
-            elif 'Water' in src: symbols.append('Water')
-            elif 'Lightning' in src: symbols.append('Lightning')
-            elif 'Psychic' in src: symbols.append('Psychic')
-            elif 'Fighting' in src: symbols.append('Fighting')
-            elif 'Darkness' in src: symbols.append('Darkness')
-            elif 'Metal' in src: symbols.append('Metal')
-            elif 'Fairy' in src: symbols.append('Fairy')
-            elif 'Dragon' in src: symbols.append('Dragon')
-            elif 'Colorless' in src: symbols.append('Colorless')
+            # Fallback based on image filename (only if not already matched)
+            if not matched:
+                if 'Grass' in src: symbols.append('草')
+                elif 'Fire' in src: symbols.append('炎')
+                elif 'Water' in src: symbols.append('水')
+                elif 'Lightning' in src: symbols.append('雷')
+                elif 'Psychic' in src: symbols.append('超')
+                elif 'Fighting' in src: symbols.append('闘')
+                elif 'Darkness' in src: symbols.append('悪')
+                elif 'Metal' in src: symbols.append('鋼')
+                elif 'Fairy' in src: symbols.append('フェアリー')
+                elif 'Dragon' in src: symbols.append('ドラゴン')
+                elif 'Colorless' in src: symbols.append('無')
 
-        return ''.join(symbols) if symbols else None
+        return symbols if symbols else None
 
     def _extract_abilities(self, soup: BeautifulSoup) -> List[Dict[str, str]]:
         """Extract abilities (identified by [Ability] prefix)"""
@@ -539,9 +544,24 @@ class EnglishCardScraper:
         if not escape_td: return 0
         return len(escape_td.find_all('img'))
 
-    def _extract_rulebox(self, card_name: str) -> Optional[str]:
+    def _extract_rulebox(self, card_name: str, attacks: List[Dict[str, Any]] = None, abilities: List[Dict[str, Any]] = None) -> Optional[str]:
+        """Extract ruleBox enum value from card name, attacks, and abilities"""
         for pattern_name, pattern in RULE_BOX_PATTERNS.items():
             if re.search(pattern, card_name): return pattern_name
+        
+        # Check for Terastal - bench protection ability
+        if abilities:
+            for ability in abilities:
+                ability_desc = ability.get('description', '')
+                if 'As long as this Pokémon is on your Bench' in ability_desc and 'prevent all damage' in ability_desc:
+                    return 'TERA'
+        
+        # Check for Terastal in attack names
+        if attacks:
+            for attack in attacks:
+                if 'Tera' in attack.get('name', '') or '太晶' in attack.get('name', ''):
+                    return 'TERA'
+        
         return None
 
     def _extract_card_id_from_url(self, url: str) -> Optional[str]:

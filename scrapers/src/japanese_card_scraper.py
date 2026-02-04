@@ -361,7 +361,7 @@ class JapaneseCardScraper:
                 "evolutionStage": evolution_stage,
                 "evolvesFrom": evolves_from,
                 "evolvesTo": evolves_to,
-                "ruleBox": self._extract_rulebox(card_name),
+                "ruleBox": self._extract_rulebox(card_name, attacks, abilities),
                 "pokedexNumber": pokedex_number,
                 
                 # Combat stats
@@ -605,7 +605,7 @@ class JapaneseCardScraper:
         
         return attacks
 
-    def _extract_attack_cost(self, attack_elem: BeautifulSoup) -> Optional[str]:
+    def _extract_attack_cost(self, attack_elem: BeautifulSoup) -> Optional[List[str]]:
         """Extract energy cost symbols from attack"""
         symbols = []
         for tag in attack_elem.find_all(True):
@@ -615,7 +615,7 @@ class JapaneseCardScraper:
                     symbol = ICON_COST_MAP.get(cls)
                     if symbol:
                         symbols.append(symbol)
-        return ''.join(symbols) if symbols else None
+        return symbols if symbols else None
 
     def _extract_abilities(self, soup: BeautifulSoup) -> List[Dict[str, str]]:
         """Extract ability information"""
@@ -749,8 +749,8 @@ class JapaneseCardScraper:
         
         return rules if rules else None
     
-    def _extract_rulebox(self, card_name: str) -> Optional[str]:
-        """Extract ruleBox enum value from card name"""
+    def _extract_rulebox(self, card_name: str, attacks: List[Dict[str, Any]] = None, abilities: List[Dict[str, Any]] = None) -> Optional[str]:
+        """Extract ruleBox enum value from card name, attacks, and abilities"""
         # Check name for rule box keywords (VMAX, VSTAR, etc.)
         for pattern_name, pattern in RULE_BOX_PATTERNS.items():
             if re.search(pattern, card_name):
@@ -759,6 +759,20 @@ class JapaneseCardScraper:
         # Check for MEGA in name
         if re.search(r'M([^a-z]|$)', card_name):  # M followed by non-lowercase or end
             return 'MEGA'
+        
+        # Check for Terastal (テラスタル/太晶) - bench protection ability
+        if abilities:
+            for ability in abilities:
+                ability_desc = ability.get('description', '')
+                if 'このポケモンは、ベンチにいるかぎり、ワザのダメージを受けない。' in ability_desc:
+                    return 'TERA'
+        
+        # Check for Terastal in attack names
+        if attacks:
+            for attack in attacks:
+                attack_name = attack.get('name', '')
+                if 'テラスタル' in attack_name or '太晶' in attack_name or 'Tera' in attack_name:
+                    return 'TERA'
         
         return None
 
