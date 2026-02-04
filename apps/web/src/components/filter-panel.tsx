@@ -178,7 +178,7 @@ export function FilterPanel({ filters, onFilterChange }: FilterPanelProps) {
           >
             <option value="" className="text-gray-900">全部</option>
             <option value="JA_JP" className="text-gray-900">日文</option>
-            <option value="ZH_HK" className="text-gray-900">繁體中文</option>
+            <option value="ZH_TW" className="text-gray-900">繁體中文</option>
             <option value="EN_US" className="text-gray-900">英文</option>
           </select>
         </div>

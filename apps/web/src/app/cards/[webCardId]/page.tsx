@@ -92,9 +92,8 @@ async function searchCardsByName(name: string) {
 
 const LANGUAGE_LABELS: Record<string, string> = {
   JA_JP: '日文',
-  ZH_HK: '繁體中文',
-  EN_US: '英文',
   ZH_TW: '繁體中文',
+  EN_US: '英文',
   KO_KR: '韓文',
 };
 

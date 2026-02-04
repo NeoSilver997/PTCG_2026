@@ -1,4 +1,4 @@
-export type LanguageCode = 'ja-JP' | 'zh-HK' | 'en-US';
+export type LanguageCode = 'ja-JP' | 'zh-TW' | 'en-US';
 export type Region = 'HK' | 'JP' | 'EN';
 export type UserRole = 'GUEST' | 'USER' | 'ADMIN';
 export type ScraperStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED';

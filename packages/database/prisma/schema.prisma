@@ -100,7 +100,7 @@ model RegionalExpansion {
 
 enum LanguageCode {
   JA_JP
-  ZH_HK
+  ZH_TW
   EN_US
 }
 

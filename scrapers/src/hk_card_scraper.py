@@ -127,18 +127,82 @@ RULE_BOX_PATTERNS = {
 class HkCardScraper:
     """Scraper for Hong Kong Pokemon card details"""
 
-    def __init__(self, data_root: Optional[str] = None):
+    def __init__(self, data_root: Optional[str] = None, html_cache_dir: Optional[str] = None):
         if data_root is None:
             script_dir = Path(__file__).parent.parent.parent
             data_root = script_dir / 'data'
         
         self.data_root = Path(data_root)
         self.cards_dir = self.data_root / 'cards' / 'hongkong'
-        self.html_dir = self.data_root / 'html' / 'hongkong'
+        
+        if html_cache_dir:
+            self.html_dir = Path(html_cache_dir)
+        else:
+            self.html_dir = self.data_root / 'html' / 'hongkong'
         
         self.user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         self.min_request_interval = 2.0
         self.quiet = False
+        self._html_index = None  # Lazy-loaded cache index
+        self.cache_hits = 0
+        self.cache_misses = 0
+
+    def _build_html_index(self) -> Dict[str, Path]:
+        """Build index mapping card ID to HTML file path (supports expansion folders)"""
+        if not self.quiet:
+            logger.info(f"Building HTML cache index from {self.html_dir}")
+        
+        id_to_path = {}
+        html_files = list(self.html_dir.rglob('*.html'))
+        
+        if not self.quiet:
+            logger.info(f"Found {len(html_files)} HTML files to index")
+        
+        def process_file(fpath):
+            try:
+                # Try extracting from filename first (faster)
+                basename = fpath.name
+                filename_match = re.match(r'^(\d+)', basename)
+                if filename_match:
+                    return filename_match.group(1), fpath
+                
+                # Fallback: read first 2KB to find card ID in URL
+                with open(fpath, 'r', encoding='utf-8') as f:
+                    header = f.read(2048)
+                    id_match = re.search(r'/detail/(\d+)/', header)
+                    if id_match:
+                        return id_match.group(1), fpath
+            except Exception:
+                pass
+            return None, None
+        
+        # Process files in parallel
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = [executor.submit(process_file, fpath) for fpath in html_files]
+            for i, future in enumerate(as_completed(futures), 1):
+                card_id, fpath = future.result()
+                if card_id:
+                    id_to_path[card_id] = fpath
+                if not self.quiet and i % 1000 == 0:
+                    logger.info(f"Processed {i}/{len(html_files)} files, found {len(id_to_path)} IDs")
+        
+        if not self.quiet:
+            logger.info(f"Indexed {len(id_to_path)} unique card IDs")
+        
+        return id_to_path
+
+    def _get_cached_html(self, card_id: str) -> Optional[Path]:
+        """Smart cache lookup: supports both flat and expansion-folder structure"""
+        # Try flat structure first (fast)
+        flat_path = self.html_dir / f"{card_id}.html"
+        if flat_path.exists():
+            return flat_path
+        
+        # Try index lookup (for expansion-folder structure)
+        if self._html_index is None:
+            self._html_index = self._build_html_index()
+        
+        return self._html_index.get(card_id)
 
     def scrape_card_details(
         self,
@@ -149,19 +213,25 @@ class HkCardScraper:
     ) -> Optional[Dict[str, Any]]:
         try:
             card_id = self._extract_card_id_from_url(card_url)
-            cache_path = self.html_dir / f"{card_id}.html" if card_id and cache_html else None
             html_text = None
 
-            if cache_path and cache_path.exists() and not refresh_cache:
-                if not self.quiet:
-                    logger.info(f"Using cached HTML for card {card_id}")
-                html_text = cache_path.read_text(encoding='utf-8')
-            else:
-                if cache_only:
+            # Smart cache lookup (supports both flat and expansion folders)
+            if card_id and (cache_html or cache_only) and not refresh_cache:
+                cache_path = self._get_cached_html(card_id)
+                if cache_path:
+                    if not self.quiet:
+                        logger.info(f"Cache hit: {cache_path.relative_to(self.html_dir)}")
+                    html_text = cache_path.read_text(encoding='utf-8')
+                    self.cache_hits += 1
+                elif cache_only:
                     if not self.quiet:
                         logger.warning(f"Cache miss for {card_id}, skipping (cache-only mode)")
+                    self.cache_misses += 1
                     return None
-                
+                else:
+                    self.cache_misses += 1
+            
+            if not html_text and not cache_only:
                 if not self.quiet:
                     logger.info(f"Fetching {card_url}")
                 
@@ -170,7 +240,9 @@ class HkCardScraper:
                 response.raise_for_status()
                 html_text = response.text
                 
-                if cache_path:
+                # Save to cache (flat structure for new downloads)
+                if cache_html and card_id:
+                    cache_path = self.html_dir / f"{card_id}.html"
                     cache_path.parent.mkdir(parents=True, exist_ok=True)
                     cache_path.write_text(html_text, encoding='utf-8')
 
@@ -234,7 +306,7 @@ class HkCardScraper:
         data = {
             'webCardId': web_card_id,
             'name': card_name,
-            'language': 'ZH_HK',
+            'language': 'ZH_TW',
             'region': 'HK',
             'supertype': supertype,
             'subtype': subtype,
@@ -665,11 +737,15 @@ def save_cards_by_expansion(cards: List[Dict[str, Any]], output_path: Path, comp
     base_name = output_path.stem
     
     for expansion, expansion_cards in by_expansion.items():
-        file_path = output_dir / f"{base_name}_{expansion}.json"
+        # Sanitize expansion code for filename: remove .png, spaces, and other problematic characters
+        safe_expansion = expansion.replace('.png', '').replace(' ', '_').replace('/', '_').strip()
+        # Remove any remaining non-alphanumeric characters except underscore and hyphen
+        safe_expansion = ''.join(c for c in safe_expansion if c.isalnum() or c in ('_', '-'))
+        file_path = output_dir / f"{base_name}_{safe_expansion}.json"
         with open(file_path, 'w', encoding='utf-8') as f:
             if compact: json.dump(expansion_cards, f, ensure_ascii=False, separators=(',', ':'))
             else: json.dump(expansion_cards, f, ensure_ascii=False, indent=2)
-        logger.info(f"Saved {len(expansion_cards)} cards to {file_path}")
+        logger.info(f"Saved {len(expansion_cards)} cards to {file_path.name}")
 
 def main():
     parser = argparse.ArgumentParser(description='HK Card Scraper')
@@ -681,11 +757,12 @@ def main():
     parser.add_argument('--cache-only', action='store_true')
     parser.add_argument('--threads', type=int, default=1)
     parser.add_argument('--quiet', action='store_true')
+    parser.add_argument('--html-cache-dir', type=str, help='Custom HTML cache directory path')
     parser.add_argument('--expansion', type=str, help='Filter by expansion code (requires fetch_expansion_ids implementation)')
     
     args = parser.parse_args()
     
-    scraper = HkCardScraper()
+    scraper = HkCardScraper(html_cache_dir=args.html_cache_dir if hasattr(args, 'html_cache_dir') else None)
     scraper.quiet = args.quiet
     
     card_ids = []
@@ -712,6 +789,15 @@ def main():
         cache_only=args.cache_only,
         threads=args.threads
     )
+    
+    # Print cache statistics
+    if scraper.cache_hits > 0 or scraper.cache_misses > 0:
+        total_lookups = scraper.cache_hits + scraper.cache_misses
+        hit_rate = (scraper.cache_hits / total_lookups * 100) if total_lookups > 0 else 0
+        logger.info(f"\nCache Statistics:")
+        logger.info(f"  Hits: {scraper.cache_hits}")
+        logger.info(f"  Misses: {scraper.cache_misses}")
+        logger.info(f"  Hit Rate: {hit_rate:.1f}%")
     
     save_cards_by_expansion(cards, Path(args.output), False)
     logger.info(f"Scraped {len(cards)} cards")
