@@ -28,12 +28,26 @@ interface ProductDetail {
   cardOnly: boolean | null;
   beginnerFlag: boolean | null;
   storesAvailable: string | null;
+  linkCardList: string | null;
+  linkPokemonCenter: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
 async function fetchProductDetail(id: string) {
   const { data } = await apiClient.get(`/products/${id}`);
+  return data;
+}
+
+async function fetchRelatedCards(productCode: string) {
+  const { data } = await apiClient.get('/cards', {
+    params: {
+      expansionCode: productCode,
+      take: 50,
+      sortBy: 'id',
+      sortOrder: 'desc'
+    }
+  });
   return data;
 }
 
@@ -51,11 +65,17 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
     queryFn: () => fetchProductDetail(id),
   });
 
+  const { data: relatedCards, isLoading: cardsLoading } = useQuery({
+    queryKey: ['product-cards', product?.code],
+    queryFn: () => product?.code ? fetchRelatedCards(product.code) : Promise.resolve({ data: [] }),
+    enabled: !!product?.code,
+  });
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Navbar />
-        <div className="max-w-4xl mx-auto px-6 py-8">
+        <div className="w-full px-6 py-8">
           <div className="text-center py-12">載入中...</div>
         </div>
       </div>
@@ -66,7 +86,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
     return (
       <div className="min-h-screen bg-gray-50">
         <Navbar />
-        <div className="max-w-4xl mx-auto px-6 py-8">
+        <div className="w-full px-6 py-8">
           <div className="text-center py-12 text-red-600">
             找不到商品或載入失敗
           </div>
@@ -79,7 +99,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
     <div className="min-h-screen bg-gray-50">
       <Navbar />
 
-      <div className="max-w-4xl mx-auto px-6 py-8">
+      <div className="w-full px-6 py-8">
         {/* Header */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
@@ -102,18 +122,18 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
 
           <div className="flex items-start gap-6">
             {/* Product Image */}
-            <div className="flex-shrink-0">
+            <div className="w-3/10 flex-shrink-0">
               {product.imageUrl ? (
                 <img
                   src={product.imageUrl}
                   alt={product.productName}
-                  className="w-64 h-64 object-cover rounded-lg shadow-lg"
+                  className="w-full h-auto object-cover rounded-lg shadow-lg"
                   onError={(e) => {
                     e.currentTarget.style.display = 'none';
                   }}
                 />
               ) : (
-                <div className="w-64 h-64 bg-gray-200 rounded-lg flex items-center justify-center">
+                <div className="w-full aspect-square bg-gray-200 rounded-lg flex items-center justify-center">
                   <span className="text-gray-400">無圖片</span>
                 </div>
               )}
@@ -247,6 +267,59 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
             </div>
           </div>
         </div>
+
+        {/* Related Cards */}
+        {product.code && (
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">
+              相關卡牌 ({product.code})
+            </h2>
+            {cardsLoading ? (
+              <div className="text-center py-8">載入卡牌中...</div>
+            ) : relatedCards?.data?.length > 0 ? (
+              <>
+                <div className="mb-4 text-sm text-gray-600">
+                  共 {relatedCards.pagination?.total || 0} 張卡牌 (按 ID 降序排列)
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {relatedCards.data.map((card: any) => (
+                    <div key={card.id} className="border rounded-lg p-3 hover:shadow-md transition-shadow">
+                      <div className="aspect-[2.5/3.5] bg-gray-100 rounded mb-2 relative overflow-hidden">
+                        {card.imageUrl ? (
+                          <img
+                            src={card.imageUrl}
+                            alt={card.name}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">
+                            無圖片
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-sm">
+                        <div className="font-medium text-gray-900 truncate">{card.name}</div>
+                        <div className="text-gray-600 text-xs">
+                          {card.webCardId} • {card.supertype}
+                          {card.hp && ` • HP ${card.hp}`}
+                        </div>
+                        {card.rarity && (
+                          <div className="text-gray-500 text-xs">{card.rarity}</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <div>此商品代碼 ({product.code}) 目前沒有相關卡牌</div>
+                <div className="text-xs mt-2">卡牌數據將在導入後顯示</div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

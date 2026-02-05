@@ -292,7 +292,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
     return (
       <div className="min-h-screen bg-gray-50">
         <Navbar />
-        <div className="max-w-6xl mx-auto px-6 py-8">
+        <div className="w-full px-6 py-8">
           <div className="text-center">載入中...</div>
         </div>
       </div>
@@ -303,7 +303,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
     return (
       <div className="min-h-screen bg-gray-50">
         <Navbar />
-        <div className="max-w-6xl mx-auto px-6 py-8">
+        <div className="w-full px-6 py-8">
           <div className="text-center text-red-600">找不到卡片資料</div>
         </div>
       </div>
@@ -314,7 +314,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
     <div className="min-h-screen bg-gray-50">
       <Navbar />
       
-      <div className="max-w-6xl mx-auto px-6 py-8">
+      <div className="w-full px-6 py-8">
         {/* Back Button */}
         <button
           onClick={() => router.back()}
@@ -324,9 +324,9 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
           返回列表
         </button>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="flex gap-8">
           {/* Card Image */}
-          <div className="bg-white rounded-lg p-6 shadow-sm">
+          <div className="w-3/10 bg-white rounded-lg p-6 shadow-sm">
             {card.imageUrl ? (
               <img
                 src={card.imageUrl}
@@ -357,7 +357,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
           </div>
 
           {/* Card Details */}
-          <div className="space-y-6">
+          <div className="flex-1 space-y-6">
             {/* Basic Info */}
             <div className="bg-white rounded-lg p-6 shadow-sm">
               <h1 className="text-3xl font-bold mb-2 text-gray-900">{card.name}</h1>
