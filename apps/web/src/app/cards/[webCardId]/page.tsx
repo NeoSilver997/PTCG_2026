@@ -4,9 +4,9 @@ import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/api-client';
 import { Navbar } from '@/components/navbar';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
-import { use } from 'react';
+import { use, useState, useEffect } from 'react';
 
 interface CardDetail {
   id: string;
@@ -124,6 +124,36 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
     queryKey: ['card', webCardId],
     queryFn: () => fetchCardDetail(webCardId),
   });
+
+  // State for variant navigation
+  const [currentVariantIndex, setCurrentVariantIndex] = useState(0);
+
+  // Navigation functions for language variants
+  const navigateToPreviousVariant = () => {
+    if (card?.languageVariants && card.languageVariants.length > 0) {
+      const newIndex = currentVariantIndex > 0 ? currentVariantIndex - 1 : card.languageVariants.length - 1;
+      setCurrentVariantIndex(newIndex);
+      router.push(`/cards/${card.languageVariants[newIndex].webCardId}`);
+    }
+  };
+
+  const navigateToNextVariant = () => {
+    if (card?.languageVariants && card.languageVariants.length > 0) {
+      const newIndex = currentVariantIndex < card.languageVariants.length - 1 ? currentVariantIndex + 1 : 0;
+      setCurrentVariantIndex(newIndex);
+      router.push(`/cards/${card.languageVariants[newIndex].webCardId}`);
+    }
+  };
+
+  // Update current variant index when card changes
+  useEffect(() => {
+    if (card?.languageVariants) {
+      const currentIndex = card.languageVariants.findIndex(variant => variant.webCardId === webCardId);
+      if (currentIndex !== -1) {
+        setCurrentVariantIndex(currentIndex);
+      }
+    }
+  }, [card?.languageVariants, webCardId]);
 
   // Fetch evolution-related cards
   const { data: evolvesFromCards = [] } = useQuery({
@@ -251,43 +281,6 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
     enabled: !!card?.name,
   });
 
-  // Find cards with same attack names
-  const { data: sameAttackCards = [] } = useQuery({
-    queryKey: ['sameAttacks', card?.attacks, card?.webCardId],
-    queryFn: async () => {
-      if (!card?.attacks || !Array.isArray(card.attacks) || card.attacks.length === 0) return [];
-      try {
-        const attackNames = card.attacks.map((a: any) => a.name).filter(Boolean);
-        if (attackNames.length === 0) return [];
-
-        // Use the new attackName API filter for exact matching
-        const results = await Promise.all(
-          attackNames.map(async (attackName: string) => {
-            const { data } = await apiClient.get('/cards', {
-              params: { attackName, take: 100 }
-            });
-            return data?.data || [];
-          })
-        );
-        const allCards = results.flat();
-
-        // Remove duplicates and current card
-        const uniqueCards = Array.from(
-          new Map(
-            allCards
-              .filter((c: any) => c.webCardId !== card.webCardId)
-              .map(c => [c.webCardId, c])
-          ).values()
-        );
-
-        return uniqueCards;
-      } catch (error) {
-        return [];
-      }
-    },
-    enabled: !!card?.attacks,
-  });
-
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -327,17 +320,44 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
         <div className="flex gap-8">
           {/* Card Image */}
           <div className="w-3/10 bg-white rounded-lg p-6 shadow-sm">
-            {card.imageUrl ? (
-              <img
-                src={card.imageUrl}
-                alt={card.name}
-                className="w-full h-auto rounded-lg"
-              />
-            ) : (
-              <div className="aspect-[2.5/3.5] bg-gray-100 rounded-lg flex items-center justify-center">
-                <span className="text-gray-400">無圖片</span>
-              </div>
-            )}
+            <div className="relative">
+              {card.imageUrl ? (
+                <img
+                  src={card.imageUrl}
+                  alt={card.name}
+                  className="w-full h-auto rounded-lg"
+                />
+              ) : (
+                <div className="aspect-[2.5/3.5] bg-gray-100 rounded-lg flex items-center justify-center">
+                  <span className="text-gray-400">無圖片</span>
+                </div>
+              )}
+
+              {/* Navigation Buttons - Always visible when multiple variants exist */}
+              {card.languageVariants && card.languageVariants.length > 1 && (
+                <>
+                  <button
+                    onClick={navigateToPreviousVariant}
+                    className="absolute top-2 left-2 bg-black bg-opacity-60 hover:bg-opacity-80 text-white p-1.5 rounded-full shadow-lg transition-all duration-200 hover:scale-110"
+                    title="上一版本"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={navigateToNextVariant}
+                    className="absolute top-2 right-2 bg-black bg-opacity-60 hover:bg-opacity-80 text-white p-1.5 rounded-full shadow-lg transition-all duration-200 hover:scale-110"
+                    title="下一版本"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+
+                  {/* Expansion Code and Card Number */}
+                  <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded-full">
+                    {(card.regionalExpansion?.code || card.primaryCard?.primaryExpansion?.code || 'N/A').toUpperCase()} #{card.primaryCard?.cardNumber || 'N/A'} {currentVariantIndex + 1}/{card.languageVariants.length}
+                  </div>
+                </>
+              )}
+            </div>
 
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <Link
@@ -594,65 +614,74 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                     })()}
                   </div>
 
-                  {/* Arrow */}
-                  <div className="flex-shrink-0 text-2xl text-gray-400">→</div>
+                  {/* Stage 2 - Only show if there are Stage 2 cards or current card is Stage 2 */}
+                  {(() => {
+                    const hasStage2Cards = evolvesToCards.some((c: any) => c.evolutionStage === 'STAGE_2');
+                    const isCurrentStage2 = card.evolutionStage === 'STAGE_2';
+                    return (hasStage2Cards || isCurrentStage2) && (
+                      <>
+                        {/* Arrow */}
+                        <div className="flex-shrink-0 text-2xl text-gray-400">→</div>
 
-                  {/* Stage 2 */}
-                  <div className="flex-shrink-0">
-                    <div className="text-xs font-semibold text-gray-500 mb-3 text-center">2進化</div>
-                    {card.evolutionStage === 'STAGE_2' ? (
-                      <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-500 rounded-lg p-4 min-w-[140px]">
-                        {card.imageUrl && (
-                          <img src={card.imageUrl} alt={card.name} className="w-full h-32 object-contain mb-2 rounded" />
-                        )}
-                        <div className="text-sm font-bold text-blue-900 mb-1">{card.name}</div>
-                        <div className="text-xs text-blue-700">當前卡片</div>
-                      </div>
-                    ) : card.evolvesTo ? (
-                      (() => {
-                        const currentExpansionCode = card.regionalExpansion?.code;
-                        // Filter to STAGE_2 cards only
-                        const stage2Cards = evolvesToCards.filter((c: any) => c.evolutionStage === 'STAGE_2');
-                        // Prioritize same expansion code, then nearest webCardId
-                        const stage2Card = stage2Cards.find((c: any) => 
-                          c.regionalExpansion?.code === currentExpansionCode
-                        ) || (stage2Cards.length > 0 ? stage2Cards.sort((a, b) => 
-                          Math.abs(parseInt(a.webCardId.replace(/\D/g, '')) - parseInt(card.webCardId.replace(/\D/g, ''))) -
-                          Math.abs(parseInt(b.webCardId.replace(/\D/g, '')) - parseInt(card.webCardId.replace(/\D/g, '')))
-                        )[0] : null);
-                        
-                        return stage2Card ? (
-                          <Link
-                            href={`/cards/${stage2Card.webCardId}`}
-                            className="block bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-300 hover:border-purple-400 rounded-lg p-4 min-w-[140px] max-w-[200px] transition-all hover:shadow-md"
-                          >
-                            {stage2Card.imageUrl && (
-                              <img src={stage2Card.imageUrl} alt={stage2Card.name} className="w-full h-32 object-contain mb-2 rounded" />
-                            )}
-                            <div className="text-sm font-medium text-gray-900 mb-1 truncate" title={stage2Card.name}>
-                              {stage2Card.name}
+                        {/* Stage 2 */}
+                        <div className="flex-shrink-0">
+                          <div className="text-xs font-semibold text-gray-500 mb-3 text-center">2進化</div>
+                          {card.evolutionStage === 'STAGE_2' ? (
+                            <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-500 rounded-lg p-4 min-w-[140px]">
+                              {card.imageUrl && (
+                                <img src={card.imageUrl} alt={card.name} className="w-full h-32 object-contain mb-2 rounded" />
+                              )}
+                              <div className="text-sm font-bold text-blue-900 mb-1">{card.name}</div>
+                              <div className="text-xs text-blue-700">當前卡片</div>
                             </div>
-                            <div className="text-xs text-purple-700">
-                              {stage2Cards.length > 1 ? `點擊查看 (${stage2Cards.length} 種)` : '點擊查看 →'}
+                          ) : card.evolvesTo ? (
+                            (() => {
+                              const currentExpansionCode = card.regionalExpansion?.code;
+                              // Filter to STAGE_2 cards only
+                              const stage2Cards = evolvesToCards.filter((c: any) => c.evolutionStage === 'STAGE_2');
+                              // Prioritize same expansion code, then nearest webCardId
+                              const stage2Card = stage2Cards.find((c: any) => 
+                                c.regionalExpansion?.code === currentExpansionCode
+                              ) || (stage2Cards.length > 0 ? stage2Cards.sort((a, b) => 
+                                Math.abs(parseInt(a.webCardId.replace(/\D/g, '')) - parseInt(card.webCardId.replace(/\D/g, ''))) -
+                                Math.abs(parseInt(b.webCardId.replace(/\D/g, '')) - parseInt(card.webCardId.replace(/\D/g, '')))
+                              )[0] : null);
+                              
+                              return stage2Card ? (
+                                <Link
+                                  href={`/cards/${stage2Card.webCardId}`}
+                                  className="block bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-300 hover:border-purple-400 rounded-lg p-4 min-w-[140px] max-w-[200px] transition-all hover:shadow-md"
+                                >
+                                  {stage2Card.imageUrl && (
+                                    <img src={stage2Card.imageUrl} alt={stage2Card.name} className="w-full h-32 object-contain mb-2 rounded" />
+                                  )}
+                                  <div className="text-sm font-medium text-gray-900 mb-1 truncate" title={stage2Card.name}>
+                                    {stage2Card.name}
+                                  </div>
+                                  <div className="text-xs text-purple-700">
+                                    {stage2Cards.length > 1 ? `點擊查看 (${stage2Cards.length} 種)` : '點擊查看 →'}
+                                  </div>
+                                </Link>
+                              ) : (
+                                <div className="bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-300 rounded-lg p-4 min-w-[140px] max-w-[200px]">
+                                  <div className="text-sm font-medium text-gray-900 mb-1 truncate" title={card.evolvesTo}>
+                                    {card.evolvesTo.split(',')[0].trim()}
+                                  </div>
+                                  <div className="text-xs text-gray-600">
+                                    {card.evolvesTo.split(',').length > 1 ? `+${card.evolvesTo.split(',').length - 1} 更多` : '可進化'}
+                                  </div>
+                                </div>
+                              );
+                            })()
+                          ) : (
+                            <div className="bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg p-4 min-w-[140px]">
+                              <div className="text-xs text-gray-400 text-center">—</div>
                             </div>
-                          </Link>
-                        ) : (
-                          <div className="bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-300 rounded-lg p-4 min-w-[140px] max-w-[200px]">
-                            <div className="text-sm font-medium text-gray-900 mb-1 truncate" title={card.evolvesTo}>
-                              {card.evolvesTo.split(',')[0].trim()}
-                            </div>
-                            <div className="text-xs text-gray-600">
-                              {card.evolvesTo.split(',').length > 1 ? `+${card.evolvesTo.split(',').length - 1} 更多` : '可進化'}
-                            </div>
-                          </div>
-                        );
-                      })()
-                    ) : (
-                      <div className="bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg p-4 min-w-[140px]">
-                        <div className="text-xs text-gray-400 text-center">—</div>
-                      </div>
-                    )}
-                  </div>
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
 
                 {/* Evolution Options */}
@@ -730,7 +759,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
             )}
 
             {/* Same Name / Same Attack Cards */}
-            {(sameNameCards.length > 0 || sameAttackCards.length > 0) && (
+            {sameNameCards.length > 0 && (
               <div className="bg-white rounded-lg p-3 shadow-sm">
                 <h2 className="text-xl font-semibold mb-3 text-gray-900">相關卡片</h2>
                 
@@ -762,40 +791,6 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                               {relatedCard.variantType}
                             </div>
                           )}
-                          {relatedCard.regionalExpansion?.code && (
-                            <div className="text-xs text-gray-600">
-                              {relatedCard.regionalExpansion.code}
-                            </div>
-                          )}
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Same Attack Cards */}
-                {sameAttackCards.length > 0 && (
-                  <div>
-                    <div className="text-sm font-medium text-gray-700 mb-3">
-                      相同招式卡片 ({sameAttackCards.length} 張)：
-                    </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
-                      {sameAttackCards.slice(0, 10).map((relatedCard: any) => (
-                        <Link
-                          key={relatedCard.webCardId}
-                          href={`/cards/${relatedCard.webCardId}`}
-                          className="block bg-white border-2 border-green-200 hover:border-green-400 rounded-lg p-2 transition-all hover:shadow-lg"
-                        >
-                          {relatedCard.imageUrl && (
-                            <img 
-                              src={relatedCard.imageUrl} 
-                              alt={relatedCard.name} 
-                              className="w-full h-24 object-contain mb-1 rounded"
-                            />
-                          )}
-                          <div className="text-sm font-medium text-gray-900 mb-1 truncate" title={relatedCard.name}>
-                            {relatedCard.name}
-                          </div>
                           {relatedCard.regionalExpansion?.code && (
                             <div className="text-xs text-gray-600">
                               {relatedCard.regionalExpansion.code}
