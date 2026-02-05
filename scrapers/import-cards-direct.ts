@@ -171,20 +171,28 @@ async function importCard(prisma: PrismaClient, card: any) {
     },
   });
 
+  // Map region from card data early (needed for RegionalExpansion)
+  const regionMap = {
+    'HK': Region.HK,
+    'JP': Region.JP,
+    'EN': Region.EN,
+  };
+  const region = card.region ? (regionMap[card.region] || Region.JP) : Region.JP;
+  
   // 2. Get or create RegionalExpansion
   const regionalExpansion = await prisma.regionalExpansion.upsert({
     where: {
       primaryExpansionId_region: {
         primaryExpansionId: primaryExpansion.id,
-        region: Region.JP,
+        region: region,
       },
     },
     update: { code: card.expansionCode },
     create: {
       primaryExpansionId: primaryExpansion.id,
-      region: Region.JP,
+      region: region,
       code: card.expansionCode,
-      name: `Japanese ${card.expansionCode}`,
+      name: `${card.region || 'JP'} ${card.expansionCode}`,
     },
   });
 
@@ -247,6 +255,15 @@ async function importCard(prisma: PrismaClient, card: any) {
   
   const variantType = card.variantType ? (VARIANT_MAP[card.variantType.toUpperCase()] || VariantType.NORMAL) : VariantType.NORMAL;
   const hp = card.hp ? (typeof card.hp === 'number' ? card.hp : parseInt(card.hp, 10)) : null;
+  
+  // Map language from card data (default to JA_JP for backward compatibility)
+  const languageMap = {
+    'ZH_HK': LanguageCode.ZH_HK,
+    'ZH_TW': LanguageCode.ZH_TW,
+    'JA_JP': LanguageCode.JA_JP,
+    'EN_US': LanguageCode.EN_US,
+  };
+  const language = card.language ? (languageMap[card.language] || LanguageCode.JA_JP) : LanguageCode.JA_JP;
 
   // 5. Upsert Card using webCardId as unique key
   await prisma.card.upsert({
@@ -279,7 +296,7 @@ async function importCard(prisma: PrismaClient, card: any) {
       primaryCardId: primaryCard.id,
       regionalExpansionId: regionalExpansion.id,
       webCardId: card.webCardId,
-      language: LanguageCode.JA_JP,
+      language: language,
       variantType,
       name: card.name,
       supertype,
