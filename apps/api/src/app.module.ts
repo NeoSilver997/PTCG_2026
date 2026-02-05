@@ -11,6 +11,7 @@ import { TournamentsModule } from './tournaments/tournaments.module';
 import { DecksModule } from './decks/decks.module';
 import { PricesModule } from './prices/prices.module';
 import { StorageModule } from './storage/storage.module';
+import { ProductsModule } from './products/products.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { StorageModule } from './storage/storage.module';
     DecksModule,
     PricesModule,
     StorageModule,
+    ProductsModule,
   ],
 })
 export class AppModule {}

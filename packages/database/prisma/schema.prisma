@@ -492,3 +492,34 @@ model ScraperJob {
   @@index([createdAt])
   @@map("scraper_jobs")
 }
+
+// ============================================================================
+// PRODUCTS
+// ============================================================================
+
+model Product {
+  id                  String   @id @default(cuid())
+  country             String
+  productName         String
+  price               String?
+  releaseDate         String?
+  code                String?
+  link                String?
+  imageUrl            String?
+  include             String?
+  cardOnly            String?
+  productType         String?
+  beginnerFlag        Int      @default(0)
+  storesAvailable     String?
+  linkCardList        String?
+  linkPokemonCenter   String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  
+  @@unique([country, code, productName, releaseDate])
+  @@index([country])
+  @@index([releaseDate])
+  @@index([code])
+  @@index([productType])
+  @@map("products")
+}

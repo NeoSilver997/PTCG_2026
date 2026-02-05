@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 export function Navbar() {
   const pathname = usePathname();
   const isCardsRoute = pathname.startsWith('/cards');
+  const isProductsRoute = pathname.startsWith('/products');
   const isDeckBuilderRoute = pathname.startsWith('/deck-builder');
   const isDeckStudioRoute = pathname.startsWith('/deck-studio');
   const breadcrumbLabel = isCardsRoute
@@ -16,6 +17,12 @@ export function Navbar() {
         : pathname === '/cards'
           ? ''
           : '卡片詳情'
+    : isProductsRoute
+    ? pathname.endsWith('/edit')
+      ? '編輯商品'
+      : pathname === '/products'
+        ? ''
+        : '商品詳情'
     : '';
 
   return (
@@ -33,6 +40,12 @@ export function Navbar() {
                 className={isCardsRoute ? 'text-white font-semibold' : 'hover:text-white'}
               >
                 卡片管理
+              </Link>
+              <Link
+                href="/products"
+                className={isProductsRoute ? 'text-white font-semibold' : 'hover:text-white'}
+              >
+                商品管理
               </Link>
               <Link
                 href="/deck-builder/tournaments"
@@ -54,14 +67,14 @@ export function Navbar() {
             </div>
           </div>
           <div className="flex items-center space-x-4">
-            {isCardsRoute && pathname !== '/cards' && (
+            {(isCardsRoute && pathname !== '/cards') || (isProductsRoute && pathname !== '/products') ? (
               <Link
-                href="/cards"
+                href={isCardsRoute ? "/cards" : "/products"}
                 className="text-purple-200 hover:text-white px-3 py-2"
               >
                 返回列表
               </Link>
-            )}
+            ) : null}
             <div className="flex items-center space-x-2 bg-white/10 px-4 py-2 rounded-lg">
               <span className="text-white font-medium">Admin</span>
             </div>
