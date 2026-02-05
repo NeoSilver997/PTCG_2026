@@ -249,6 +249,7 @@ class EnglishCardScraper:
             'rarity': RARITY_MAP.get(rarity, 'COMMON') if rarity else 'COMMON',
             'expansionCode': expansion_code,
             'collectorNumber': collector_number,
+            'regulationMark': self._extract_regulation_mark(soup),
             'imageUrl': image_url,
             'sourceUrl': source_url,
             'scrapedAt': datetime.now().isoformat(),
@@ -409,25 +410,63 @@ class EnglishCardScraper:
         return None
 
     def _extract_expansion_code(self, soup: BeautifulSoup) -> Optional[str]:
+        # First priority: Try expansion link with expansionCodes parameter (most reliable)
+        exp_link = soup.select_one('a[href*="expansionCodes="]')
+        if exp_link and exp_link.get('href'):
+            match = re.search(r'expansionCodes=([A-Za-z0-9]+)', exp_link['href'])
+            if match:
+                return match.group(1).lower()
+        
+        # Second priority: Try expansion symbol image
+        exp_symbol = soup.find('span', class_='expansionSymbol')
+        if exp_symbol:
+            img = exp_symbol.find('img')
+            if img and img.get('src'):
+                # Extract from filename like expansion_mark_SV5K.png
+                filename = img['src'].split('/')[-1]
+                match = re.search(r'expansion_mark_([A-Za-z0-9]+)\.png', filename)
+                if match:
+                    return match.group(1).lower()
+        
+        # Fallback: old logo method
         logo = soup.select_one('img.img-regulation[alt]')
-        if logo: return (logo.get('alt') or '').strip().lower()
-        link = soup.select_one('a[href^="/ex/"]')
-        if link and link.get('href'):
-            match = re.search(r'^/ex/([^/]+)/', link['href'])
-            if match: return match.group(1).lower()
-            
-        # Fallback: check expansion column
+        if logo:
+            alt_text = (logo.get('alt') or '').strip()
+            if alt_text and alt_text != 'expansion':
+                return alt_text.lower()
+        
+        # Fallback: check expansion column for other images
         exp_col = soup.find('section', class_='expansionColumn')
         if exp_col:
             img = exp_col.find('img')
             if img and img.get('src'):
-                # Extract from filename like M2F_exp.png
+                # Extract from filename like M2F_exp.png or SV5K.png
                 filename = img['src'].split('/')[-1]
-                code = filename.split('_')[0]
-                # Remove last char if it indicates set A/B
-                if code.endswith('F') or code.endswith('L') or code.endswith('S'):
-                     return code
-                return code.lower()
+                # Try pattern: CODE_exp.png or CODE.png
+                match = re.search(r'^([A-Za-z0-9]+)(?:_exp)?\.png', filename)
+                if match:
+                    code = match.group(1)
+                    if code.lower() != 'expansion':
+                        return code.lower()
+        
+        return None
+
+    def _extract_regulation_mark(self, soup: BeautifulSoup) -> Optional[str]:
+        """Extract regulation mark (single letter A-I) from span.alpha element."""
+        # Try span.alpha first
+        alpha_span = soup.find('span', class_='alpha')
+        if alpha_span:
+            text = alpha_span.get_text(strip=True)
+            if text and len(text) == 1 and text.isalpha():
+                return text.upper()
+        
+        # Try span.regulationMark as fallback
+        regulation_span = soup.find('span', class_='regulationMark')
+        if regulation_span:
+            text = regulation_span.get_text(strip=True)
+            if text and len(text) == 1 and text.isalpha():
+                return text.upper()
+        
         return None
 
     def _extract_image_url(self, soup: BeautifulSoup) -> Optional[str]:
