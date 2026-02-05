@@ -108,7 +108,7 @@ export class CardsController {
   async updateEvolution(
     @Param('webCardId') webCardId: string,
     @Body() dto: { evolvesFrom?: string; evolvesTo?: string }
-  ) {
+  ): Promise<any> {
     return await this.cardsService.updateEvolution(webCardId, dto);
   }
 }

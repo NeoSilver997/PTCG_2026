@@ -15,7 +15,13 @@ interface ProductDetail {
   price: string | null;
   releaseDate: string | null;
   code: string | null;
-  productType: string | null;
+  productType: {
+    id: string;
+    code: string;
+    nameJa: string;
+    nameZh: string;
+    nameEn: string;
+  } | null;
   imageUrl: string | null;
   link: string | null;
   include: string | null;
@@ -35,14 +41,6 @@ const COUNTRY_LABELS: Record<string, string> = {
   Japan: '日本',
   'Hong Kong (EN)': '香港 (英文)',
   'Hong Kong (ZH)': '香港 (中文)',
-};
-
-const PRODUCT_TYPE_LABELS: Record<string, string> = {
-  '拡張パック': '擴張包',
-  '強化拡張パック': '強化擴張包',
-  'スターターセット': '入門套組',
-  'デッキ': '牌組',
-  '周辺グッズ': '周邊商品',
 };
 
 export default function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -134,7 +132,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                     </span>
                     {product.productType && (
                       <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
-                        {PRODUCT_TYPE_LABELS[product.productType] || product.productType}
+                        {product.productType.nameZh}
                       </span>
                     )}
                   </div>

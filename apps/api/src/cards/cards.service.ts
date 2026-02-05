@@ -803,7 +803,7 @@ export class CardsService {
   async updateEvolution(
     webCardId: string,
     dto: { evolvesFrom?: string; evolvesTo?: string }
-  ) {
+  ): Promise<any> {
     const card = await this.prisma.card.findUnique({
       where: { webCardId },
     });

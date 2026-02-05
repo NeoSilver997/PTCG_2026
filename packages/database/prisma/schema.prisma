@@ -14,8 +14,23 @@ datasource db {
 }
 
 // ============================================================================
-// AUTHENTICATION & USER MANAGEMENT
+// PRODUCT TYPES
 // ============================================================================
+
+model ProductType {
+  id          String    @id @default(cuid())
+  code        String    @unique // Internal code (e.g., "expansion_pack")
+  nameJa      String    // Japanese name (e.g., "拡張パック")
+  nameZh      String    // Chinese name (e.g., "擴充包")
+  nameEn      String    // English name (e.g., "Expansion Pack")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  // Relations
+  products    Product[]
+  
+  @@map("product_types")
+}
 
 enum UserRole {
   GUEST
@@ -498,7 +513,7 @@ model ScraperJob {
 // ============================================================================
 
 model Product {
-  id                  String   @id @default(cuid())
+  id                  String      @id @default(cuid())
   country             String
   productName         String
   price               String?
@@ -508,18 +523,21 @@ model Product {
   imageUrl            String?
   include             String?
   cardOnly            String?
-  productType         String?
-  beginnerFlag        Int      @default(0)
+  productTypeId       String?     // Reference to ProductType
+  beginnerFlag        Int         @default(0)
   storesAvailable     String?
   linkCardList        String?
   linkPokemonCenter   String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  
+  // Relations
+  productType         ProductType? @relation(fields: [productTypeId], references: [id])
   
   @@unique([country, code, productName, releaseDate])
   @@index([country])
   @@index([releaseDate])
   @@index([code])
-  @@index([productType])
+  @@index([productTypeId])
   @@map("products")
 }

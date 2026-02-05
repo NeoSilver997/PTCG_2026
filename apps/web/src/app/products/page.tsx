@@ -12,9 +12,15 @@ interface Product {
   price: string | null;
   releaseDate: string | null;
   code: string | null;
-  productType: string | null;
   imageUrl: string | null;
   link: string | null;
+  productType: {
+    id: string;
+    code: string;
+    nameJa: string;
+    nameZh: string;
+    nameEn: string;
+  } | null;
 }
 
 interface ProductsResponse {
@@ -121,11 +127,13 @@ export default function ProductsPage() {
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">所有類型</option>
-              <option value="拡張パック">拡張パック (Expansion Pack)</option>
-              <option value="強化拡張パック">強化拡張パック (Enhanced Expansion)</option>
-              <option value="スターターセット">スターターセット (Starter Set)</option>
-              <option value="デッキ">デッキ (Deck)</option>
-              <option value="周辺グッズ">周辺グッズ (Accessories)</option>
+              <option value="expansion_pack">擴充包</option>
+              <option value="enhanced_expansion">強化擴充包</option>
+              <option value="starter_set">入門套組</option>
+              <option value="constructed_deck">構築牌組</option>
+              <option value="accessories">周邊商品</option>
+              <option value="special_products">其他商品</option>
+              <option value="deck">牌組</option>
             </select>
           </div>
 
@@ -215,7 +223,7 @@ export default function ProductsPage() {
                   )}
                   {product.productType && (
                     <p className="text-xs text-gray-600 mb-3">
-                      {product.productType}
+                      {product.productType.nameZh}
                     </p>
                   )}
                   {product.link && (

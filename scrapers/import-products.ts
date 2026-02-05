@@ -29,6 +29,25 @@ interface ProductData {
 
 const prisma = new PrismaClient();
 
+// Map old product type strings to new ProductType codes
+const productTypeMapping: Record<string, string> = {
+  '拡張パック': 'expansion_pack',
+  '強化拡張パック': 'enhanced_expansion',
+  '入門セット': 'starter_set',
+  '構築デッキ': 'constructed_deck',
+  '周辺グッズ': 'accessories',
+  'その他の商品': 'special_products',
+  'デッキ': 'deck',
+  // English mappings
+  'Expansion Pack': 'expansion_pack',
+  'Enhanced Expansion Pack': 'enhanced_expansion',
+  'Starter Set': 'starter_set',
+  'Constructed Deck': 'constructed_deck',
+  'Accessories': 'accessories',
+  'Special Products': 'special_products',
+  'Deck': 'deck'
+};
+
 async function importProducts(jsonFilePath: string) {
   console.log('\n🔍 Reading products from JSON...\n');
   
@@ -43,6 +62,43 @@ async function importProducts(jsonFilePath: string) {
   
   for (const product of products) {
     try {
+      // Find the ProductType ID based on the product_type string
+      let productTypeId: string | null = null;
+      if (product.product_type) {
+        const typeCode = productTypeMapping[product.product_type];
+        if (typeCode) {
+          const productType = await prisma.productType.findUnique({
+            where: { code: typeCode }
+          });
+          productTypeId = productType?.id || null;
+        }
+      } else {
+        // For Chinese products without product_type, infer from product name
+        const name = product.product_name.toLowerCase();
+        let inferredTypeCode: string | null = null;
+        
+        if (name.includes('擴充包')) {
+          inferredTypeCode = 'expansion_pack';
+        } else if (name.includes('高級擴充包') || name.includes('強化擴充包')) {
+          inferredTypeCode = 'enhanced_expansion';
+        } else if (name.includes('初階牌組') || name.includes('入門套組') || name.includes('starter')) {
+          inferredTypeCode = 'starter_set';
+        } else if (name.includes('構築牌組') || name.includes('牌組')) {
+          inferredTypeCode = 'constructed_deck';
+        } else if (name.includes('周邊') || name.includes('accessories') || name.includes('デッキシールド')) {
+          inferredTypeCode = 'accessories';
+        } else {
+          inferredTypeCode = 'special_products'; // Default fallback
+        }
+        
+        if (inferredTypeCode) {
+          const productType = await prisma.productType.findUnique({
+            where: { code: inferredTypeCode }
+          });
+          productTypeId = productType?.id || null;
+        }
+      }
+
       // Use upsert to handle duplicates
       await prisma.product.upsert({
         where: {
@@ -59,7 +115,7 @@ async function importProducts(jsonFilePath: string) {
           imageUrl: product.image_url,
           include: product.include,
           cardOnly: product.card_only,
-          productType: product.product_type,
+          productTypeId: productTypeId,
           beginnerFlag: product.beginner_flag || 0,
           storesAvailable: product.stores_available,
           linkCardList: product.link_card_list,
@@ -75,7 +131,7 @@ async function importProducts(jsonFilePath: string) {
           imageUrl: product.image_url,
           include: product.include,
           cardOnly: product.card_only,
-          productType: product.product_type,
+          productTypeId: productTypeId,
           beginnerFlag: product.beginner_flag || 0,
           storesAvailable: product.stores_available,
           linkCardList: product.link_card_list,

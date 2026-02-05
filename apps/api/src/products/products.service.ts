@@ -16,7 +16,23 @@ export class ProductsService {
     }
 
     if (productType) {
-      where.productType = productType;
+      // Find the ProductType by code and filter by productTypeId
+      const productTypeRecord = await this.prisma.productType.findUnique({
+        where: { code: productType }
+      });
+      if (productTypeRecord) {
+        where.productTypeId = productTypeRecord.id;
+      } else {
+        // If productType code not found, return empty results
+        return {
+          data: [],
+          pagination: {
+            total: 0,
+            skip: Number(skip),
+            take: Math.min(Number(take), 100),
+          },
+        };
+      }
     }
 
     if (search) {
@@ -35,6 +51,9 @@ export class ProductsService {
           { releaseDate: 'desc' },
           { productName: 'asc' },
         ],
+        include: {
+          productType: true,
+        },
       }),
       this.prisma.product.count({ where }),
     ]);
@@ -52,6 +71,9 @@ export class ProductsService {
   async getProduct(id: string) {
     const product = await this.prisma.product.findUnique({
       where: { id },
+      include: {
+        productType: true,
+      },
     });
 
     if (!product) {
