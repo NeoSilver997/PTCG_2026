@@ -146,6 +146,7 @@ enum Subtype {
   TOOL
   BASIC_ENERGY
   SPECIAL_ENERGY
+  TERA
 }
 
 enum EvolutionStage {

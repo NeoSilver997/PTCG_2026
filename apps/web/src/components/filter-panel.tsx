@@ -3,7 +3,7 @@ import { useState } from 'react';
 
 interface FilterPanelProps {
   filters: {
-    search: string;
+    name: string;
     supertype: string;
     types: string;
     rarity: string;
@@ -33,12 +33,12 @@ export function FilterPanel({ filters, onFilterChange }: FilterPanelProps) {
   
   const clearFilters = () => {
     onFilterChange({
-      search: '',
+      name: '',
       supertype: '',
       types: '',
       rarity: '',
       language: '',
-      sortBy: 'createdAt',
+      sortBy: 'expansionReleaseDate',
       sortOrder: 'desc',
       webCardId: '',
       subtypes: '',
@@ -53,7 +53,7 @@ export function FilterPanel({ filters, onFilterChange }: FilterPanelProps) {
     });
   };
   
-  const hasActiveFilters = filters.search || filters.supertype || filters.types || 
+  const hasActiveFilters = filters.name || filters.supertype || filters.types || 
     filters.rarity || filters.language || filters.webCardId || filters.subtypes ||
     filters.variantType || filters.minHp || filters.maxHp || filters.artist ||
     filters.regulationMark || filters.expansionCode || filters.hasAbilities || filters.hasAttackText;
@@ -96,8 +96,8 @@ export function FilterPanel({ filters, onFilterChange }: FilterPanelProps) {
         <input
           type="text"
           placeholder="搜尋卡片名稱..."
-          value={filters.search}
-          onChange={(e) => updateFilter('search', e.target.value)}
+          value={filters.name}
+          onChange={(e) => updateFilter('name', e.target.value)}
           className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
       </div>
