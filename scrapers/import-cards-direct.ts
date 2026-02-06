@@ -127,6 +127,7 @@ interface JapaneseCard {
   regulationMark?: string;
   imageUrl?: string;
   imageUrlHiRes?: string;
+  sourceUrl?: string;
   variantType?: string;
   evolvesFrom?: string;
   evolvesTo?: string;
@@ -348,6 +349,7 @@ async function importCardOptimized(prisma: PrismaClient, card: any) {
       regulationMark: card.regulationMark || null,
       imageUrl: card.imageUrl || null,
       imageUrlHiRes: card.imageUrlHiRes || null,
+      sourceUrl: card.sourceUrl || null,
       variantType,
     },
     create: {
@@ -375,6 +377,7 @@ async function importCardOptimized(prisma: PrismaClient, card: any) {
       regulationMark: card.regulationMark || null,
       imageUrl: card.imageUrl || null,
       imageUrlHiRes: card.imageUrlHiRes || null,
+      sourceUrl: card.sourceUrl || null,
     },
   });
 }
