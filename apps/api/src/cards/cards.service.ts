@@ -535,14 +535,15 @@ export class CardsService {
     const validSortFields = ['id', 'webCardId', 'name', 'hp', 'createdAt', 'updatedAt', 'rarity', 'supertype', 'expansionReleaseDate'];
     if (actualSortBy && validSortFields.includes(actualSortBy)) {
       if (actualSortBy === 'expansionReleaseDate') {
-        // Special handling for expansion release date - will be handled in raw SQL
+        // For expansion release date, sort by createdAt since all release dates are NULL
+        orderBy.createdAt = actualSortOrder || 'desc';
       } else {
         orderBy[actualSortBy] = actualSortOrder || 'desc';
       }
     } else {
-      // Default sort by expansion release date (newest first)
-      actualSortBy = 'expansionReleaseDate';
-      actualSortOrder = 'desc';
+      // Default sort by createdAt (newest first) since expansionReleaseDate would sort by createdAt anyway
+      actualSortBy = 'createdAt';
+      orderBy.createdAt = 'desc';
     }
 
     // Handle hasAbilities filter using raw SQL due to Prisma JSON limitations
@@ -662,7 +663,7 @@ export class CardsService {
           LEFT JOIN regional_expansions re ON c."regionalExpansionId" = re.id
           LEFT JOIN primary_expansions pe ON re."primaryExpansionId" = pe.id
           ${whereClause}
-          ORDER BY ${actualSortBy === 'expansionReleaseDate' ? `pe."releaseDate" ${actualSortOrder || 'DESC'}, c."createdAt" DESC` : `c."${actualSortBy || 'createdAt'}" ${actualSortOrder || 'DESC'}`}
+          ORDER BY c."createdAt" ${actualSortOrder === 'asc' ? 'ASC' : 'DESC'}
           LIMIT ${Math.min(take, 100)} OFFSET ${skip}
         `),
         this.prisma.$queryRawUnsafe<[{ count: bigint }]>(`

@@ -30,6 +30,24 @@ export default function CardsPage() {
     hasAttackText: '',
   });
 
+  // Load saved filters from localStorage on component mount
+  useEffect(() => {
+    const savedFilters = localStorage.getItem('cardFilters');
+    if (savedFilters) {
+      try {
+        const parsedFilters = JSON.parse(savedFilters);
+        setFilters(prevFilters => ({ ...prevFilters, ...parsedFilters }));
+      } catch (error) {
+        console.error('Error loading saved filters:', error);
+      }
+    }
+  }, []);
+
+  // Save filters to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('cardFilters', JSON.stringify(filters));
+  }, [filters]);
+
   const { data, isLoading, error } = useQuery({
     queryKey: ['cards', filters],
     queryFn: async () => {

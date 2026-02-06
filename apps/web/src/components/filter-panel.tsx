@@ -102,8 +102,39 @@ export function FilterPanel({ filters, onFilterChange }: FilterPanelProps) {
         />
       </div>
       
-      {/* Basic Filters (Always Visible) */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* Basic Filters (Always Visible) */}  
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">
+            排序依據
+          </label>
+          <select
+            value={filters.sortBy}
+            onChange={(e) => updateFilter('sortBy', e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900"
+          >
+            <option value="expansionReleaseDate" className="text-gray-900">發行日期</option>
+            <option value="createdAt" className="text-gray-900">匯入日期</option>
+            <option value="name" className="text-gray-900">名稱</option>
+            <option value="hp" className="text-gray-900">HP</option>
+            <option value="rarity" className="text-gray-900">稀有度</option>
+            <option value="supertype" className="text-gray-900">超級類型</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">
+            排序順序
+          </label>
+          <select
+            value={filters.sortOrder}
+            onChange={(e) => updateFilter('sortOrder', e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900"
+          >
+            <option value="desc" className="text-gray-900">降序 (新到舊)</option>
+            <option value="asc" className="text-gray-900">升序 (舊到新)</option>
+          </select>
+        </div>
         <div>
           <label className="block text-xs font-medium text-gray-700 mb-1">
             超級類型
