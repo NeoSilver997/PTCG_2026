@@ -312,6 +312,7 @@ class HkCardScraper:
         regulation_mark = self._extract_regulation_mark(soup)
         
         supertype = self._extract_supertype(soup, card_name, page_text)
+        effect_text = self._extract_effect_text(soup, supertype)
         evolution_stage = self._extract_evolution_stage_from_marker(evolution_stage_text) if supertype == 'POKEMON' else None
         
         # Extract abilities early for Pokemon to check for Terastal
@@ -365,7 +366,8 @@ class HkCardScraper:
             'imageUrl': image_url,
             'sourceUrl': source_url,
             'scrapedAt': datetime.now().isoformat(),
-            'rawRarity': rarity 
+            'rawRarity': rarity,
+            'effectText': effect_text
         }
 
         if supertype == 'POKEMON':
@@ -817,6 +819,35 @@ class HkCardScraper:
         
         return None
     
+    def _extract_effect_text(self, soup: BeautifulSoup, supertype: str) -> Optional[str]:
+        """Extract card effect text (for Trainer/Energy cards)"""
+        if supertype == 'POKEMON':
+            return None
+        
+        # Method 1: Look for specific Trainer/Energy sections (both Chinese and English)
+        for section_title in ['物品', '支援者', '競技場', '寶可夢的道具', '特殊能量', '基本能量', 'Item', 'Supporter', 'Stadium', 'Pokémon Tool', 'Special Energy', 'Basic Energy']:
+            section = soup.find(['h2', 'h3'], string=re.compile(section_title, re.IGNORECASE))
+            if section:
+                # Get the next paragraph after the section title
+                next_p = section.find_next('p')
+                if next_p:
+                    text = next_p.get_text(strip=True)
+                    # Skip header/metadata paragraphs
+                    if text and len(text) > 15 and not text.startswith('身高') and not text.startswith('體重') and not text.startswith('Height') and not text.startswith('Weight'):
+                        return text
+        
+        # Method 2: Look for paragraphs with effect-like keywords (fallback)
+        for p in soup.find_all('p'):
+            text = p.get_text(strip=True)
+            if text and len(text) > 20:
+                # Check for effect-like keywords (both Chinese and English)
+                if any(keyword in text.lower() for keyword in ['this card', 'your turn', 'opponent', 'damage', 'pokemon', '這張卡', '你的回合', '對手', '傷害', '寶可夢']):
+                    # Skip if it's flavor text indicators
+                    if not any(skip in text.lower() for skip in ['身高:', '體重:', 'height:', 'weight:']):
+                        return text
+        
+        return None
+
     def _extract_flavor_text(self, soup: BeautifulSoup) -> Optional[str]:
         """Extract flavor text (height, weight, description)"""
         extra_info = soup.find('div', class_='extraInformation')

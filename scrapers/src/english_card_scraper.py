@@ -215,6 +215,7 @@ class EnglishCardScraper:
         expansion_code = self._extract_expansion_code(soup)
         
         supertype = self._extract_supertype(soup, card_name, page_text)
+        effect_text = self._extract_effect_text(soup, supertype)
         evolution_stage = self._extract_evolution_stage_from_marker(evolution_stage_text) if supertype == 'POKEMON' else None
         subtype = self._determine_subtype(supertype, evolution_stage, soup, page_text)
         
@@ -253,7 +254,8 @@ class EnglishCardScraper:
             'imageUrl': image_url,
             'sourceUrl': source_url,
             'scrapedAt': datetime.now().isoformat(),
-            'rawRarity': rarity 
+            'rawRarity': rarity,
+            'effectText': effect_text
         }
 
         if supertype == 'POKEMON':
@@ -662,6 +664,23 @@ class EnglishCardScraper:
         
         return None
     
+    def _extract_effect_text(self, soup: BeautifulSoup, supertype: str) -> Optional[str]:
+        """Extract card effect text (for Trainer/Energy cards)"""
+        if supertype == 'POKEMON':
+            return None
+        
+        # Look for paragraphs with effect-like keywords
+        for p in soup.find_all('p'):
+            text = p.get_text(strip=True)
+            if text and len(text) > 20:
+                # Check for effect-like keywords
+                if any(keyword in text.lower() for keyword in ['this card', 'your turn', 'opponent', 'damage', 'pokemon', 'shuffle', 'deck', 'hand', 'discard']):
+                    # Skip if it's flavor text indicators
+                    if not any(skip in text.lower() for skip in ['height:', 'weight:']):
+                        return text
+        
+        return None
+
     def _extract_flavor_text(self, soup: BeautifulSoup) -> Optional[str]:
         """Extract flavor text (height, weight, description)"""
         extra_info = soup.find('div', class_='extraInformation')
