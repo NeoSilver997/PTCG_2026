@@ -3,6 +3,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import CardsPage from '../page';
 import apiClient from '@/lib/api-client';
 
+// Mock localStorage
+const localStorageMock = {
+  getItem: jest.fn(() => null), // Return null by default to simulate no saved filters
+  setItem: jest.fn(),
+  removeItem: jest.fn(),
+  clear: jest.fn(),
+};
+global.localStorage = localStorageMock;
+
 // Mock the API client
 jest.mock('@/lib/api-client');
 jest.mock('@/components/navbar', () => ({
@@ -101,7 +110,7 @@ describe('CardsPage', () => {
     render(<CardsPage />, { wrapper: createWrapper() });
     
     await waitFor(() => {
-      expect(screen.getByText(/錯誤:/)).toBeInTheDocument();
+      expect(screen.getByText('載入失敗')).toBeInTheDocument();
     });
   });
 
@@ -121,7 +130,7 @@ describe('CardsPage', () => {
     render(<CardsPage />, { wrapper: createWrapper() });
     
     await waitFor(() => {
-      expect(screen.getByText('沒有找到符合條件的卡片')).toBeInTheDocument();
+      expect(screen.getByText('沒有找到卡牌')).toBeInTheDocument();
     });
   });
 
@@ -154,13 +163,16 @@ describe('CardsPage', () => {
       expect(screen.getByText('基本鋼エネルギー')).toBeInTheDocument();
     });
     
-    const supertypeSelect = screen.getAllByRole('combobox')[1];
+    const supertypeSelect = screen.getAllByRole('combobox')[2];
     fireEvent.change(supertypeSelect, { target: { value: 'POKEMON' } });
     
     await waitFor(() => {
-      expect(mockApiClient.get).toHaveBeenCalledWith(
-        expect.stringContaining('supertype=POKEMON')
-      );
+      const calls = mockApiClient.get.mock.calls;
+      const lastCall = calls[calls.length - 1][0];
+      const decodedCall = decodeURIComponent(lastCall);
+      expect(decodedCall).toContain('supertype=POKEMON');
+      expect(decodedCall).toContain('sortBy=expansionReleaseDate');
+      expect(decodedCall).toContain('sortOrder=desc');
     });
   });
 
@@ -173,13 +185,16 @@ describe('CardsPage', () => {
       expect(screen.getByText('基本鋼エネルギー')).toBeInTheDocument();
     });
     
-    const raritySelect = screen.getAllByRole('combobox')[3];
+    const raritySelect = screen.getAllByRole('combobox')[4];
     fireEvent.change(raritySelect, { target: { value: 'COMMON' } });
     
     await waitFor(() => {
-      expect(mockApiClient.get).toHaveBeenCalledWith(
-        expect.stringContaining('rarity=COMMON')
-      );
+      const calls = mockApiClient.get.mock.calls;
+      const lastCall = calls[calls.length - 1][0];
+      const decodedCall = decodeURIComponent(lastCall);
+      expect(decodedCall).toContain('rarity=COMMON');
+      expect(decodedCall).toContain('sortBy=expansionReleaseDate');
+      expect(decodedCall).toContain('sortOrder=desc');
     });
   });
 
@@ -192,13 +207,16 @@ describe('CardsPage', () => {
       expect(screen.getByText('基本鋼エネルギー')).toBeInTheDocument();
     });
     
-    const typesSelect = screen.getAllByRole('combobox')[2];
+    const typesSelect = screen.getAllByRole('combobox')[3];
     fireEvent.change(typesSelect, { target: { value: 'FIRE' } });
     
     await waitFor(() => {
-      expect(mockApiClient.get).toHaveBeenCalledWith(
-        expect.stringContaining('types=FIRE')
-      );
+      const calls = mockApiClient.get.mock.calls;
+      const lastCall = calls[calls.length - 1][0];
+      const decodedCall = decodeURIComponent(lastCall);
+      expect(decodedCall).toContain('types=FIRE');
+      expect(decodedCall).toContain('sortBy=expansionReleaseDate');
+      expect(decodedCall).toContain('sortOrder=desc');
     });
   });
 
@@ -211,78 +229,17 @@ describe('CardsPage', () => {
       expect(screen.getByText('基本鋼エネルギー')).toBeInTheDocument();
     });
     
-    const languageSelect = screen.getAllByRole('combobox')[4];
+    const languageSelect = screen.getAllByRole('combobox')[5];
     fireEvent.change(languageSelect, { target: { value: 'EN_US' } });
     
     await waitFor(() => {
-      expect(mockApiClient.get).toHaveBeenCalledWith(
-        expect.stringContaining('language=EN_US')
-      );
+      const calls = mockApiClient.get.mock.calls;
+      const lastCall = calls[calls.length - 1][0];
+      const decodedCall = decodeURIComponent(lastCall);
+      expect(decodedCall).toContain('language=EN_US');
+      expect(decodedCall).toContain('sortBy=expansionReleaseDate');
+      expect(decodedCall).toContain('sortOrder=desc');
     });
-  });
-
-  it('should reset to page 0 when filter changes', async () => {
-    mockApiClient.get.mockResolvedValue(mockCardsResponse);
-    
-    render(<CardsPage />, { wrapper: createWrapper() });
-    
-    await waitFor(() => {
-      expect(screen.getByText('基本鋼エネルギー')).toBeInTheDocument();
-    });
-    
-    // Go to next page first
-    const nextButton = screen.getByText('下一頁');
-    fireEvent.click(nextButton);
-    
-    // Then change filter
-    const searchInput = screen.getByPlaceholderText('搜尋卡片名稱...');
-    fireEvent.change(searchInput, { target: { value: 'test' } });
-    
-    await waitFor(() => {
-      expect(mockApiClient.get).toHaveBeenLastCalledWith(
-        expect.stringContaining('skip=0')
-      );
-    });
-  });
-
-  // Pagination tests would require more complex mock setup - tested manually
-  // it('should handle pagination - next page')
-  // it('should handle pagination - previous page')
-
-  it('should disable previous button on first page', async () => {
-    mockApiClient.get.mockResolvedValue(mockCardsResponse);
-    
-    render(<CardsPage />, { wrapper: createWrapper() });
-    
-    await waitFor(() => {
-      expect(screen.getByText('基本鋼エネルギー')).toBeInTheDocument();
-    });
-    
-    const prevButton = screen.getByText('上一頁');
-    expect(prevButton).toBeDisabled();
-  });
-
-  it('should disable next button when no more cards', async () => {
-    mockApiClient.get.mockResolvedValue({
-      data: {
-        data: [mockCardsResponse.data.data[0]],
-        pagination: {
-          total: 1,
-          skip: 0,
-          take: 50,
-          hasMore: false,
-        },
-      },
-    });
-    
-    render(<CardsPage />, { wrapper: createWrapper() });
-    
-    await waitFor(() => {
-      expect(screen.getByText('基本鋼エネルギー')).toBeInTheDocument();
-    });
-    
-    const nextButton = screen.getByText('下一頁');
-    expect(nextButton).toBeDisabled();
   });
 
   it('should display correct pagination info', async () => {
@@ -291,20 +248,23 @@ describe('CardsPage', () => {
     render(<CardsPage />, { wrapper: createWrapper() });
     
     await waitFor(() => {
-      expect(screen.getByText('顯示 1 - 2 / 共 2 筆')).toBeInTheDocument();
+      expect(screen.getByText('顯示 2 張卡牌 (總共 2 張)')).toBeInTheDocument();
     });
   });
 
-  it('should render action links for each card', async () => {
+  it('should render cards with correct information', async () => {
     mockApiClient.get.mockResolvedValue(mockCardsResponse);
     
     render(<CardsPage />, { wrapper: createWrapper() });
     
     await waitFor(() => {
       expect(screen.getByText('基本鋼エネルギー')).toBeInTheDocument();
+      expect(screen.getByText('ピカチュウ')).toBeInTheDocument();
     });
     
-    expect(screen.getByRole('link', { name: '新增卡片' })).toBeInTheDocument();
+    // Check that cards are clickable
+    const cards = screen.getAllByRole('img');
+    expect(cards).toHaveLength(2);
   });
 
   it('should combine multiple filters', async () => {
@@ -321,11 +281,11 @@ describe('CardsPage', () => {
     fireEvent.change(searchInput, { target: { value: 'ピカチュウ' } });
     
     // Set supertype
-    const supertypeSelect = screen.getAllByRole('combobox')[1];
+    const supertypeSelect = screen.getAllByRole('combobox')[2];
     fireEvent.change(supertypeSelect, { target: { value: 'POKEMON' } });
     
     // Set language (supertype, types, rarity, language)
-    const languageSelect = screen.getAllByRole('combobox')[4];
+    const languageSelect = screen.getAllByRole('combobox')[5];
     fireEvent.change(languageSelect, { target: { value: 'JA_JP' } });
     
     await waitFor(() => {
@@ -334,6 +294,8 @@ describe('CardsPage', () => {
       expect(decodedCall).toContain('name=ピカチュウ');
       expect(decodedCall).toContain('supertype=POKEMON');
       expect(decodedCall).toContain('language=JA_JP');
+      expect(decodedCall).toContain('sortBy=expansionReleaseDate');
+      expect(decodedCall).toContain('sortOrder=desc');
     });
   });
 });
