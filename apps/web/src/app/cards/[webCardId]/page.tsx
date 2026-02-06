@@ -20,6 +20,7 @@ interface CardDetail {
   variantType: string;
   language: string;
   imageUrl: string | null;
+  sourceUrl: string | null;
   artist: string | null;
   regulationMark: string | null;
   ruleBox: string | null;
@@ -291,9 +292,40 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
       if (!card?.name) return [];
       const cards = await searchCardsByName(card.name);
       // Filter to exact name matches only and exclude current card
-      return cards.filter((c: any) =>
+      let filteredCards = cards.filter((c: any) =>
         c.name === card.name && c.webCardId !== card.webCardId
       );
+
+      // For Pokemon cards, exclude cards with identical attacks
+      if (card.supertype === 'POKEMON' && card.attacks) {
+        filteredCards = filteredCards.filter((c: any) => {
+          if (!c.attacks || c.attacks.length !== card.attacks.length) return true;
+          
+          // Check if attacks are identical
+          const currentAttacks = JSON.stringify(card.attacks.map((attack: any) => ({
+            name: attack.name,
+            damage: attack.damage,
+            text: attack.text || attack.effect,
+            cost: attack.cost
+          })));
+          
+          const cardAttacks = JSON.stringify(c.attacks.map((attack: any) => ({
+            name: attack.name,
+            damage: attack.damage,
+            text: attack.text || attack.effect,
+            cost: attack.cost
+          })));
+          
+          return currentAttacks !== cardAttacks;
+        });
+      }
+
+      // For Trainer cards, exclude cards with identical text/effects
+      if (card.supertype === 'TRAINER' && card.text) {
+        filteredCards = filteredCards.filter((c: any) => c.text !== card.text);
+      }
+
+      return filteredCards;
     },
     enabled: !!card?.name,
   });
@@ -402,6 +434,11 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                 <span className="px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-full">
                   {SUPERTYPE_LABELS[card.supertype] || card.supertype}
                 </span>
+                {card.ruleBox && (
+                  <span className="px-3 py-1 bg-purple-100 text-purple-800 text-sm rounded-full font-semibold">
+                    {card.ruleBox}
+                  </span>
+                )}
                 {card.types && (
                   <span className={`px-3 py-1 text-white text-sm rounded-full ${
                     TYPE_COLORS[Array.isArray(card.types) ? card.types[0] : card.types] || 'bg-gray-500'
@@ -419,7 +456,20 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
               <dl className="grid grid-cols-2 gap-4">
                 <div>
                   <dt className="text-sm text-gray-600">卡號</dt>
-                  <dd className="font-medium text-gray-900">{currentVariant?.webCardId || card.webCardId}</dd>
+                  <dd className="font-medium text-gray-900">
+                    {card.sourceUrl ? (
+                      <a
+                        href={card.sourceUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800 underline"
+                      >
+                        {currentVariant?.webCardId || card.webCardId}
+                      </a>
+                    ) : (
+                      currentVariant?.webCardId || card.webCardId
+                    )}
+                  </dd>
                 </div>
                 {currentVariant?.regionalExpansion && (
                   <div>
@@ -460,6 +510,20 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                 )}
               </dl>
             </div>
+
+            {/* Trainer Card Text/Description */}
+            {card?.supertype === 'TRAINER' && card?.text && card?.text.trim().length > 0 && (
+              <div className="bg-white rounded-lg p-3 shadow-sm">
+                <h2 className="text-xl font-semibold mb-3 text-gray-900">
+                  {card.subtypes?.includes('SUPPORTER') && '效果 (Supporter Effect)'}
+                  {card.subtypes?.includes('ITEM') && '效果 (Item Effect)'}
+                  {card.subtypes?.includes('STADIUM') && '效果 (Stadium Effect)'}
+                  {card.subtypes?.includes('TOOL') && '效果 (Tool Effect)'}
+                  {!card.subtypes?.includes('SUPPORTER') && !card.subtypes?.includes('ITEM') && !card.subtypes?.includes('STADIUM') && !card.subtypes?.includes('TOOL') && '效果'}
+                </h2>
+                <p className="text-gray-800 whitespace-pre-wrap leading-relaxed">{card.text}</p>
+              </div>
+            )}
 
             {/* Attacks */}
             {card.attacks && Array.isArray(card.attacks) && card.attacks.length > 0 && (
@@ -829,20 +893,6 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                     <div className="text-sm text-gray-800 mt-1">{ability.text}</div>
                   </div>
                 ))}
-              </div>
-            )}
-
-            {/* Trainer Card Text/Description */}
-            {card.supertype === 'TRAINER' && card.text && (
-              <div className="bg-white rounded-lg p-3 shadow-sm">
-                <h2 className="text-xl font-semibold mb-3 text-gray-900">
-                  {card.subtypes.includes('SUPPORTER') && '效果 (Supporter Effect)'}
-                  {card.subtypes.includes('ITEM') && '效果 (Item Effect)'}
-                  {card.subtypes.includes('STADIUM') && '效果 (Stadium Effect)'}
-                  {card.subtypes.includes('TOOL') && '效果 (Tool Effect)'}
-                  {!card.subtypes.includes('SUPPORTER') && !card.subtypes.includes('ITEM') && !card.subtypes.includes('STADIUM') && !card.subtypes.includes('TOOL') && '效果'}
-                </h2>
-                <p className="text-gray-800 whitespace-pre-wrap leading-relaxed">{card.text}</p>
               </div>
             )}
 

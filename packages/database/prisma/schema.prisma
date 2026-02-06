@@ -1,8 +1,3 @@
-// Prisma Schema for PTCG CardDB
-// Multi-language card database with expansion mapping
-// Supported languages: Japanese, Chinese (HK), English
-// Supported regions: HK, JP, EN
-
 generator client {
   provider = "prisma-client-js"
   output   = "../node_modules/.prisma/client"
@@ -13,45 +8,31 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ============================================================================
-// PRODUCT TYPES
-// ============================================================================
-
 model ProductType {
-  id          String    @id @default(cuid())
-  code        String    @unique // Internal code (e.g., "expansion_pack")
-  nameJa      String    // Japanese name (e.g., "拡張パック")
-  nameZh      String    // Chinese name (e.g., "擴充包")
-  nameEn      String    // English name (e.g., "Expansion Pack")
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  
-  // Relations
-  products    Product[]
-  
+  id        String    @id @default(cuid())
+  code      String    @unique
+  nameJa    String
+  nameZh    String
+  nameEn    String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  products  Product[]
+
   @@map("product_types")
 }
 
-enum UserRole {
-  GUEST
-  USER
-  ADMIN
-}
-
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  name          String?
-  image         String?
-  role          UserRole  @default(USER)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
-  // Relations
-  sessions      Session[]
-  collections   Collection[]
-  decks         Deck[]
-  
+  id          String       @id @default(cuid())
+  email       String       @unique
+  name        String?
+  image       String?
+  role        UserRole     @default(USER)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  collections Collection[]
+  decks       Deck[]
+  sessions    Session[]
+
   @@index([email])
   @@map("users")
 }
@@ -63,55 +44,288 @@ model Session {
   refreshToken String   @unique
   expiresAt    DateTime
   createdAt    DateTime @default(now())
-  
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
   @@index([token])
   @@map("sessions")
 }
 
-// ============================================================================
-// EXPANSION MANAGEMENT (Multi-Region)
-// ============================================================================
-
 model PrimaryExpansion {
-  id                String               @id @default(cuid())
-  code              String               @unique // Canonical code: "SV9"
-  nameEn            String
-  releaseDate       DateTime?
-  createdAt         DateTime             @default(now())
-  updatedAt         DateTime             @updatedAt
-  
-  // Relations
-  regionalExpansions RegionalExpansion[]
+  id                 String              @id @default(cuid())
+  code               String              @unique
+  nameEn             String
+  releaseDate        DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
   primaryCards       PrimaryCard[]
-  
+  regionalExpansions RegionalExpansion[]
+
   @@index([code])
   @@map("primary_expansions")
 }
 
 model RegionalExpansion {
-  id                  String           @id @default(cuid())
-  primaryExpansionId  String
-  region              Region
-  code                String           // Regional code: "SV08", "sv9"
-  name                String           // Localized name
-  createdAt           DateTime         @default(now())
-  
-  // Relations
-  primaryExpansion PrimaryExpansion @relation(fields: [primaryExpansionId], references: [id], onDelete: Cascade)
-  cards            Card[]
-  
+  id                 String           @id @default(cuid())
+  primaryExpansionId String
+  region             Region
+  code               String
+  name               String
+  createdAt          DateTime         @default(now())
+  cards              Card[]
+  primaryExpansion   PrimaryExpansion @relation(fields: [primaryExpansionId], references: [id], onDelete: Cascade)
+
   @@unique([primaryExpansionId, region])
   @@index([region, code])
   @@map("regional_expansions")
 }
 
-// ============================================================================
-// CARD MANAGEMENT (Multi-Language)
-// ============================================================================
+model PrimaryCard {
+  id                 String            @id @default(cuid())
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  name               String
+  skillsSignature    String
+  cardNumber         String?
+  primaryExpansionId String?
+  cards              Card[]
+  primaryExpansion   PrimaryExpansion? @relation(fields: [primaryExpansionId], references: [id])
+
+  @@unique([name, skillsSignature])
+  @@index([name])
+  @@index([primaryExpansionId])
+  @@map("primary_cards")
+}
+
+model Card {
+  id                  String             @id @default(cuid())
+  primaryCardId       String
+  webCardId           String             @unique
+  language            LanguageCode
+  variantType         VariantType        @default(NORMAL)
+  name                String
+  supertype           Supertype?
+  subtypes            Subtype[]
+  hp                  Int?
+  types               PokemonType[]
+  ruleBox             RuleBox?
+  abilities           Json?
+  attacks             Json?
+  rules               String[]
+  flavorText          String?
+  artist              String?
+  rarity              Rarity?
+  regulationMark      String?
+  imageUrl            String?
+  imageUrlHiRes       String?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  evolutionStage      EvolutionStage?
+  text                String?
+  regionalExpansionId String?
+  evolvesFrom         String?
+  evolvesTo           String?
+  sourceUrl           String?
+  prices              CardPrice[]
+  primaryCard         PrimaryCard        @relation(fields: [primaryCardId], references: [id], onDelete: Cascade)
+  regionalExpansion   RegionalExpansion? @relation(fields: [regionalExpansionId], references: [id])
+  collectionItems     CollectionItem[]
+  deckCards           DeckCard[]
+
+  @@index([language])
+  @@index([name])
+  @@index([supertype])
+  @@index([primaryCardId, language, variantType])
+  @@index([regionalExpansionId])
+  @@map("cards")
+}
+
+model Collection {
+  id        String           @id @default(cuid())
+  userId    String
+  name      String           @default("My Collection")
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  items     CollectionItem[]
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("collections")
+}
+
+model CollectionItem {
+  id           String     @id @default(cuid())
+  collectionId String
+  cardId       String
+  quantity     Int        @default(1)
+  condition    String?
+  notes        String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  card         Card       @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  @@unique([collectionId, cardId])
+  @@index([collectionId])
+  @@index([cardId])
+  @@map("collection_items")
+}
+
+model Tournament {
+  id          String             @id @default(cuid())
+  eventId     String             @unique
+  name        String
+  type        TournamentType
+  date        DateTime
+  location    String?
+  region      Region
+  playerCount Int?
+  ageGroup    String?
+  sourceUrl   String
+  scrapedAt   DateTime           @default(now())
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  results     TournamentResult[]
+
+  @@index([date])
+  @@index([region, type])
+  @@index([eventId])
+  @@map("tournaments")
+}
+
+model TournamentResult {
+  id            String         @id @default(cuid())
+  tournamentId  String
+  playerName    String
+  placement     Int
+  deckName      String?
+  deckArchetype DeckArchetype?
+  createdAt     DateTime       @default(now())
+  deckId        String?
+  deck          Deck?          @relation(fields: [deckId], references: [id])
+  tournament    Tournament     @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+
+  @@unique([tournamentId, placement])
+  @@index([tournamentId])
+  @@index([playerName])
+  @@map("tournament_results")
+}
+
+model Deck {
+  id                 String             @id @default(cuid())
+  userId             String?
+  name               String
+  description        String?
+  archetype          DeckArchetype?
+  format             String?
+  isPublic           Boolean            @default(false)
+  tournamentResultId String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  cards              DeckCard[]
+  user               User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tournamentResults  TournamentResult[]
+
+  @@index([userId])
+  @@index([archetype])
+  @@index([isPublic])
+  @@map("decks")
+}
+
+model DeckCard {
+  id        String   @id @default(cuid())
+  deckId    String
+  cardId    String
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())
+  card      Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  deck      Deck     @relation(fields: [deckId], references: [id], onDelete: Cascade)
+
+  @@unique([deckId, cardId])
+  @@index([deckId])
+  @@index([cardId])
+  @@map("deck_cards")
+}
+
+model CardPrice {
+  id        String      @id @default(cuid())
+  cardId    String
+  source    PriceSource
+  condition String?
+  price     Float
+  currency  String      @default("JPY")
+  inStock   Boolean     @default(true)
+  fetchedAt DateTime    @default(now())
+  createdAt DateTime    @default(now())
+  card      Card        @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@index([cardId, source])
+  @@index([fetchedAt])
+  @@map("card_prices")
+}
+
+model PriceHistory {
+  id       String      @id @default(cuid())
+  cardId   String
+  source   PriceSource
+  price    Float
+  currency String      @default("JPY")
+  date     DateTime    @default(now())
+
+  @@index([cardId, source, date])
+  @@map("price_history")
+}
+
+model ScraperJob {
+  id           String        @id @default(cuid())
+  source       Region
+  status       ScraperStatus @default(PENDING)
+  startedAt    DateTime?
+  completedAt  DateTime?
+  successCount Int           @default(0)
+  failureCount Int           @default(0)
+  errors       Json?
+  createdAt    DateTime      @default(now())
+
+  @@index([source, status])
+  @@index([createdAt])
+  @@map("scraper_jobs")
+}
+
+model Product {
+  id                String       @id @default(cuid())
+  country           String
+  productName       String
+  price             String?
+  releaseDate       String?
+  code              String?
+  link              String?
+  imageUrl          String?
+  include           String?
+  cardOnly          String?
+  beginnerFlag      Int          @default(0)
+  storesAvailable   String?
+  linkCardList      String?
+  linkPokemonCenter String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  productTypeId     String?
+  productType       ProductType? @relation(fields: [productTypeId], references: [id])
+
+  @@unique([country, code, productName, releaseDate])
+  @@index([country])
+  @@index([releaseDate])
+  @@index([code])
+  @@index([productTypeId])
+  @@map("products")
+}
+
+enum UserRole {
+  GUEST
+  USER
+  ADMIN
+}
 
 enum LanguageCode {
   JA_JP
@@ -208,124 +422,6 @@ enum Region {
   EN
 }
 
-model PrimaryCard {
-  id                  String           @id @default(cuid())
-  primaryExpansionId  String?          // Link to canonical expansion
-  name                String           // Card name for grouping
-  skillsSignature     String           // Hash of abilities + attacks for uniqueness
-  cardNumber          String?          // Card number in expansion (e.g., "001")
-  createdAt           DateTime         @default(now())
-  updatedAt           DateTime         @updatedAt
-  
-  // Relations
-  cards            Card[]
-  primaryExpansion PrimaryExpansion? @relation(fields: [primaryExpansionId], references: [id], onDelete: SetNull)
-  
-  @@unique([name, skillsSignature])
-  @@index([name])
-  @@index([primaryExpansionId])
-  @@map("primary_cards")
-}
-
-model Card {
-  id                  String       @id @default(cuid())
-  primaryCardId       String
-  regionalExpansionId String?      // Link to regional expansion variant
-  webCardId           String       @unique // Format: "hk00014744", "jp49355"
-  language            LanguageCode
-  variantType         VariantType  @default(NORMAL)
-  
-  // Card details
-  name           String
-  supertype      Supertype?
-  subtypes       Subtype[]
-  evolutionStage EvolutionStage?  // Only for Pokemon cards
-  hp             Int?
-  types          PokemonType[]    // Pokemon can have multiple types
-  ruleBox        RuleBox?
-  
-  // Card text
-  abilities      Json?       // Array of ability objects
-  attacks        Json?       // Array of attack objects
-  rules          String[]
-  text           String?     // Trainer/Energy card effect text
-  flavorText     String?     // Pokemon flavor text (height, weight, description)
-  
-  // Evolution information
-  evolvesFrom    String?     // Name of Pokemon this evolves from
-  evolvesTo      String?     // Name of Pokemon this evolves into
-  
-  // Card metadata
-  artist         String?
-  rarity         Rarity?
-  regulationMark String?
-  
-  // Images
-  imageUrl       String?
-  imageUrlHiRes  String?
-  
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-  
-  // Relations
-  primaryCard       PrimaryCard        @relation(fields: [primaryCardId], references: [id], onDelete: Cascade)
-  regionalExpansion RegionalExpansion? @relation(fields: [regionalExpansionId], references: [id], onDelete: SetNull)
-  collectionItems   CollectionItem[]
-  deckCards         DeckCard[]
-  prices            CardPrice[]
-  
-  @@index([language])
-  @@index([name])
-  @@index([supertype])
-  @@index([primaryCardId, language, variantType])
-  @@index([regionalExpansionId])
-  @@map("cards")
-}
-
-// ============================================================================
-// USER COLLECTION
-// ============================================================================
-
-model Collection {
-  id        String   @id @default(cuid())
-  userId    String
-  name      String   @default("My Collection")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  
-  // Relations
-  user  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  items CollectionItem[]
-  
-  @@unique([userId, name])
-  @@index([userId])
-  @@map("collections")
-}
-
-model CollectionItem {
-  id           String   @id @default(cuid())
-  collectionId String
-  cardId       String
-  quantity     Int      @default(1)
-  condition    String?  // "Mint", "Near Mint", "Played"
-  notes        String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  
-  // Relations
-  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
-  card       Card       @relation(fields: [cardId], references: [id], onDelete: Cascade)
-  
-  @@unique([collectionId, cardId])
-  @@index([collectionId])
-  @@index([cardId])
-  @@map("collection_items")
-}
-
-// ============================================================================
-// TOURNAMENT & DECK MANAGEMENT
-// ============================================================================
-
 enum TournamentType {
   CHAMPIONSHIP
   REGIONAL
@@ -343,202 +439,17 @@ enum DeckArchetype {
   OTHER
 }
 
-model Tournament {
-  id              String         @id @default(cuid())
-  eventId         String         @unique // From Pokemon website
-  name            String
-  type            TournamentType
-  date            DateTime
-  location        String?
-  region          Region
-  playerCount     Int?
-  ageGroup        String?        // "Masters", "Seniors", "Juniors"
-  
-  // Scraping metadata
-  sourceUrl       String
-  scrapedAt       DateTime       @default(now())
-  
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-  
-  // Relations
-  results         TournamentResult[]
-  
-  @@index([date])
-  @@index([region, type])
-  @@index([eventId])
-  @@map("tournaments")
-}
-
-model TournamentResult {
-  id            String     @id @default(cuid())
-  tournamentId  String
-  playerName    String
-  placement     Int
-  deckName      String?
-  deckArchetype DeckArchetype?
-  
-  createdAt     DateTime   @default(now())
-  
-  // Relations
-  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
-  deck       Deck?      @relation(fields: [deckId], references: [id])
-  deckId     String?
-  
-  @@unique([tournamentId, placement])
-  @@index([tournamentId])
-  @@index([playerName])
-  @@map("tournament_results")
-}
-
-model Deck {
-  id            String         @id @default(cuid())
-  userId        String?        // Null for tournament/public decks
-  name          String
-  description   String?
-  archetype     DeckArchetype?
-  format        String?        // "Standard", "Expanded"
-  isPublic      Boolean        @default(false)
-  
-  // Tournament association
-  tournamentResultId String?
-  
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  
-  // Relations
-  user          User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  cards         DeckCard[]
-  tournamentResults TournamentResult[]
-  
-  @@index([userId])
-  @@index([archetype])
-  @@index([isPublic])
-  @@map("decks")
-}
-
-model DeckCard {
-  id        String   @id @default(cuid())
-  deckId    String
-  cardId    String
-  quantity  Int      @default(1)
-  
-  createdAt DateTime @default(now())
-  
-  // Relations
-  deck Deck @relation(fields: [deckId], references: [id], onDelete: Cascade)
-  card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
-  
-  @@unique([deckId, cardId])
-  @@index([deckId])
-  @@index([cardId])
-  @@map("deck_cards")
-}
-
-// ============================================================================
-// MARKET PRICING
-// ============================================================================
-
 enum PriceSource {
-  YUYU_TEI     // 遊々亭
-  HARERUYA     // 晴れる屋
+  YUYU_TEI
+  HARERUYA
   CARDMARKET
   TCGPLAYER
   OTHER
 }
-
-model CardPrice {
-  id          String      @id @default(cuid())
-  cardId      String
-  source      PriceSource
-  condition   String?     // "NM", "LP", "MP", "HP"
-  
-  // Pricing data
-  price       Float       // Current price
-  currency    String      @default("JPY")
-  inStock     Boolean     @default(true)
-  
-  // Historical tracking
-  fetchedAt   DateTime    @default(now())
-  createdAt   DateTime    @default(now())
-  
-  // Relations
-  card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
-  
-  @@index([cardId, source])
-  @@index([fetchedAt])
-  @@map("card_prices")
-}
-
-model PriceHistory {
-  id          String   @id @default(cuid())
-  cardId      String
-  source      PriceSource
-  price       Float
-  currency    String   @default("JPY")
-  date        DateTime @default(now())
-  
-  @@index([cardId, source, date])
-  @@map("price_history")
-}
-
-// ============================================================================
-// SCRAPER LOGS
-// ============================================================================
 
 enum ScraperStatus {
   PENDING
   RUNNING
   SUCCESS
   FAILED
-}
-
-model ScraperJob {
-  id          String        @id @default(cuid())
-  source      Region
-  status      ScraperStatus @default(PENDING)
-  startedAt   DateTime?
-  completedAt DateTime?
-  successCount Int          @default(0)
-  failureCount Int          @default(0)
-  errors      Json?         // Array of error objects
-  createdAt   DateTime      @default(now())
-  
-  @@index([source, status])
-  @@index([createdAt])
-  @@map("scraper_jobs")
-}
-
-// ============================================================================
-// PRODUCTS
-// ============================================================================
-
-model Product {
-  id                  String      @id @default(cuid())
-  country             String
-  productName         String
-  price               String?
-  releaseDate         String?
-  code                String?
-  link                String?
-  imageUrl            String?
-  include             String?
-  cardOnly            String?
-  productTypeId       String?     // Reference to ProductType
-  beginnerFlag        Int         @default(0)
-  storesAvailable     String?
-  linkCardList        String?
-  linkPokemonCenter   String?
-  createdAt           DateTime    @default(now())
-  updatedAt           DateTime    @updatedAt
-  
-  // Relations
-  productType         ProductType? @relation(fields: [productTypeId], references: [id])
-  
-  @@unique([country, code, productName, releaseDate])
-  @@index([country])
-  @@index([releaseDate])
-  @@index([code])
-  @@index([productTypeId])
-  @@map("products")
 }
