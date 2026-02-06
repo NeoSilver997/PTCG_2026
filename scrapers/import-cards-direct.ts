@@ -1,29 +1,30 @@
 /**
  * Direct Database Card Import Script
- * 
+ *
  * Imports card data from JSON files directly into PostgreSQL via Prisma Client.
- * Bypasses API validation and handles both Japanese text and English enum values.
- * 
+ * Bypasses API validation and handles Japanese, Chinese, and English card data.
+ *
  * Usage Examples:
- * 
- * 1. Import all JSON files from default directory (data/cards/japan):
+ *
+ * 1. Import all JSON files from all regions (japan, english, hongkong):
  *    npx tsx scrapers/import-cards-direct.ts
- * 
- * 2. Import from custom directory:
+ *
+ * 2. Import from custom base directory:
+ *    npx tsx scrapers/import-cards-direct.ts "../data/cards"
+ *
+ * 3. Import specific region only:
+ *    npx tsx scrapers/import-cards-direct.ts "../data/cards" "english"
+ *
+ * 4. Import from single region directory:
  *    npx tsx scrapers/import-cards-direct.ts "../data/cards/japan"
- * 
- * 3. Import specific files matching pattern:
- *    npx tsx scrapers/import-cards-direct.ts "../data/cards/japan" "japanese_cards_40k_sv*.json"
- * 
- * 4. Import single file:
- *    npx tsx scrapers/import-cards-direct.ts "../data/cards/japan" "japanese_cards_sv9.json"
- * 
+ *
  * Features:
  * - Automatic expansion code normalization (sv9 → SV9)
  * - Creates PrimaryExpansion and RegionalExpansion as needed
  * - Extracts card number from collectorNumber
  * - Skills signature for duplicate detection
- * - Handles both update and create operations
+ * - Handles Japanese, Chinese (HK), and English cards
+ * - Supports multiple regions in single run
  */
 
 import { PrismaClient, LanguageCode, Supertype, Subtype, EvolutionStage, RuleBox, PokemonType, Rarity, VariantType, Region } from '../packages/database/node_modules/.prisma/client';
@@ -45,6 +46,7 @@ const SUBTYPE_MAP: Record<string, Subtype> = {
   'ポケモンのどうぐ': Subtype.TOOL,
   '基本エネルギー': Subtype.BASIC_ENERGY,
   '特殊エネルギー': Subtype.SPECIAL_ENERGY,
+  'TERA': Subtype.TERA,
 };
 
 const EVOLUTION_STAGE_MAP: Record<string, EvolutionStage> = {
@@ -323,78 +325,108 @@ async function importCard(prisma: PrismaClient, card: any) {
 
 async function main() {
   const prisma = new PrismaClient();
-  
+
   const args = process.argv.slice(2);
-  const jsonDir = args[0] || path.join(__dirname, '../data/cards/japan');
-  const pattern = args[1] || 'japanese_cards_40k_*.json';
-  
-  console.log(`\n📂 Importing from: ${jsonDir}`);
-  console.log(`🔍 Pattern: ${pattern}\n`);
-  
-  const files = fs.readdirSync(jsonDir)
-    .filter(f => f.match(new RegExp(pattern.replace('*', '.*'))))
-    .sort();
-  
-  console.log(`Found ${files.length} JSON files\n`);
-  
+  const baseDir = args[0] || path.join(__dirname, '../data/cards');
+  const region = args[1]; // Optional: 'japan', 'english', 'hongkong', or undefined for all
+
+  console.log(`\n📂 Base directory: ${baseDir}`);
+  console.log(`🌍 Region filter: ${region || 'all'}\n`);
+
+  const regions = region ? [region] : ['japan', 'english', 'hongkong'];
+  let totalFiles = 0;
   let totalSuccess = 0;
   let totalFailed = 0;
   let totalSkipped = 0;
-  
-  for (const file of files) {
-    const filePath = path.join(jsonDir, file);
-    console.log(`\n${'='.repeat(60)}`);
-    console.log(`Processing: ${file}`);
-    console.log(`${'='.repeat(60)}`);
-    
-    try {
-      const cards: JapaneseCard[] = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-      console.log(`Loaded ${cards.length} cards`);
-      
-      let success = 0;
-      let failed = 0;
-      let skipped = 0;
-      
-      for (let i = 0; i < cards.length; i++) {
-        const card = cards[i];
-        try {
-          const result = await importCard(prisma, card);
-          if (result === null) {
-            skipped++;
-          } else {
-            success++;
+
+  for (const regionName of regions) {
+    const regionDir = path.join(baseDir, regionName);
+    if (!fs.existsSync(regionDir)) {
+      console.log(`⚠️  Directory not found: ${regionDir} - skipping`);
+      continue;
+    }
+
+    console.log(`\n🏁 Processing region: ${regionName.toUpperCase()}`);
+    console.log(`${'='.repeat(50)}`);
+
+    // Set pattern based on region
+    let pattern: string;
+    switch (regionName) {
+      case 'japan':
+        pattern = 'japanese_cards_*.json';
+        break;
+      case 'english':
+        pattern = 'english_cards_*.json';
+        break;
+      case 'hongkong':
+        pattern = 'hk_cards_*.json';
+        break;
+      default:
+        pattern = '*.json';
+    }
+
+    const files = fs.readdirSync(regionDir)
+      .filter(f => f.match(new RegExp(pattern.replace('*', '.*'))))
+      .sort();
+
+    console.log(`Found ${files.length} JSON files in ${regionName}\n`);
+
+    for (const file of files) {
+      const filePath = path.join(regionDir, file);
+      console.log(`${'='.repeat(60)}`);
+      console.log(`Processing: ${regionName}/${file}`);
+      console.log(`${'='.repeat(60)}`);
+
+      try {
+        const cards: JapaneseCard[] = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+        console.log(`Loaded ${cards.length} cards`);
+
+        let success = 0;
+        let failed = 0;
+        let skipped = 0;
+
+        for (let i = 0; i < cards.length; i++) {
+          const card = cards[i];
+          try {
+            const result = await importCard(prisma, card);
+            if (result === null) {
+              skipped++;
+            } else {
+              success++;
+            }
+
+            if ((i + 1) % 50 === 0) {
+              console.log(`  Progress: ${i + 1}/${cards.length} cards...`);
+            }
+          } catch (error) {
+            failed++;
+            console.error(`  ✗ Failed ${card.webCardId}: ${error.message}`);
           }
-          
-          if ((i + 1) % 50 === 0) {
-            console.log(`  Progress: ${i + 1}/${cards.length} cards...`);
-          }
-        } catch (error) {
-          failed++;
-          console.error(`  ✗ Failed ${card.webCardId}: ${error.message}`);
         }
+
+        console.log(`✓ ${regionName}/${file}: ${success} success, ${failed} failed${skipped > 0 ? `, ${skipped} skipped` : ''}`);
+        totalSuccess += success;
+        totalFailed += failed;
+        totalSkipped += skipped;
+        totalFiles++;
+
+      } catch (error) {
+        console.error(`✗ Error processing ${regionName}/${file}: ${error.message}`);
       }
-      
-      console.log(`✓ ${file}: ${success} success, ${failed} failed${skipped > 0 ? `, ${skipped} skipped` : ''}`);
-      totalSuccess += success;
-      totalFailed += failed;
-      totalSkipped += skipped;
-      
-    } catch (error) {
-      console.error(`✗ Error processing ${file}: ${error.message}`);
     }
   }
-  
+
   console.log(`\n${'='.repeat(60)}`);
   console.log('IMPORT SUMMARY');
   console.log(`${'='.repeat(60)}`);
-  console.log(`Files processed: ${files.length}`);
+  console.log(`Files processed: ${totalFiles}`);
   console.log(`Successfully imported: ${totalSuccess}`);
   console.log(`Failed: ${totalFailed}`);
   if (totalSkipped > 0) {
     console.log(`Skipped (カード検索): ${totalSkipped}`);
   }
   console.log(`${'='.repeat(60)}\n`);
-  
+
   await prisma.$disconnect();
 }
 
