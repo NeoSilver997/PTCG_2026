@@ -242,6 +242,20 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
     }));
   };
 
+  const addRelatedLink = () => {
+    setRelatedCards(prev => [...prev, { webCardId: '', note: '' }]);
+  };
+
+  const updateRelatedLink = (index: number, key: keyof RelatedCardEntry, value: string) => {
+    setRelatedCards(prev => prev.map((link, i) =>
+      i === index ? { ...link, [key]: value } : link
+    ));
+  };
+
+  const removeRelatedLink = (index: number) => {
+    setRelatedCards(prev => prev.filter((_, i) => i !== index));
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
@@ -395,39 +409,43 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
                     <option value="ALT_ART">替代圖</option>
                   </select>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">進化階段</label>
-                  <select
-                    value={cardData.evolutionStage}
-                    onChange={(e) => updateCardData('evolutionStage', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black"
-                  >
-                    <option value="">選擇進化階段</option>
-                    <option value="BASIC">基礎</option>
-                    <option value="STAGE_1">1 階進化</option>
-                    <option value="STAGE_2">2 階進化</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">進化自</label>
-                  <input
-                    type="text"
-                    value={cardData.evolvesFrom}
-                    onChange={(e) => updateCardData('evolvesFrom', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black"
-                    placeholder="進化來源卡片名稱"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">進化至</label>
-                  <input
-                    type="text"
-                    value={cardData.evolvesTo}
-                    onChange={(e) => updateCardData('evolvesTo', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black"
-                    placeholder="進化目標卡片名稱"
-                  />
-                </div>
+                {cardData.supertype === 'POKEMON' && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">進化階段</label>
+                      <select
+                        value={cardData.evolutionStage}
+                        onChange={(e) => updateCardData('evolutionStage', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black"
+                      >
+                        <option value="">選擇進化階段</option>
+                        <option value="BASIC">基礎</option>
+                        <option value="STAGE_1">1 階進化</option>
+                        <option value="STAGE_2">2 階進化</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">進化自</label>
+                      <input
+                        type="text"
+                        value={cardData.evolvesFrom}
+                        onChange={(e) => updateCardData('evolvesFrom', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black"
+                        placeholder="進化來源卡片名稱"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">進化至</label>
+                      <input
+                        type="text"
+                        value={cardData.evolvesTo}
+                        onChange={(e) => updateCardData('evolvesTo', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black"
+                        placeholder="進化目標卡片名稱"
+                      />
+                    </div>
+                  </>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">繪師</label>
                   <input
@@ -519,7 +537,7 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
               <h2 className="text-xl font-semibold text-gray-900 mb-4">子類型</h2>
               <div className="space-y-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">選擇子類型</label>
+                  <label className="block text-sm font-medium text-blue-700 mb-2">選擇子類型</label>
                   <div className="flex flex-wrap gap-2">
                     {['ITEM', 'SUPPORTER', 'STADIUM', 'TOOL', 'BASIC_ENERGY', 'SPECIAL_ENERGY', 'TERA'].map(subtype => (
                       <button
@@ -793,6 +811,55 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
                     placeholder="官方網站來源 URL"
                   />
                 </div>
+              </div>
+            </section>
+
+            {/* Related Links */}
+            <section className="bg-white rounded-lg p-6 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-gray-900">相關連結</h2>
+                <button
+                  type="button"
+                  onClick={addRelatedLink}
+                  className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800"
+                >
+                  <Plus className="w-4 h-4" />
+                  新增連結
+                </button>
+              </div>
+              <div className="space-y-3">
+                {relatedCards.map((link, index) => (
+                  <div key={index} className="flex gap-3 items-end">
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">卡片 ID</label>
+                      <input
+                        type="text"
+                        value={link.webCardId}
+                        onChange={(e) => updateRelatedLink(index, 'webCardId', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black"
+                        placeholder="相關卡片 webCardId"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">備註</label>
+                      <input
+                        type="text"
+                        value={link.note}
+                        onChange={(e) => updateRelatedLink(index, 'note', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black"
+                        placeholder="關聯說明"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeRelatedLink(index)}
+                      className="flex items-center justify-center text-gray-400 hover:text-red-500 px-2 py-2"
+                      aria-label="移除連結"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
               </div>
             </section>
           </div>
