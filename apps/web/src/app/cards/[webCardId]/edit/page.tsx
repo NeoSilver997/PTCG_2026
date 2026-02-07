@@ -1,9 +1,11 @@
 'use client';
 
-import { use, useState } from 'react';
+import { use, useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import apiClient from '@/lib/api-client';
 import Link from 'next/link';
 import { Navbar } from '@/components/navbar';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Copy } from 'lucide-react';
 
 interface RelatedCardEntry {
   webCardId: string;
@@ -28,6 +30,53 @@ interface Attack {
   damage: string;
   effect: string;
   text: string;
+}
+
+interface CardDetail {
+  id: string;
+  webCardId: string;
+  name: string;
+  hp: number | null;
+  types: string[] | string | null;
+  supertype: string;
+  subtypes: string[];
+  rarity: string | null;
+  variantType: string;
+  language: string;
+  imageUrl: string | null;
+  sourceUrl: string | null;
+  artist: string | null;
+  regulationMark: string | null;
+  ruleBox: string | null;
+  text: string | null; // For Trainer/Energy card text/description
+  abilities: any;
+  attacks: any;
+  weaknesses: any;
+  resistances: any;
+  retreatCost: any;
+  evolvesFrom: string | null;
+  evolvesTo: string | null;
+  evolutionStage: string | null;
+  region: string | null;
+  scrapedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  primaryCard: {
+    id: string;
+    expansionId: string;
+    cardNumber: string;
+    primaryExpansion: {
+      code: string;
+      nameEn: string;
+    } | null;
+  };
+  regionalExpansion: {
+    id: string;
+    code: string;
+    name: string;
+    region: string;
+    primaryExpansionId: string;
+  } | null;
 }
 
 export default function CardEditPage({ params }: { params: Promise<{ webCardId: string }> }) {
@@ -73,6 +122,44 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
   const updateCardData = (key: string, value: any) => {
     setCardData(prev => ({ ...prev, [key]: value }));
   };
+
+  // Fetch existing card data
+  const { data: card, isLoading, error } = useQuery<CardDetail>({
+    queryKey: ['card', webCardId],
+    queryFn: async () => {
+      const { data } = await apiClient.get(`/cards/web/${webCardId}`);
+      return data;
+    },
+  });
+
+  // Populate form when card data loads
+  useEffect(() => {
+    if (card) {
+      setCardData({
+        name: card.name || '',
+        supertype: card.supertype as 'POKEMON' | 'TRAINER' | 'ENERGY' || 'POKEMON',
+        subtypes: card.subtypes || [],
+        hp: card.hp ? card.hp.toString() : '',
+        types: Array.isArray(card.types) ? card.types : (card.types ? [card.types] : []),
+        rarity: (card.rarity as '' | 'COMMON' | 'UNCOMMON' | 'RARE' | 'DOUBLE_RARE' | 'ULTRA_RARE' | 'ILLUSTRATION_RARE' | 'SPECIAL_ILLUSTRATION_RARE' | 'HYPER_RARE' | 'PROMO' | 'AMAZING_RARE' | 'SHINY_RARE' | 'ACE_SPEC') || '',
+        variantType: (card.variantType as 'NORMAL' | 'REVERSE_HOLO' | 'HOLO' | '1ST_EDITION' | 'SHINY' | 'FULL_ART' | 'ALT_ART') || 'NORMAL',
+        imageUrl: card.imageUrl || '',
+        imageUrlHiRes: '',
+        sourceUrl: card.sourceUrl || '',
+        artist: card.artist || '',
+        regulationMark: card.regulationMark || '',
+        ruleBox: (card.ruleBox as '' | 'EX' | 'GX' | 'V' | 'VMAX' | 'VSTAR' | 'RADIANT' | 'MEGA') || '',
+        text: card.text || '',
+        flavorText: '',
+        rules: [],
+        abilities: card.abilities || [],
+        attacks: card.attacks || [],
+        evolvesFrom: card.evolvesFrom || '',
+        evolvesTo: card.evolvesTo || '',
+        evolutionStage: (card.evolutionStage as '' | 'BASIC' | 'STAGE_1' | 'STAGE_2') || '',
+      });
+    }
+  }, [card]);
 
   const addType = (type: string) => {
     if (!cardData.types.includes(type)) {
@@ -160,19 +247,43 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
       <Navbar />
 
       <div className="w-full px-6 py-8">
-        {/* Back Button */}
-        <Link
-          href={`/cards/${webCardId}`}
-          className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6"
-        >
-          ← 返回卡片詳情
-        </Link>
+        {isLoading && (
+          <div className="flex justify-center items-center py-12">
+            <div className="text-gray-600">載入中...</div>
+          </div>
+        )}
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+            <div className="text-red-800">載入卡片資料時發生錯誤: {error.message}</div>
+          </div>
+        )}
+
+        {!isLoading && !error && (
+          <>
+            {/* Back Button */}
+            <Link
+              href={`/cards/${webCardId}`}
+              className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6"
+            >
+              ← 返回卡片詳情
+            </Link>
 
         <div className="flex gap-8">
-          {/* Card Image Placeholder */}
+          {/* Card Image Display */}
           <div className="w-3/10 bg-white rounded-lg p-6 shadow-sm">
-            <div className="aspect-[2.5/3.5] bg-gray-100 rounded-lg flex items-center justify-center mb-6">
-              <span className="text-gray-400">卡片圖片</span>
+            <div className="mb-6">
+              {cardData.imageUrl ? (
+                <img
+                  src={cardData.imageUrl}
+                  alt={cardData.name || '卡片圖片'}
+                  className="w-full h-auto rounded-lg"
+                />
+              ) : (
+                <div className="aspect-[2.5/3.5] bg-gray-100 rounded-lg flex items-center justify-center">
+                  <span className="text-gray-400">無圖片</span>
+                </div>
+              )}
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
@@ -183,9 +294,23 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
               >
                 儲存變更 (待 API)
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  // Copy current card data to create new card
+                  const newCardData = { ...cardData };
+                  // Clear the webCardId to create a new card
+                  // Note: In a real implementation, this would generate a new ID
+                  alert('複製卡片功能待實現 - 需要 API 支援');
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+              >
+                <Copy className="w-4 h-4" />
+                複製為新卡片
+              </button>
               <Link
                 href={`/cards/${webCardId}`}
-                className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-900 rounded-lg hover:bg-gray-50"
               >
                 取消編輯
               </Link>
@@ -199,12 +324,12 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
               <h2 className="text-xl font-semibold text-gray-900 mb-4">基本資訊</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">卡片名稱</label>
+                  <label className="block text-sm font-medium text-gray-900 mb-1">卡片名稱</label>
                   <input
                     type="text"
                     value={cardData.name}
                     onChange={(e) => updateCardData('name', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black"
                     placeholder="卡片名稱"
                   />
                 </div>
@@ -213,7 +338,7 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
                   <select
                     value={cardData.supertype}
                     onChange={(e) => updateCardData('supertype', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black"
                   >
                     <option value="POKEMON">寶可夢</option>
                     <option value="TRAINER">訓練家</option>
@@ -227,7 +352,7 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
                       type="number"
                       value={cardData.hp}
                       onChange={(e) => updateCardData('hp', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black"
                       placeholder="HP 值"
                     />
                   </div>
@@ -237,7 +362,7 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
                   <select
                     value={cardData.rarity}
                     onChange={(e) => updateCardData('rarity', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black"
                   >
                     <option value="">選擇稀有度</option>
                     <option value="COMMON">普通</option>
@@ -259,7 +384,7 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
                   <select
                     value={cardData.variantType}
                     onChange={(e) => updateCardData('variantType', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black"
                   >
                     <option value="NORMAL">普通</option>
                     <option value="REVERSE_HOLO">反轉全息</option>
@@ -275,7 +400,7 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
                   <select
                     value={cardData.evolutionStage}
                     onChange={(e) => updateCardData('evolutionStage', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black"
                   >
                     <option value="">選擇進化階段</option>
                     <option value="BASIC">基礎</option>
@@ -289,7 +414,7 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
                     type="text"
                     value={cardData.evolvesFrom}
                     onChange={(e) => updateCardData('evolvesFrom', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black"
                     placeholder="進化來源卡片名稱"
                   />
                 </div>
@@ -299,7 +424,7 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
                     type="text"
                     value={cardData.evolvesTo}
                     onChange={(e) => updateCardData('evolvesTo', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black"
                     placeholder="進化目標卡片名稱"
                   />
                 </div>
@@ -309,7 +434,7 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
                     type="text"
                     value={cardData.artist}
                     onChange={(e) => updateCardData('artist', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black"
                     placeholder="繪師名稱"
                   />
                 </div>
@@ -319,7 +444,7 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
                     type="text"
                     value={cardData.regulationMark}
                     onChange={(e) => updateCardData('regulationMark', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black"
                     placeholder="例: A, B, C..."
                   />
                 </div>
@@ -334,7 +459,7 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
                   <h2 className="text-xl font-semibold text-gray-900 mb-4">屬性</h2>
                   <div className="space-y-3">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">選擇屬性</label>
+                      <label className="block text-sm font-medium text-gray-900 mb-2">選擇屬性</label>
                       <div className="flex flex-wrap gap-2">
                         {['COLORLESS', 'DARKNESS', 'DRAGON', 'FAIRY', 'FIGHTING', 'FIRE', 'GRASS', 'LIGHTNING', 'METAL', 'PSYCHIC', 'WATER'].map(type => (
                           <button
@@ -349,7 +474,7 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
                       </div>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">已選屬性</label>
+                      <label className="block text-sm font-medium text-gray-900 mb-2">已選屬性</label>
                       <div className="flex flex-wrap gap-2">
                         {cardData.types.map(type => (
                           <span key={type} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
@@ -374,7 +499,7 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
                   <select
                     value={cardData.ruleBox}
                     onChange={(e) => updateCardData('ruleBox', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black"
                   >
                     <option value="">無規則框</option>
                     <option value="EX">EX</option>
@@ -439,7 +564,7 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
                       value={cardData.text}
                       onChange={(e) => updateCardData('text', e.target.value)}
                       rows={4}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black"
                       placeholder="訓練家卡片的效果描述"
                     />
                   </div>
@@ -450,7 +575,7 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
                     value={cardData.flavorText}
                     onChange={(e) => updateCardData('flavorText', e.target.value)}
                     rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black"
                     placeholder="卡片底部的風格文字"
                   />
                 </div>
@@ -477,7 +602,7 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
                       type="text"
                       value={rule}
                       onChange={(e) => updateRule(index, e.target.value)}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-black"
                       placeholder="規則文字"
                     />
                     <button
@@ -516,12 +641,12 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
                           placeholder="特性名稱"
                           value={ability.name}
                           onChange={(e) => updateAbility(index, 'name', e.target.value)}
-                          className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                          className="px-3 py-2 border border-gray-300 rounded-lg text-black"
                         />
                         <select
                           value={ability.type}
                           onChange={(e) => updateAbility(index, 'type', e.target.value)}
-                          className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                          className="px-3 py-2 border border-gray-300 rounded-lg text-black"
                         >
                           <option value="ABILITY">ABILITY</option>
                           <option value="POKEMON_POWER">POKEMON_POWER</option>
@@ -542,7 +667,7 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
                         value={ability.text}
                         onChange={(e) => updateAbility(index, 'text', e.target.value)}
                         rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black"
                       />
                     </div>
                   ))}
@@ -573,21 +698,21 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
                           placeholder="招式名稱"
                           value={attack.name}
                           onChange={(e) => updateAttack(index, 'name', e.target.value)}
-                          className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                          className="px-3 py-2 border border-gray-300 rounded-lg text-black"
                         />
                         <input
                           type="text"
                           placeholder="傷害"
                           value={attack.damage}
                           onChange={(e) => updateAttack(index, 'damage', e.target.value)}
-                          className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                          className="px-3 py-2 border border-gray-300 rounded-lg text-black"
                         />
                         <input
                           type="text"
                           placeholder="能量花費 (例: F,F,C)"
                           value={attack.cost.join(',')}
                           onChange={(e) => updateAttack(index, 'cost', e.target.value.split(',').map(s => s.trim()))}
-                          className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                          className="px-3 py-2 border border-gray-300 rounded-lg text-black"
                         />
                         <button
                           type="button"
@@ -603,14 +728,14 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
                         value={attack.effect}
                         onChange={(e) => updateAttack(index, 'effect', e.target.value)}
                         rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mb-2"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black mb-2"
                       />
                       <textarea
                         placeholder="額外文字"
                         value={attack.text}
                         onChange={(e) => updateAttack(index, 'text', e.target.value)}
                         rows={2}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black"
                       />
                     </div>
                   ))}
@@ -621,6 +746,22 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
             {/* Images and URLs */}
             <section className="bg-white rounded-lg p-6 shadow-sm">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">圖片與連結</h2>
+              
+              {/* Card Image Display */}
+              <div className="mb-6 flex justify-center">
+                {cardData.imageUrl ? (
+                  <img
+                    src={cardData.imageUrl}
+                    alt={cardData.name || '卡片圖片'}
+                    className="max-w-xs h-auto rounded-lg shadow-sm"
+                  />
+                ) : (
+                  <div className="w-48 h-64 bg-gray-100 rounded-lg flex items-center justify-center">
+                    <span className="text-gray-400">無圖片</span>
+                  </div>
+                )}
+              </div>
+              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">圖片 URL</label>
@@ -628,7 +769,7 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
                     type="url"
                     value={cardData.imageUrl}
                     onChange={(e) => updateCardData('imageUrl', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black"
                     placeholder="卡片圖片 URL"
                   />
                 </div>
@@ -638,7 +779,7 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
                     type="url"
                     value={cardData.imageUrlHiRes}
                     onChange={(e) => updateCardData('imageUrlHiRes', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black"
                     placeholder="高解析度圖片 URL"
                   />
                 </div>
@@ -648,7 +789,7 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
                     type="url"
                     value={cardData.sourceUrl}
                     onChange={(e) => updateCardData('sourceUrl', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black"
                     placeholder="官方網站來源 URL"
                   />
                 </div>
@@ -656,6 +797,8 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
             </section>
           </div>
         </div>
+          </>
+        )}
       </div>
     </div>
   );
