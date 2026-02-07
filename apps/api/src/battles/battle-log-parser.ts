@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
-import { BattleAction, BattleActionType } from '@ptcg/shared-types';
+import { BattleAction, BattleActionType, DeckCard } from '@ptcg/shared-types';
 
 interface ParsedMetadata {
   player1Name: string;
@@ -12,6 +12,8 @@ interface ParsedMetadata {
 interface ParseResult {
   metadata: ParsedMetadata;
   actions: BattleAction[];
+  player1Deck: DeckCard[];
+  player2Deck: DeckCard[];
 }
 
 @Injectable()
@@ -57,7 +59,9 @@ export class BattleLogParser {
         currentPlayer,
         timestamp,
         actionCounter++,
-        metadata
+        metadata,
+        lines,
+        i
       );
       
       if (action) {
@@ -69,7 +73,10 @@ export class BattleLogParser {
     // Enrich with card data
     await this.enrichWithCardData(actions);
     
-    return { metadata, actions };
+    // Extract deck lists from actions
+    const { player1Deck, player2Deck } = await this.extractDeckLists(actions, metadata);
+    
+    return { metadata, actions, player1Deck, player2Deck };
   }
   
   private extractMetadata(rawLog: string): ParsedMetadata {
@@ -123,11 +130,18 @@ export class BattleLogParser {
     player: 'player1' | 'player2',
     timestamp: number,
     actionId: number,
-    metadata: ParsedMetadata
+    metadata: ParsedMetadata,
+    lines: string[],
+    currentIndex: number
   ): BattleAction | null {
     // Drew cards
     if (line.includes('drew') && line.includes('card')) {
-      return this.parseDrawAction(line, turnNumber, player, timestamp, actionId, metadata);
+      return this.parseDrawAction(line, turnNumber, player, timestamp, actionId, metadata, lines, currentIndex);
+    }
+    
+    // Took prize cards
+    if (line.includes('took') && line.includes('Prize')) {
+      return this.parsePrizeAction(line, turnNumber, player, timestamp, actionId, metadata, lines, currentIndex);
     }
     
     // Played Pokémon
@@ -153,11 +167,6 @@ export class BattleLogParser {
     // Knocked out
     if (line.includes('was Knocked Out')) {
       return this.parseKnockoutAction(line, turnNumber, player, timestamp, actionId, metadata);
-    }
-    
-    // Took prize
-    if (line.includes('took a Prize card') || line.includes('took') && line.includes('Prize cards')) {
-      return this.parsePrizeAction(line, turnNumber, player, timestamp, actionId, metadata);
     }
     
     // Played trainer (Item/Supporter/Stadium)
@@ -189,10 +198,36 @@ export class BattleLogParser {
     player: 'player1' | 'player2',
     timestamp: number,
     actionId: number,
-    metadata: ParsedMetadata
+    metadata: ParsedMetadata,
+    lines: string[],
+    currentIndex: number
   ): BattleAction {
-    const match = line.match(/(\w+)\s+drew\s+(\d+)?\s*(?:a\s+)?(card)/i);
-    const count = match && match[2] ? parseInt(match[2]) : 1;
+    // Extract specific card name if format is "drew CardName"
+    const specificCardMatch = line.match(/drew\s+([A-Z][^.]+?)\s*\./i);
+    const countMatch = line.match(/(\w+)\s+drew\s+(\d+)?\s*(?:a\s+)?(card)/i);
+    const count = countMatch && countMatch[2] ? parseInt(countMatch[2]) : 1;
+    
+    let cardNames: string[] = [];
+    
+    // Check if specific card name is mentioned in draw line
+    if (specificCardMatch && !line.includes('drew a card') && !line.includes('drew card')) {
+      cardNames = [specificCardMatch[1].trim()];
+    } else {
+      // Look ahead for bullet point list of cards
+      for (let i = currentIndex + 1; i < Math.min(currentIndex + 10, lines.length); i++) {
+        const nextLine = lines[i];
+        if (nextLine.startsWith('•')) {
+          // Parse card names from bullet list: "• Card1, Card2, Card3"
+          const cardsLine = nextLine.replace('•', '').trim();
+          cardNames = cardsLine.split(',').map(c => c.trim());
+          break;
+        }
+        // Stop looking if we hit another action or turn
+        if (!nextLine.startsWith('-') && !nextLine.includes('drawn cards')) {
+          break;
+        }
+      }
+    }
     
     return {
       id: `action-${actionId}`,
@@ -200,12 +235,52 @@ export class BattleLogParser {
       timestamp,
       player,
       actionType: 'DRAW',
-      cardName: `${count} card${count > 1 ? 's' : ''}`,
+      cardName: cardNames.length > 0 ? cardNames[0] : `${count} card${count > 1 ? 's' : ''}`,
       details: line,
-      metadata: { count }
+      metadata: { count, cardNames: cardNames.length > 0 ? cardNames : undefined }
     };
   }
   
+  private parsePrizeAction(
+    line: string,
+    turnNumber: number,
+    player: 'player1' | 'player2',
+    timestamp: number,
+    actionId: number,
+    metadata: ParsedMetadata,
+    lines: string[],
+    currentIndex: number
+  ): BattleAction | null {
+    const match = line.match(/(\d+)\s+Prize/i);
+    const count = match ? parseInt(match[1]) : 1;
+    
+    // Look for cards revealed from prize
+    let cardNames: string[] = [];
+    for (let i = currentIndex + 1; i < Math.min(currentIndex + count + 5, lines.length); i++) {
+      const nextLine = lines[i];
+      if (nextLine.includes('was added to') && nextLine.includes('hand')) {
+        const cardMatch = nextLine.match(/([A-Z][^w]+)\s+was added/i);
+        if (cardMatch) {
+          cardNames.push(cardMatch[1].trim());
+        }
+      }
+      if (nextLine.includes("'s Turn") || nextLine.includes('is now in the Active Spot')) {
+        break;
+      }
+    }
+    
+    return {
+      id: `action-${actionId}`,
+      turnNumber,
+      timestamp,
+      player,
+      actionType: 'PRIZE',
+      cardName: `Prize card${count > 1 ? 's' : ''}`,
+      details: line,
+      metadata: { count, cardNames: cardNames.length > 0 ? cardNames : undefined }
+    };
+  }
+
   private playPokemonAction(
     line: string,
     turnNumber: number,
@@ -342,31 +417,6 @@ export class BattleLogParser {
     };
   }
   
-  private parsePrizeAction(
-    line: string,
-    turnNumber: number,
-    player: 'player1' | 'player2',
-    timestamp: number,
-    actionId: number,
-    metadata: ParsedMetadata
-  ): BattleAction | null {
-    const match = line.match(/(\w+)\s+took\s+(?:a\s+Prize\s+card|(\d+)\s+Prize\s+cards)/);
-    if (!match) return null;
-    
-    const count = match[2] ? parseInt(match[2]) : 1;
-    
-    return {
-      id: `action-${actionId}`,
-      turnNumber,
-      timestamp,
-      player,
-      actionType: 'PRIZE',
-      cardName: `${count} Prize card${count > 1 ? 's' : ''}`,
-      details: line,
-      metadata: { count }
-    };
-  }
-  
   private parseTrainerAction(
     line: string,
     turnNumber: number,
@@ -484,7 +534,7 @@ export class BattleLogParser {
   async resolveCardName(cardName: string): Promise<string | null> {
     // Check cache first
     if (this.cardNameCache.has(cardName)) {
-      return this.cardNameCache.get(cardName);
+      return this.cardNameCache.get(cardName) ?? null;
     }
     
     try {
@@ -508,13 +558,86 @@ export class BattleLogParser {
       
       const webCardId = card?.webCardId ?? null;
       
-      // Cache the result
-      this.cardNameCache.set(cardName, webCardId);
+      // Cache the result (only cache if found)
+      if (webCardId) {
+        this.cardNameCache.set(cardName, webCardId);
+      }
       
       return webCardId;
     } catch (error) {
       this.logger.warn(`Failed to resolve card name: ${cardName}`, error);
       return null;
     }
+  }
+
+  /**
+   * Extract complete deck lists for both players from battle actions
+   */
+  private async extractDeckLists(
+    actions: BattleAction[],
+    metadata: ParsedMetadata,
+  ): Promise<{ player1Deck: DeckCard[]; player2Deck: DeckCard[] }> {
+    const player1Cards = new Map<string, number>();
+    const player2Cards = new Map<string, number>();
+
+    // Scan all actions to find cards used by each player
+    for (const action of actions) {
+      const player = action.player;
+      const cardMap = player === 'player1' ? player1Cards : player2Cards;
+      
+      // Add main card from action
+      if (action.cardName && action.cardName !== 'Unknown Card') {
+        const currentCount = cardMap.get(action.cardName) || 0;
+        cardMap.set(action.cardName, currentCount + 1);
+      }
+      
+      // Add cards from metadata (e.g., drawn cards, revealed cards)
+      if (action.metadata?.cardNames && Array.isArray(action.metadata.cardNames)) {
+        for (const cardName of action.metadata.cardNames) {
+          if (cardName && cardName !== 'Card') {
+            const currentCount = cardMap.get(cardName) || 0;
+            cardMap.set(cardName, currentCount + 1);
+          }
+        }
+      }
+    }
+
+    // Convert maps to DeckCard arrays and resolve webCardIds
+    const player1Deck = await this.buildDeckList(player1Cards);
+    const player2Deck = await this.buildDeckList(player2Cards);
+
+    this.logger.log(
+      `Extracted decks: ${metadata.player1Name} (${player1Deck.length} unique cards), ${metadata.player2Name} (${player2Deck.length} unique cards)`,
+    );
+
+    return { player1Deck, player2Deck };
+  }
+
+  /**
+   * Build a deck list from card name counts and resolve webCardIds
+   */
+  private async buildDeckList(cardCounts: Map<string, number>): Promise<DeckCard[]> {
+    const deckList: DeckCard[] = [];
+
+    for (const [cardName, quantity] of cardCounts.entries()) {
+      // Resolve card to webCardId
+      const webCardId = await this.resolveCardName(cardName);
+      
+      deckList.push({
+        name: cardName,
+        quantity,
+        webCardId: webCardId ?? undefined,
+      });
+    }
+
+    // Sort by quantity (descending), then by name
+    deckList.sort((a, b) => {
+      if (b.quantity !== a.quantity) {
+        return b.quantity - a.quantity;
+      }
+      return a.name.localeCompare(b.name);
+    });
+
+    return deckList;
   }
 }

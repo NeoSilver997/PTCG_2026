@@ -21,61 +21,71 @@ export function CardSlot({ pokemon, isActive, benchIndex }: CardSlotProps) {
     hpPercentage > 66 ? 'bg-green-500' : hpPercentage > 33 ? 'bg-yellow-500' : 'bg-red-500';
 
   const cardContent = (
-    <div className="w-24 h-32 bg-gradient-to-br from-purple-100 to-indigo-100 border-2 border-purple-300 rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer overflow-hidden">
-      {/* Card Header */}
-      <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-2 py-1">
-        <div className="text-xs font-semibold truncate">{pokemon.name}</div>
+    <div className="w-24 h-32 bg-gradient-to-br from-purple-600 to-indigo-600 border-2 border-purple-300 rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer overflow-hidden relative">
+      {/* Card Name (always visible as fallback) */}
+      <div className="absolute inset-0 flex items-center justify-center p-2 pointer-events-none">
+        <span className="text-white text-xs font-bold text-center drop-shadow-lg">{pokemon.name}</span>
+      </div>
+      
+      {/* Card Image (overlays name when loaded) */}
+      {pokemon.webCardId && (
+        <img
+          src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1'}/storage/cards/${pokemon.webCardId}/image`}
+          alt={pokemon.name}
+          className="absolute inset-0 w-full h-full object-cover"
+          onError={(e) => {
+            // Hide image on error to show card name
+            e.currentTarget.style.opacity = '0';
+          }}
+        />
+      )}
+
+      {/* HP Bar Overlay */}
+      <div className="absolute bottom-0 left-0 right-0 h-2 bg-gray-800/70">
+        <div
+          className={`h-full ${hpColor} transition-all`}
+          style={{ width: `${hpPercentage}%` }}
+        />
       </div>
 
-      {/* Card Body */}
-      <div className="p-2 flex flex-col justify-between h-[calc(100%-28px)]">
-        {/* HP Bar */}
-        <div>
-          <div className="text-xs text-gray-600 mb-1">
-            HP: {pokemon.hp}/{pokemon.maxHp}
-          </div>
-          <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-            <div
-              className={`h-full ${hpColor} transition-all`}
-              style={{ width: `${hpPercentage}%` }}
-            />
-          </div>
+      {/* HP Text */}
+      <div className="absolute top-1 right-1 bg-black/70 text-white text-xs px-1.5 py-0.5 rounded font-bold">
+        {pokemon.hp}/{pokemon.maxHp}
+      </div>
+
+      {/* Damage Counters */}
+      {pokemon.damageCounters > 0 && (
+        <div className="absolute top-1 left-1 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full font-bold shadow">
+          -{pokemon.damageCounters * 10}
         </div>
+      )}
 
-        {/* Damage Counters */}
-        {pokemon.damageCounters > 0 && (
-          <div className="text-center">
-            <div className="inline-block bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">
-              -{pokemon.damageCounters * 10}
+      {/* Evolution Indicator */}
+      {pokemon.evolution && (
+        <div className="absolute bottom-3 left-1 bg-indigo-500 text-white text-[10px] px-1 py-0.5 rounded shadow">
+          ←{pokemon.evolution.length > 8 ? pokemon.evolution.substring(0, 8) : pokemon.evolution}
+        </div>
+      )}
+
+      {/* Attached Energy/Tools */}
+      {pokemon.attachedCards.length > 0 && (
+        <div className="absolute bottom-3 right-1 flex flex-col gap-0.5 max-w-[70%]">
+          {pokemon.attachedCards.slice(0, 4).map((attached, idx) => (
+            <div
+              key={idx}
+              className="bg-yellow-400/90 text-black text-[9px] px-1 py-0.5 rounded shadow font-semibold truncate"
+              title={attached.name}
+            >
+              {attached.name.length > 8 ? attached.name.substring(0, 7) + '…' : attached.name}
             </div>
-          </div>
-        )}
-
-        {/* Attached Cards */}
-        {pokemon.attachedCards.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {pokemon.attachedCards.slice(0, 3).map((card, idx) => (
-              <div
-                key={idx}
-                className="w-4 h-4 bg-yellow-400 rounded-full border border-yellow-600"
-                title={card}
-              />
-            ))}
-            {pokemon.attachedCards.length > 3 && (
-              <div className="text-xs text-gray-500">
-                +{pokemon.attachedCards.length - 3}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Evolution Indicator */}
-        {pokemon.evolution && (
-          <div className="text-xs text-purple-600 truncate" title={`Evolved from ${pokemon.evolution}`}>
-            ← {pokemon.evolution}
-          </div>
-        )}
-      </div>
+          ))}
+          {pokemon.attachedCards.length > 4 && (
+            <div className="bg-yellow-500 text-white text-[9px] px-1 py-0.5 rounded font-bold text-center">
+              +{pokemon.attachedCards.length - 4}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 

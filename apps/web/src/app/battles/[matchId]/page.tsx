@@ -9,6 +9,8 @@ import { useBattleReplay } from '@/hooks/useBattleReplay';
 import { BattleBoard } from './components/BattleBoard';
 import { ReplayControls } from './components/ReplayControls';
 import { ActionLog } from './components/ActionLog';
+import { DrawCardNotification } from './components/DrawCardNotification';
+import { DeckViewer } from './components/DeckViewer';
 import { ArrowLeft, Trophy } from 'lucide-react';
 
 export default function BattleReplayPage() {
@@ -76,16 +78,33 @@ export default function BattleReplayPage() {
               </div>
             </div>
 
-            {/* Winner Badge */}
-            {battleLog.winnerName && (
-              <div className="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-lg">
-                <Trophy className="w-5 h-5 text-yellow-300" />
-                <span className="font-semibold">{battleLog.winnerName} wins!</span>
-              </div>
-            )}
+            <div className="flex items-center gap-3">
+              {/* Deck Viewers */}
+              <DeckViewer 
+                playerName={battleLog.player1Name}
+                deck={battleLog.player1Deck}
+                playerColor="blue"
+              />
+              <DeckViewer 
+                playerName={battleLog.player2Name}
+                deck={battleLog.player2Deck}
+                playerColor="red"
+              />
+
+              {/* Winner Badge */}
+              {battleLog.winnerName && (
+                <div className="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-lg">
+                  <Trophy className="w-5 h-5 text-yellow-300" />
+                  <span className="font-semibold">{battleLog.winnerName} wins!</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Draw Card Notification */}
+      <DrawCardNotification action={replay.currentAction} />
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">

@@ -17,8 +17,8 @@ export class BattlesService {
   async create(createDto: CreateBattleLogDto): Promise<BattleLogDTO> {
     this.logger.log('Parsing battle log...');
     
-    // Parse the raw log
-    const { metadata, actions } = await this.parser.parseLogText(createDto.rawLog);
+    // Parse the raw log and extract deck lists
+    const { metadata, actions, player1Deck, player2Deck } = await this.parser.parseLogText(createDto.rawLog);
     
     // Create battle log in database
     const battleLog = await this.prisma.battleLog.create({
@@ -26,6 +26,8 @@ export class BattlesService {
         matchTitle: `${metadata.player1Name} vs ${metadata.player2Name}`,
         player1Name: metadata.player1Name,
         player2Name: metadata.player2Name,
+        player1Deck: player1Deck as any,
+        player2Deck: player2Deck as any,
         winnerName: metadata.winnerName,
         turnCount: metadata.turnCount,
         actions: actions as any,
@@ -34,7 +36,7 @@ export class BattlesService {
       },
     });
     
-    this.logger.log(`Created battle log: ${battleLog.id}`);
+    this.logger.log(`Created battle log: ${battleLog.id} with ${player1Deck.length} and ${player2Deck.length} unique cards`);
     
     return this.toDTO(battleLog);
   }
@@ -116,6 +118,8 @@ export class BattlesService {
       matchTitle: battleLog.matchTitle,
       player1Name: battleLog.player1Name,
       player2Name: battleLog.player2Name,
+      player1Deck: battleLog.player1Deck as any,
+      player2Deck: battleLog.player2Deck as any,
       winnerName: battleLog.winnerName,
       turnCount: battleLog.turnCount,
       durationSeconds: battleLog.durationSeconds,
