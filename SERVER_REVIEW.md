@@ -252,7 +252,8 @@ Card Variants:     All NORMAL type
 ✅ pnpm build            - Build all packages
 ✅ pnpm test             - Run tests
 ✅ pnpm db:generate      - Generate Prisma client
-✅ pnpm db:migrate       - Apply migrations
+✅ pnpm db:migrate:deploy - Apply migrations (non-interactive for scripts)
+✅ pnpm db:migrate -- --name X - Create new migration (interactive, manual only)
 ```
 
 ---

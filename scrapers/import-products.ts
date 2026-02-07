@@ -1,12 +1,11 @@
 /**
- * Import PTCG products from JSON to PostgreSQL database
- * 
+ * Update PTCG products with product types
+ *
  * Usage:
  *   npx tsx scrapers/import-products.ts
- *   npx tsx scrapers/import-products.ts "../path/to/products.json"
  */
 
-import { PrismaClient } from '../packages/database/node_modules/.prisma/client';
+import { PrismaClient } from '../../packages/database/node_modules/.prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -48,136 +47,146 @@ const productTypeMapping: Record<string, string> = {
   'Deck': 'deck'
 };
 
-async function importProducts(jsonFilePath: string) {
-  console.log('\n🔍 Reading products from JSON...\n');
-  
-  const jsonData = fs.readFileSync(jsonFilePath, 'utf-8');
-  const products: ProductData[] = JSON.parse(jsonData);
-  
-  console.log(`Found ${products.length} products in JSON\n`);
-  
-  let imported = 0;
-  let skipped = 0;
-  let errors = 0;
-  
-  for (const product of products) {
-    try {
-      // Find the ProductType ID based on the product_type string
-      let productTypeId: string | null = null;
-      if (product.product_type) {
-        const typeCode = productTypeMapping[product.product_type];
-        if (typeCode) {
-          const productType = await prisma.productType.findUnique({
-            where: { code: typeCode }
-          });
-          productTypeId = productType?.id || null;
-        }
-      } else {
-        // For Chinese products without product_type, infer from product name
-        const name = product.product_name.toLowerCase();
-        let inferredTypeCode: string | null = null;
-        
-        if (name.includes('擴充包')) {
-          inferredTypeCode = 'expansion_pack';
-        } else if (name.includes('高級擴充包') || name.includes('強化擴充包')) {
-          inferredTypeCode = 'enhanced_expansion';
-        } else if (name.includes('初階牌組') || name.includes('入門套組') || name.includes('starter')) {
-          inferredTypeCode = 'starter_set';
-        } else if (name.includes('構築牌組') || name.includes('牌組')) {
-          inferredTypeCode = 'constructed_deck';
-        } else if (name.includes('周邊') || name.includes('accessories') || name.includes('デッキシールド')) {
-          inferredTypeCode = 'accessories';
-        } else {
-          inferredTypeCode = 'special_products'; // Default fallback
-        }
-        
-        if (inferredTypeCode) {
-          const productType = await prisma.productType.findUnique({
-            where: { code: inferredTypeCode }
-          });
-          productTypeId = productType?.id || null;
-        }
-      }
+async function updateProductTypes() {
+  console.log('Starting product type updates...\n');
 
-      // Use upsert to handle duplicates
-      await prisma.product.upsert({
-        where: {
-          country_code_productName_releaseDate: {
-            country: product.country,
-            code: product.code || '',
-            productName: product.product_name,
-            releaseDate: product.release_date || ''
-          }
-        },
-        update: {
-          price: product.price,
-          link: product.link,
-          imageUrl: product.image_url,
-          include: product.include,
-          cardOnly: product.card_only,
-          productTypeId: productTypeId,
-          beginnerFlag: product.beginner_flag || 0,
-          storesAvailable: product.stores_available,
-          linkCardList: product.link_card_list,
-          linkPokemonCenter: product.link_pokemon_center,
-        },
-        create: {
-          country: product.country,
-          productName: product.product_name,
-          price: product.price,
-          releaseDate: product.release_date,
-          code: product.code,
-          link: product.link,
-          imageUrl: product.image_url,
-          include: product.include,
-          cardOnly: product.card_only,
-          productTypeId: productTypeId,
-          beginnerFlag: product.beginner_flag || 0,
-          storesAvailable: product.stores_available,
-          linkCardList: product.link_card_list,
-          linkPokemonCenter: product.link_pokemon_center,
+  // Define mapping rules based on product name patterns
+  const typeMappings = [
+    // Expansion packs - Chinese
+    {
+      patterns: ['擴充包'],
+      type: '拡張パック',
+      description: 'Expansion packs (Chinese)'
+    },
+    // Expansion packs - English (most English products are expansion packs)
+    {
+      patterns: ['Scarlet & Violet', 'Sword & Shield', 'Sun & Moon', 'Mega Evolution'],
+      excludePatterns: ['Basic Energy', 'Promo', '151', 'Celebrations', 'Pokémon GO'],
+      type: '拡張パック',
+      description: 'Expansion packs (English)'
+    },
+    // Enhanced expansion packs (premium/high-grade)
+    {
+      patterns: ['強化擴充包', '高級擴充包'],
+      type: '強化拡張パック',
+      description: 'Enhanced/Premium expansion packs'
+    },
+    // Starter decks
+    {
+      patterns: ['入門組合', 'Starter Deck', 'スタートデッキ'],
+      type: 'スターターデッキ',
+      description: 'Starter decks'
+    },
+    // Booster packs
+    {
+      patterns: ['ブースターパック', 'Booster Pack'],
+      type: 'ブースターパック',
+      description: 'Booster packs'
+    },
+    // Special collections
+    {
+      patterns: ['コレクション', 'Collection', '151', 'Celebrations'],
+      type: 'スペシャルコレクション',
+      description: 'Special collections'
+    },
+    // Energy cards
+    {
+      patterns: ['Basic Energy', 'エネルギーカード'],
+      type: 'エネルギーカード',
+      description: 'Energy cards'
+    },
+    // Promotional cards
+    {
+      patterns: ['Promo', 'プロモ', 'Pokémon GO'],
+      type: 'プロモカード',
+      description: 'Promotional cards'
+    }
+  ];
+
+  let totalUpdated = 0;
+
+  for (const mapping of typeMappings) {
+    console.log(`Processing: ${mapping.description}`);
+
+    // Build where clause
+    const whereConditions = [];
+
+    // Include patterns
+    for (const pattern of mapping.patterns) {
+      whereConditions.push({
+        productName: {
+          contains: pattern
         }
       });
-      
-      imported++;
-      
-      if (imported % 100 === 0) {
-        console.log(`  ✓ Imported ${imported}/${products.length} products...`);
-      }
-    } catch (error) {
-      if (error instanceof Error && error.message.includes('Unique constraint')) {
-        skipped++;
-      } else {
-        console.error(`  ✗ Error importing ${product.product_name}:`, error);
-        errors++;
+    }
+
+    // Exclude patterns
+    if (mapping.excludePatterns) {
+      for (const excludePattern of mapping.excludePatterns) {
+        whereConditions.push({
+          productName: {
+            not: {
+              contains: excludePattern
+            }
+          }
+        });
       }
     }
+
+    // Find products that match
+    const products = await prisma.product.findMany({
+      where: {
+        AND: whereConditions
+      },
+      select: {
+        id: true,
+        productName: true,
+        productTypeId: true
+      }
+    });
+
+    if (products.length === 0) {
+      console.log(`  No products found for this pattern\n`);
+      continue;
+    }
+
+    console.log(`  Found ${products.length} products`);
+
+    // Find the product type
+    const productType = await prisma.productType.findFirst({
+      where: {
+        code: mapping.type
+      }
+    });
+
+    if (!productType) {
+      console.log(`  Warning: Product type '${mapping.type}' not found, skipping\n`);
+      continue;
+    }
+
+    // Update the products
+    const result = await prisma.product.updateMany({
+      where: {
+        AND: whereConditions
+      },
+      data: {
+        productTypeId: productType.id
+      }
+    });
+
+    console.log(`  Updated: ${result.count} products\n`);
+    totalUpdated += result.count;
   }
-  
-  console.log('\n' + '='.repeat(60));
-  console.log('IMPORT SUMMARY');
-  console.log('='.repeat(60));
-  console.log(`Total products: ${products.length}`);
-  console.log(`Successfully imported: ${imported}`);
-  console.log(`Skipped (duplicates): ${skipped}`);
-  console.log(`Errors: ${errors}`);
-  console.log('='.repeat(60) + '\n');
+
+  console.log(`Total products updated: ${totalUpdated}`);
 }
 
 async function main() {
-  const args = process.argv.slice(2);
-  const jsonFilePath = args[0] || path.join(process.cwd(), 'ptcg_products.json');
-  
-  if (!fs.existsSync(jsonFilePath)) {
-    console.error(`Error: File not found: ${jsonFilePath}`);
-    process.exit(1);
-  }
-  
   try {
-    await importProducts(jsonFilePath);
-    console.log('✅ Import completed!');
+    await updateProductTypes();
+    console.log('✅ Update completed!');
   } catch (error) {
-    console.error('❌ Import failed:', error);
+    console.error('❌ Update failed:', error);
     throw error;
   } finally {
     await prisma.$disconnect();

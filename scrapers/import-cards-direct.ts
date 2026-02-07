@@ -2,28 +2,34 @@
  * Direct Database Card Import Script
  *
  * Imports card data from JSON files directly into PostgreSQL via Prisma Client.
- * Bypasses API validation and handles Japanese, Chinese, and English card data.
+ * Bypasses API validation and handles Japanese, Chinese (Simplified & Traditional), and English card data.
  *
  * Usage Examples:
  *
- * 1. Import all JSON files from all regions (japan, english, hongkong):
+ * 1. Import all JSON files from all regions (japan, english, hongkong, china):
  *    npx tsx scrapers/import-cards-direct.ts
  *
  * 2. Import from custom base directory:
  *    npx tsx scrapers/import-cards-direct.ts "../data/cards"
  *
  * 3. Import specific region only:
- *    npx tsx scrapers/import-cards-direct.ts "../data/cards" "english"
+ *    npx tsx scrapers/import-cards-direct.ts "../data/cards" "china"
  *
  * 4. Import from single region directory:
  *    npx tsx scrapers/import-cards-direct.ts "../data/cards/japan"
+ *
+ * Supported Regions:
+ * - japan: Japanese cards (JA_JP language)
+ * - english: English cards (EN_US language)
+ * - hongkong: Traditional Chinese cards from Hong Kong (ZH_TW language)
+ * - china: Simplified Chinese cards from Mainland China (ZH_CN language)
  *
  * Features:
  * - Automatic expansion code normalization (sv9 → SV9)
  * - Creates PrimaryExpansion and RegionalExpansion as needed
  * - Extracts card number from collectorNumber
  * - Skills signature for duplicate detection
- * - Handles Japanese, Chinese (HK), and English cards
+ * - Handles Japanese, Chinese (Simplified & Traditional), and English cards
  * - Supports multiple regions in single run
  */
 
@@ -156,7 +162,7 @@ async function batchUpsertExpansions(prisma: PrismaClient, cards: any[]) {
       });
     }
 
-    const regionMap = { 'HK': Region.HK, 'JP': Region.JP, 'EN': Region.EN };
+    const regionMap = { 'HK': Region.HK, 'JP': Region.JP, 'EN': Region.EN, 'CN': Region.CN };
     const region = card.region ? (regionMap[card.region] || Region.JP) : Region.JP;
     const regionalKey = `${canonicalCode}_${region}`;
 
@@ -240,7 +246,7 @@ async function importCardOptimized(prisma: PrismaClient, card: any) {
     throw new Error(`PrimaryExpansion ${canonicalCode} not found`);
   }
 
-  const regionMap = { 'HK': Region.HK, 'JP': Region.JP, 'EN': Region.EN };
+  const regionMap = { 'HK': Region.HK, 'JP': Region.JP, 'EN': Region.EN, 'CN': Region.CN };
   const region = card.region ? (regionMap[card.region] || Region.JP) : Region.JP;
 
   const regionalExpansion = await prisma.regionalExpansion.findUnique({
@@ -319,6 +325,7 @@ async function importCardOptimized(prisma: PrismaClient, card: any) {
   // Map language from card data (default to JA_JP for backward compatibility)
   const languageMap = {
     'ZH_TW': LanguageCode.ZH_TW,
+    'ZH_CN': LanguageCode.ZH_CN,
     'JA_JP': LanguageCode.JA_JP,
     'EN_US': LanguageCode.EN_US,
   };
@@ -422,12 +429,12 @@ async function main() {
 
   const args = process.argv.slice(2);
   const baseDir = args[0] || path.join(__dirname, '../data/cards');
-  const region = args[1]; // Optional: 'japan', 'english', 'hongkong', or undefined for all
+  const region = args[1]; // Optional: 'japan', 'english', 'hongkong', 'china', or undefined for all
 
   console.log(`\n📂 Base directory: ${baseDir}`);
   console.log(`🌍 Region filter: ${region || 'all'}\n`);
 
-  const regions = region ? [region] : ['japan', 'english', 'hongkong'];
+  const regions = region ? [region] : ['japan', 'english', 'hongkong', 'china'];
   let totalFiles = 0;
   let totalSuccess = 0;
   let totalFailed = 0;
@@ -459,6 +466,9 @@ async function main() {
         break;
       case 'hongkong':
         pattern = 'hk_cards_*.json';
+        break;
+      case 'china':
+        pattern = 'china_cards_*.json';
         break;
       default:
         pattern = '*.json';

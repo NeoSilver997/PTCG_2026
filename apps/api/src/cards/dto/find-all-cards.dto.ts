@@ -36,7 +36,7 @@ export class FindAllCardsDto {
   @IsString()
   webCardId?: string;
 
-  @ApiProperty({ required: false, example: 'JA_JP' })
+  @ApiProperty({ required: false, example: 'ZH_TW' })
   @IsOptional()
   @IsString()
   language?: LanguageCode;

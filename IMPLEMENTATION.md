@@ -254,7 +254,10 @@ pnpm install
 ```bash
 cd packages/database
 npx prisma generate
+# For initial setup (interactive - manual only):
 npx prisma migrate dev --name init
+# For applying existing migrations (non-interactive - use in scripts):
+npx prisma migrate deploy
 ```
 
 ### Step 3: Create Seed Data
@@ -548,7 +551,8 @@ pnpm test:watch
 # Database commands
 cd packages/database
 npx prisma generate        # Generate Prisma client
-npx prisma migrate dev     # Create & apply migration
+npx prisma migrate deploy  # Apply existing migrations (non-interactive)
+npx prisma migrate dev --name X  # Create new migration (interactive, manual only)
 npx prisma studio          # Open database GUI
 npx prisma db seed         # Seed database
 

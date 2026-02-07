@@ -50,21 +50,41 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
     <div className="min-h-screen bg-gray-50">
       <Navbar />
 
-      <div className="max-w-6xl mx-auto px-6 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">編輯卡片</h1>
-            <p className="text-gray-600 mt-1">Web Card ID：{webCardId}</p>
-          </div>
-          <Link
-            href={`/cards/${webCardId}`}
-            className="text-sm text-blue-600 hover:text-blue-800"
-          >
-            返回卡片詳情
-          </Link>
-        </div>
+      <div className="w-full px-6 py-8">
+        {/* Back Button */}
+        <Link
+          href={`/cards/${webCardId}`}
+          className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6"
+        >
+          ← 返回卡片詳情
+        </Link>
 
-        <div className="space-y-6">
+        <div className="flex gap-8">
+          {/* Card Image Placeholder */}
+          <div className="w-3/10 bg-white rounded-lg p-6 shadow-sm">
+            <div className="aspect-[2.5/3.5] bg-gray-100 rounded-lg flex items-center justify-center mb-6">
+              <span className="text-gray-400">卡片圖片</span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                disabled
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg opacity-60 cursor-not-allowed"
+              >
+                儲存變更 (待 API)
+              </button>
+              <Link
+                href={`/cards/${webCardId}`}
+                className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+              >
+                取消編輯
+              </Link>
+            </div>
+          </div>
+
+          {/* Edit Form */}
+          <div className="flex-1 space-y-6">
           <section className="bg-white rounded-lg p-6 shadow-sm">
             <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-semibold text-gray-900">相關卡片</h2>
@@ -204,22 +224,6 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
               ))}
             </div>
           </section>
-
-          <div className="flex items-center justify-end gap-3">
-            <button
-              type="button"
-              className="px-4 py-2 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50"
-            >
-              取消
-            </button>
-            <button
-              type="button"
-              disabled
-              className="px-5 py-2 bg-blue-600 text-white rounded-lg opacity-60 cursor-not-allowed"
-            >
-              儲存變更 (待 API)
-            </button>
-          </div>
         </div>
       </div>
     </div>
