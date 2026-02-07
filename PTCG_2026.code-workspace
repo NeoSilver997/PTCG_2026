@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"name": "PTCG_Wiki",
+			"path": "../PTCG_Wiki"
+		},
+		{
+			"path": "../PTCG_CardDB"
+		}
+	],
+	"settings": {
+		"powershell.cwd": "PTCG_2026"
+	}
+}

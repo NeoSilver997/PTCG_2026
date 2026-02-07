@@ -33,13 +33,17 @@ pnpm lint:fix         # Fix linting issues
 ### Database Operations
 ```bash
 cd packages/database
-pnpm db:generate      # Generate Prisma client (run after schema changes)
-pnpm db:migrate       # Create and apply migrations
-pnpm db:studio        # Open Prisma Studio
-pnpm db:seed          # Seed database with test data
+pnpm db:generate             # Generate Prisma client (run after schema changes)
+pnpm db:migrate:deploy       # Apply existing migrations (NON-INTERACTIVE - use in scripts)
+pnpm db:migrate -- --name X  # Create new migration during development (INTERACTIVE)
+pnpm db:studio               # Open Prisma Studio
+pnpm db:seed                 # Seed database with test data
 ```
 
-**Critical:** After modifying `schema.prisma`, always run `pnpm db:generate` before building or running apps.
+**Critical:** 
+- After modifying `schema.prisma`, always run `pnpm db:generate` before building or running apps.
+- **NEVER use `pnpm db:migrate` in scripts** - it's interactive and will hang. Use `pnpm db:migrate:deploy` instead.
+- See [DATABASE_MIGRATION_GUIDE.md](../DATABASE_MIGRATION_GUIDE.md) for detailed migration workflows.
 
 ### Scraper & Import Workflows
 
