@@ -8,7 +8,7 @@ This guide explains how to import the scraped Japanese card data into the Postgr
    ```bash
    cd packages/database
    pnpm db:generate  # Generate Prisma client
-   pnpm db:migrate   # Apply migrations
+   pnpm db:migrate:deploy  # Apply migrations (non-interactive)
    ```
 
 2. **Environment Variables**
