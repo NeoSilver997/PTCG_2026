@@ -72,4 +72,13 @@ export class BattlesController {
   async remove(@Param('id') id: string) {
     await this.battlesService.remove(id);
   }
+
+  @Post(':id/reparse')
+  @Throttle({ medium: { limit: 20, ttl: 10000 } })
+  @ApiOperation({ summary: 'Re-parse a battle log with updated parsing logic' })
+  @ApiResponse({ status: 200, description: 'Battle log re-parsed successfully' })
+  @ApiResponse({ status: 404, description: 'Battle log not found' })
+  async reparse(@Param('id') id: string) {
+    return this.battlesService.reparse(id);
+  }
 }

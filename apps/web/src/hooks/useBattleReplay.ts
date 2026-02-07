@@ -101,19 +101,19 @@ function getInitialGameState(): GameState {
       name: '',
       active: null,
       bench: [],
-      hand: 7,
+      hand: [],
       deck: 60,
       prizes: 6,
-      discard: 0,
+      discardPile: [],
     },
     player2: {
       name: '',
       active: null,
       bench: [],
-      hand: 7,
+      hand: [],
       deck: 60,
       prizes: 6,
-      discard: 0,
+      discardPile: [],
     },
     stadium: null,
     currentTurn: 0,
@@ -130,19 +130,19 @@ function computeGameStateAtAction(
       name: battleLog.player1Name,
       active: null,
       bench: [],
-      hand: 7,
+      hand: [],
       deck: 60,
       prizes: 6,
-      discard: 0,
+      discardPile: [],
     },
     player2: {
       name: battleLog.player2Name,
       active: null,
       bench: [],
-      hand: 7,
+      hand: [],
       deck: 60,
       prizes: 6,
-      discard: 0,
+      discardPile: [],
     },
     stadium: null,
     currentTurn: 0,
@@ -160,12 +160,36 @@ function computeGameStateAtAction(
     switch (action.actionType) {
       case 'DRAW':
         const drawCount = action.metadata?.count || 1;
-        player.hand += drawCount;
+        const drawnCardNames = action.metadata?.cardNames as string[] | undefined;
+        
+        if (drawnCardNames && drawnCardNames.length > 0) {
+          // Add specific cards to hand
+          drawnCardNames.forEach(cardName => {
+            player.hand.push({ name: cardName, webCardId: action.cardWebId });
+          });
+        } else {
+          // Add generic cards
+          for (let i = 0; i < drawCount; i++) {
+            player.hand.push({ name: 'Card', webCardId: undefined });
+          }
+        }
         player.deck = Math.max(0, player.deck - drawCount);
         break;
 
       case 'PLAY_POKEMON':
-        const position = action.metadata?.position as 'active' | 'bench';
+        const position = action.metadata?.position as 'active' | 'bench' | undefined;
+        
+        // Debug logging
+        if (i <= 20) {
+          console.log(`Action ${i}: PLAY_POKEMON`, {
+            player: action.player,
+            cardName: action.cardName,
+            position,
+            metadata: action.metadata,
+            details: action.details
+          });
+        }
+        
         const newPokemon: CardInstance = {
           webCardId: action.cardWebId,
           name: action.cardName,
@@ -174,25 +198,34 @@ function computeGameStateAtAction(
           damageCounters: 0,
           attachedCards: [],
           evolution: null,
-          position,
+          position: position || 'bench',
           benchIndex: position === 'bench' ? player.bench.length : undefined,
         };
 
         if (position === 'active') {
           player.active = newPokemon;
+          console.log(`Set ${action.player} active:`, newPokemon.name);
         } else {
           player.bench.push(newPokemon);
+          console.log(`Added to ${action.player} bench:`, newPokemon.name);
         }
-        player.hand = Math.max(0, player.hand - 1);
+        // Remove from hand
+        if (player.hand.length > 0) {
+          player.hand.pop();
+        }
         break;
 
       case 'ATTACH_ENERGY':
-        // Find target Pokémon and attach energy
+      case 'ATTACH_TOOL':
+        // Find target Pokémon and attach energy/tool
         const target = findPokemonByName(player, action.targetCardName || '');
         if (target) {
-          target.attachedCards.push(action.cardName);
+          target.attachedCards.push({ name: action.cardName, webCardId: action.cardWebId });
         }
-        player.hand = Math.max(0, player.hand - 1);
+        // Remove from hand
+        if (player.hand.length > 0) {
+          player.hand.pop();
+        }
         break;
 
       case 'EVOLVE':
@@ -200,9 +233,13 @@ function computeGameStateAtAction(
         const evolveTarget = findPokemonByName(player, action.targetCardName || '');
         if (evolveTarget) {
           evolveTarget.name = action.cardName;
+          evolveTarget.webCardId = action.cardWebId;
           evolveTarget.evolution = action.targetCardName || null;
         }
-        player.hand = Math.max(0, player.hand - 1);
+        // Remove from hand
+        if (player.hand.length > 0) {
+          player.hand.pop();
+        }
         break;
 
       case 'ATTACK':
@@ -215,34 +252,114 @@ function computeGameStateAtAction(
         break;
 
       case 'KNOCKOUT':
-        // Remove Pokémon from play
-        removePokemon(player, action.cardName);
-        player.discard++;
+        // Remove Pokémon from play and add to discard
+        const knockedOut = removePokemon(player, action.cardName);
+        if (knockedOut) {
+          player.discardPile.push({ name: knockedOut.name, webCardId: knockedOut.webCardId });
+          // Add attached cards to discard
+          knockedOut.attachedCards.forEach((card: { name: string; webCardId?: string }) => {
+            player.discardPile.push(card);
+          });
+          
+          // If active was knocked out, look ahead to find next active or promote from bench
+          if (!player.active && knockedOut.position === 'active') {
+            // Look ahead in next few actions to find what becomes active
+            for (let j = i + 1; j < Math.min(i + 5, battleLog.actions.length); j++) {
+              const nextAction = battleLog.actions[j];
+              if (nextAction.player !== action.player) continue;
+              
+              // Check if next action references a Pokémon
+              if ((nextAction.actionType === 'ATTACK' || nextAction.actionType === 'ABILITY') && nextAction.cardName) {
+                const benchPokemon = player.bench.find((p: CardInstance) => p.name === nextAction.cardName);
+                if (benchPokemon) {
+                  player.active = benchPokemon;
+                  player.bench = player.bench.filter((p: CardInstance) => p !== benchPokemon);
+                  player.active.position = 'active';
+                  break;
+                }
+              }
+            }
+            
+            // If no new active found, promote first bench Pokémon if available
+            if (!player.active && player.bench.length > 0) {
+              player.active = player.bench[0];
+              player.bench.splice(0, 1);
+              player.active.position = 'active';
+            }
+          }
+        }
         break;
 
       case 'PRIZE':
         const prizeCount = action.metadata?.count || 1;
+        const prizeCardNames = action.metadata?.cardNames as string[] | undefined;
+        
         player.prizes = Math.max(0, player.prizes - prizeCount);
-        player.hand += prizeCount;
+        
+        // Add prize cards to hand
+        if (prizeCardNames && prizeCardNames.length > 0) {
+          prizeCardNames.forEach(cardName => {
+            player.hand.push({ name: cardName, webCardId: undefined });
+          });
+        } else {
+          for (let i = 0; i < prizeCount; i++) {
+            player.hand.push({ name: 'Prize Card', webCardId: undefined });
+          }
+        }
         break;
 
       case 'RETREAT':
-        // Move active to bench, new active should be in next action
+        // Move active to bench, then look ahead to see what becomes active
         if (player.active) {
           player.active.position = 'bench';
           player.bench.push(player.active);
           player.active = null;
         }
+        
+        // Look ahead in next few actions to find what becomes active
+        for (let j = i + 1; j < Math.min(i + 5, battleLog.actions.length); j++) {
+          const nextAction = battleLog.actions[j];
+          if (nextAction.player !== action.player) continue;
+          
+          // Check if next action references a Pokémon (attack, ability, etc.)
+          if ((nextAction.actionType === 'ATTACK' || nextAction.actionType === 'ABILITY') && nextAction.cardName) {
+            const benchPokemon = player.bench.find((p: CardInstance) => p.name === nextAction.cardName);
+            if (benchPokemon) {
+              player.active = benchPokemon;
+              player.bench = player.bench.filter((p: CardInstance) => p !== benchPokemon);
+              player.active.position = 'active';
+              break;
+            }
+          }
+        }
+        
+        // If no new active found, promote first bench Pokémon if available
+        if (!player.active && player.bench.length > 0) {
+          player.active = player.bench[0];
+          player.bench.splice(0, 1);
+          player.active.position = 'active';
+        }
         break;
 
       case 'PLAY_TRAINER':
-        player.hand = Math.max(0, player.hand - 1);
-        player.discard++;
+        // Remove from hand
+        if (player.hand.length > 0) {
+          player.hand.pop();
+        }
+        // Add to discard
+        player.discardPile.push({ name: action.cardName, webCardId: action.cardWebId });
+        // Handle stadium
+        if (action.details?.includes('Stadium')) {
+          state.stadium = action.cardName;
+        }
         break;
 
       case 'DISCARD':
-        player.hand = Math.max(0, player.hand - 1);
-        player.discard++;
+        // Remove from hand and add to discard
+        if (player.hand.length > 0) {
+          player.hand.pop();
+        }
+        player.discardPile.push({ name: action.cardName, webCardId: action.cardWebId });
         break;
 
       case 'SHUFFLE':
@@ -256,6 +373,22 @@ function computeGameStateAtAction(
     }
   }
 
+  // Debug: Log final state
+  console.log(`Final state at action ${actionIndex}:`, {
+    player1: {
+      name: state.player1.name,
+      active: state.player1.active?.name || 'NONE',
+      benchCount: state.player1.bench.length,
+      bench: state.player1.bench.map(p => p.name)
+    },
+    player2: {
+      name: state.player2.name,
+      active: state.player2.active?.name || 'NONE',
+      benchCount: state.player2.bench.length,
+      bench: state.player2.bench.map(p => p.name)
+    }
+  });
+
   return state;
 }
 
@@ -263,13 +396,21 @@ function findPokemonByName(player: PlayerState, name: string): CardInstance | nu
   if (player.active?.name === name) {
     return player.active;
   }
-  return player.bench.find((p) => p.name === name) || null;
+  return player.bench.find((p: CardInstance) => p.name === name) || null;
 }
 
-function removePokemon(player: PlayerState, name: string): void {
+function removePokemon(player: PlayerState, name: string): CardInstance | null {
   if (player.active?.name === name) {
+    const removed = player.active;
     player.active = null;
+    return removed;
   } else {
-    player.bench = player.bench.filter((p) => p.name !== name);
+    const index = player.bench.findIndex((p: CardInstance) => p.name === name);
+    if (index >= 0) {
+      const removed = player.bench[index];
+      player.bench.splice(index, 1);
+      return removed;
+    }
   }
+  return null;
 }

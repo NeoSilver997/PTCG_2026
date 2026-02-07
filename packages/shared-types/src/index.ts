@@ -244,3 +244,103 @@ export interface UserPayload {
   email: string;
   role: UserRole;
 }
+// ============================================================================
+// Battle Log Types
+// ============================================================================
+
+export type BattleActionType = 
+  | 'DRAW'           // Drew N cards
+  | 'PLAY_POKEMON'   // Played to Active/Bench
+  | 'PLAY_TRAINER'   // Item/Supporter/Stadium
+  | 'ATTACH_ENERGY'  // Attach energy to Pokémon
+  | 'ATTACH_TOOL'    // Attach tool card
+  | 'ATTACK'         // Use attack
+  | 'EVOLVE'         // Evolve Pokémon
+  | 'RETREAT'        // Switch active
+  | 'ABILITY'        // Use ability
+  | 'KNOCKOUT'       // Pokémon knocked out
+  | 'PRIZE'          // Take prize cards
+  | 'CHECKUP'        // Between-turn effects
+  | 'DISCARD'        // Discard cards
+  | 'SHUFFLE';       // Shuffle deck
+
+export interface DeckCard {
+  name: string;
+  quantity: number;
+  webCardId?: string;
+}
+
+export interface BattleAction {
+  id: string;
+  turnNumber: number;
+  timestamp: number;        // Milliseconds from start
+  player: 'player1' | 'player2';
+  actionType: BattleActionType;
+  cardWebId?: string;       // Link to Card.webCardId
+  cardName: string;
+  targetCardName?: string;  // Target Pokémon for attacks/abilities
+  targetWebId?: string;     // Target card webCardId
+  damage?: number;
+  details?: string;         // Parsed description
+  metadata?: Record<string, any>;  // Flexible for various actions
+}
+
+export interface CardInstance {
+  webCardId?: string;
+  name: string;
+  hp: number;
+  maxHp: number;
+  damageCounters: number;
+  attachedCards: Array<{ name: string; webCardId?: string }>;  // Tools, energy
+  evolution: string | null; // Evolved from
+  position: 'active' | 'bench';
+  benchIndex?: number;      // 0-4 for bench position
+}
+
+export interface PlayerState {
+  name: string;
+  active: CardInstance | null;
+  bench: CardInstance[];
+  hand: Array<{ name: string; webCardId?: string }>;  // Actual hand cards
+  deck: number;
+  prizes: number;
+  discardPile: Array<{ name: string; webCardId?: string }>;  // Actual discard pile
+}
+
+export interface GameState {
+  player1: PlayerState;
+  player2: PlayerState;
+  stadium: string | null;
+  currentTurn: number;
+  currentPlayer: 'player1' | 'player2';
+}
+
+export interface BattleLogDTO {
+  id: string;
+  matchTitle: string;
+  player1Name: string;
+  player2Name: string;
+  player1Deck?: DeckCard[];
+  player2Deck?: DeckCard[];
+  winnerName: string | null;
+  turnCount: number;
+  durationSeconds?: number;
+  actions: BattleAction[];
+  createdAt: string;
+  updatedAt: string;
+  tournamentResultId?: string;
+}
+
+export interface CreateBattleLogDTO {
+  rawLog: string;
+  tournamentResultId?: string;
+}
+
+export interface BattleLogSearchParams {
+  player1Name?: string;
+  player2Name?: string;
+  playerName?: string;      // Search both players
+  tournamentId?: string;
+  skip?: number;
+  take?: number;
+}

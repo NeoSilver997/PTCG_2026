@@ -205,11 +205,34 @@ model TournamentResult {
   deckId        String?
   deck          Deck?          @relation(fields: [deckId], references: [id])
   tournament    Tournament     @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  battleLog     BattleLog?
 
   @@unique([tournamentId, placement])
   @@index([tournamentId])
   @@index([playerName])
   @@map("tournament_results")
+}
+
+model BattleLog {
+  id                   String            @id @default(cuid())
+  matchTitle           String
+  player1Name          String
+  player2Name          String
+  player1Deck          Json?             // Array of {name: string, quantity: number, webCardId?: string}
+  player2Deck          Json?             // Array of {name: string, quantity: number, webCardId?: string}
+  winnerName           String?
+  turnCount            Int
+  durationSeconds      Int?
+  actions              Json
+  rawLog               String?           @db.Text
+  tournamentResultId   String?           @unique
+  tournamentResult     TournamentResult? @relation(fields: [tournamentResultId], references: [id], onDelete: Cascade)
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  @@index([player1Name, player2Name])
+  @@index([createdAt])
+  @@map("battle_logs")
 }
 
 model Deck {

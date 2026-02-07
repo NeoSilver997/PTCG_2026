@@ -85,43 +85,118 @@ export class BattleLogParser {
     let player2Name = '';
     let winnerName: string | null = null;
     let turnCount = 0;
-    
-    // Find player names from initial setup
+
+    // Find player names from coin toss
+    let coinTossWinner = '';
+    let coinTossChooser = '';
+
     for (const line of lines) {
-      // Coin flip winner pattern
-      if (line.includes('won the coin toss') || line.includes('chose heads')) {
-        const match = line.match(/^(\w+)\s+(chose|won)/);
-        if (match && !player1Name) {
-          player1Name = match[1];
+      // Coin toss winner
+      if (line.includes('won the coin toss')) {
+        const match = line.match(/^(\w+)\s+won/);
+        if (match) {
+          coinTossWinner = match[1];
         }
       }
-      
-      // Second player from turn marker
-      if (line.includes("'s Turn") && player1Name) {
-        const match = line.match(/^(\w+)'s Turn/);
-        if (match && match[1] !== player1Name && !player2Name) {
-          player2Name = match[1];
+
+      // Coin toss chooser
+      if (line.includes('chose heads') || line.includes('chose tails')) {
+        const match = line.match(/^(\w+)\s+chose/);
+        if (match) {
+          coinTossChooser = match[1];
         }
       }
-      
+
       // Winner detection
       if (line.includes('wins')) {
-        const match = line.match(/(\w+)\s+wins/);
+        const match = line.match(/(\w+)\s+wins\.?/);
         if (match) {
           winnerName = match[1];
         }
       }
-      
+
       // Count turns
       if (line.includes("'s Turn")) {
         turnCount++;
       }
     }
-    
+
+    // Determine player1 and player2
+    if (coinTossWinner && coinTossChooser && coinTossWinner !== coinTossChooser) {
+      player1Name = coinTossWinner;
+      player2Name = coinTossChooser;
+    }
+
+    // Fallback: Extract player names from action lines if coin toss info is missing or invalid
+    if (!player1Name || !player2Name || player1Name === player2Name) {
+      const playerNames = new Set<string>();
+      
+      for (const line of lines) {
+        // Extract player names from action patterns
+        const patterns = [
+          /^(\w+)\s+(played|drew|attached|used|took|put|discarded|retreated)/i,
+          /^(\w+)'s\s+(.*?)\s+(was|used|attacked|took|received)/i,
+        ];
+        
+        for (const pattern of patterns) {
+          const match = line.match(pattern);
+          if (match) {
+            playerNames.add(match[1]);
+            if (playerNames.size >= 2) break;
+          }
+        }
+        
+        if (playerNames.size >= 2) break;
+      }
+      
+      const namesArray = Array.from(playerNames);
+      if (namesArray.length >= 2) {
+        player1Name = namesArray[0];
+        player2Name = namesArray[1];
+      }
+    }
+
     // Adjust turn count (divide by 2 since each turn is counted per player)
     turnCount = Math.ceil(turnCount / 2);
-    
+
+    console.log('Extracted metadata:', { player1Name, player2Name, winnerName, turnCount });
+
     return { player1Name, player2Name, winnerName, turnCount };
+  }
+  
+  /**
+   * Helper function to determine which player performed an action by extracting the player name from the action line
+   * @param line The action line (e.g., "Silver_Poke played Terapagos ex to the Active Spot")
+   * @param metadata Metadata containing player names
+   * @param fallbackPlayer Fallback player if name can't be extracted (usually turn-based player)
+   */
+  private getPlayerFromActionLine(
+    line: string, 
+    metadata: ParsedMetadata, 
+    fallbackPlayer: 'player1' | 'player2'
+  ): 'player1' | 'player2' {
+    // Try to extract player name from common action patterns
+    const patterns = [
+      /^(\w+)\s+(played|drew|attached|used|took|put|discarded|retreated)/i,
+      /^(\w+)'s\s+(.*?)\s+(was|used|attacked|took|received)/i,
+      /^-\s+(\w+)\s+(played|drew|attached|used|took|put|discarded|retreated)/i,
+      /^-\s+(\w+)'s\s+(.*?)\s+(was|used|attacked|took|received)/i,
+    ];
+    
+    for (const pattern of patterns) {
+      const match = line.match(pattern);
+      if (match) {
+        const playerName = match[1];
+        if (playerName === metadata.player1Name) {
+          return 'player1';
+        } else if (playerName === metadata.player2Name) {
+          return 'player2';
+        }
+      }
+    }
+    
+    // If we can't determine from the line, use the fallback (turn-based player)
+    return fallbackPlayer;
   }
   
   private parseAction(
@@ -134,59 +209,66 @@ export class BattleLogParser {
     lines: string[],
     currentIndex: number
   ): BattleAction | null {
+    // Skip continuation lines that start with "-" - they should be handled by the main action
+    if (line.startsWith('-')) {
+      return null;
+    }
+    
+    // Determine the actual player from the action line
+    const actualPlayer = this.getPlayerFromActionLine(line, metadata, player);
     // Drew cards
     if (line.includes('drew') && line.includes('card')) {
-      return this.parseDrawAction(line, turnNumber, player, timestamp, actionId, metadata, lines, currentIndex);
+      return this.parseDrawAction(line, turnNumber, actualPlayer, timestamp, actionId, metadata, lines, currentIndex);
     }
     
     // Took prize cards
     if (line.includes('took') && line.includes('Prize')) {
-      return this.parsePrizeAction(line, turnNumber, player, timestamp, actionId, metadata, lines, currentIndex);
+      return this.parsePrizeAction(line, turnNumber, actualPlayer, timestamp, actionId, metadata, lines, currentIndex);
     }
     
     // Played Pokémon
     if (line.match(/played .+ to the (Active Spot|Bench)/)) {
-      return this.playPokemonAction(line, turnNumber, player, timestamp, actionId, metadata);
+      return this.playPokemonAction(line, turnNumber, actualPlayer, timestamp, actionId, metadata);
     }
     
     // Attached energy
     if (line.includes('attached') && line.includes('Energy')) {
-      return this.parseAttachEnergyAction(line, turnNumber, player, timestamp, actionId, metadata);
+      return this.parseAttachEnergyAction(line, turnNumber, actualPlayer, timestamp, actionId, metadata);
     }
     
     // Used attack
     if (line.includes('used') && line.includes('on') && line.includes('damage')) {
-      return this.parseAttackAction(line, turnNumber, player, timestamp, actionId, metadata);
+      return this.parseAttackAction(line, turnNumber, actualPlayer, timestamp, actionId, metadata);
     }
     
     // Evolved
     if (line.includes('evolved')) {
-      return this.parseEvolveAction(line, turnNumber, player, timestamp, actionId, metadata);
+      return this.parseEvolveAction(line, turnNumber, actualPlayer, timestamp, actionId, metadata);
     }
     
     // Knocked out
     if (line.includes('was Knocked Out')) {
-      return this.parseKnockoutAction(line, turnNumber, player, timestamp, actionId, metadata);
+      return this.parseKnockoutAction(line, turnNumber, actualPlayer, timestamp, actionId, metadata);
     }
     
     // Played trainer (Item/Supporter/Stadium)
     if (line.match(/played \w+\./)) {
-      return this.parseTrainerAction(line, turnNumber, player, timestamp, actionId, metadata);
+      return this.parseTrainerAction(line, turnNumber, actualPlayer, timestamp, actionId, metadata);
     }
     
     // Retreated
     if (line.includes('retreated')) {
-      return this.parseRetreatAction(line, turnNumber, player, timestamp, actionId, metadata);
+      return this.parseRetreatAction(line, turnNumber, actualPlayer, timestamp, actionId, metadata);
     }
     
     // Ability used
     if (line.includes('used') && !line.includes('damage')) {
-      return this.parseAbilityAction(line, turnNumber, player, timestamp, actionId, metadata);
+      return this.parseAbilityAction(line, turnNumber, actualPlayer, timestamp, actionId, metadata);
     }
     
     // Discarded
     if (line.includes('discarded')) {
-      return this.parseDiscardAction(line, turnNumber, player, timestamp, actionId, metadata);
+      return this.parseDiscardAction(line, turnNumber, actualPlayer, timestamp, actionId, metadata);
     }
     
     return null;
@@ -229,11 +311,14 @@ export class BattleLogParser {
       }
     }
     
+    // Determine the actual player from the action line, not the turn
+    const actualPlayer = this.getPlayerFromActionLine(line, metadata, player);
+    
     return {
       id: `action-${actionId}`,
       turnNumber,
       timestamp,
-      player,
+      player: actualPlayer,
       actionType: 'DRAW',
       cardName: cardNames.length > 0 ? cardNames[0] : `${count} card${count > 1 ? 's' : ''}`,
       details: line,
@@ -269,11 +354,14 @@ export class BattleLogParser {
       }
     }
     
+    // Determine the actual player from the action line, not the turn
+    const actualPlayer = this.getPlayerFromActionLine(line, metadata, player);
+    
     return {
       id: `action-${actionId}`,
       turnNumber,
       timestamp,
-      player,
+      player: actualPlayer,
       actionType: 'PRIZE',
       cardName: `Prize card${count > 1 ? 's' : ''}`,
       details: line,
@@ -295,11 +383,14 @@ export class BattleLogParser {
     const cardName = match[2].trim();
     const position = match[3] === 'Active Spot' ? 'active' : 'bench';
     
+    // Determine the actual player from the action line, not the turn
+    const actualPlayer = this.getPlayerFromActionLine(line, metadata, player);
+    
     return {
       id: `action-${actionId}`,
       turnNumber,
       timestamp,
-      player,
+      player: actualPlayer,
       actionType: 'PLAY_POKEMON',
       cardName,
       details: line,
@@ -321,11 +412,14 @@ export class BattleLogParser {
     const energyName = match[1].trim();
     const targetName = match[2].trim();
     
+    // Determine the actual player from the action line, not the turn
+    const actualPlayer = this.getPlayerFromActionLine(line, metadata, player);
+    
     return {
       id: `action-${actionId}`,
       turnNumber,
       timestamp,
-      player,
+      player: actualPlayer,
       actionType: 'ATTACH_ENERGY',
       cardName: energyName,
       targetCardName: targetName,
@@ -349,11 +443,14 @@ export class BattleLogParser {
     const targetName = match[5].trim();
     const damage = parseInt(match[6]);
     
+    // Determine the actual player from the action line (player1Name's Pokemon attacked)
+    const actualPlayer = this.getPlayerFromActionLine(line, metadata, player);
+    
     return {
       id: `action-${actionId}`,
       turnNumber,
       timestamp,
-      player,
+      player: actualPlayer,
       actionType: 'ATTACK',
       cardName: attackerName,
       targetCardName: targetName,
@@ -377,11 +474,14 @@ export class BattleLogParser {
     const fromName = match[1].trim();
     const toName = match[2].trim();
     
+    // Determine the actual player from the action line, not the turn
+    const actualPlayer = this.getPlayerFromActionLine(line, metadata, player);
+    
     return {
       id: `action-${actionId}`,
       turnNumber,
       timestamp,
-      player,
+      player: actualPlayer,
       actionType: 'EVOLVE',
       cardName: toName,
       targetCardName: fromName,
@@ -430,12 +530,19 @@ export class BattleLogParser {
     
     const cardName = match[1].trim();
     
+    // Determine the actual player from the action line, not the turn
+    const actualPlayer = this.getPlayerFromActionLine(line, metadata, player);
+    
+    // Check if this might be an evolution card play (Pokémon card) rather than a trainer card
+    // Evolution cards are played without position info and often follow evolve actions
+    const isLikelyEvolution = !['Dawn', 'Hilda', 'Iono', 'Arven', 'Artazon', 'Nest Ball', 'Ultra Ball', 'Rare Candy', 'Energy Switch', 'Air Balloon', 'Buddy-Buddy Poffin', 'Battle Cage', 'Explorer\'s Guidance', 'Boss\'s Orders', 'Janine\'s Secret Art', 'Team Rocket\'s Venture Bomb', 'Thick Scale', 'Luminous Energy', 'Munkidori', 'Tynamo', 'Eelektrik', 'Budew', 'Froslass', 'Iron Bundle', 'Snorunt', 'Dratini', 'Dragonair'].includes(cardName);
+    
     return {
       id: `action-${actionId}`,
       turnNumber,
       timestamp,
-      player,
-      actionType: 'PLAY_TRAINER',
+      player: actualPlayer,
+      actionType: isLikelyEvolution ? 'PLAY_POKEMON' : 'PLAY_TRAINER',
       cardName,
       details: line
     };
@@ -454,11 +561,14 @@ export class BattleLogParser {
     
     const cardName = match[1].trim();
     
+    // Determine the actual player from the action line, not the turn
+    const actualPlayer = this.getPlayerFromActionLine(line, metadata, player);
+    
     return {
       id: `action-${actionId}`,
       turnNumber,
       timestamp,
-      player,
+      player: actualPlayer,
       actionType: 'RETREAT',
       cardName,
       details: line
@@ -473,17 +583,20 @@ export class BattleLogParser {
     actionId: number,
     metadata: ParsedMetadata
   ): BattleAction | null {
-    const match = line.match(/(.+?)'s\s+(.+?)\s+used\s+(.+?)\./);
+    const match = line.match(/(.+?)'s\s+(.+?)\s+used\s+(.+?\.)/);
     if (!match) return null;
     
     const cardName = match[2].trim();
     const abilityName = match[3].trim();
     
+    // Determine the actual player from the action line, not the turn
+    const actualPlayer = this.getPlayerFromActionLine(line, metadata, player);
+    
     return {
       id: `action-${actionId}`,
       turnNumber,
       timestamp,
-      player,
+      player: actualPlayer,
       actionType: 'ABILITY',
       cardName,
       details: line,
@@ -499,16 +612,34 @@ export class BattleLogParser {
     actionId: number,
     metadata: ParsedMetadata
   ): BattleAction | null {
+    // Skip generic "X cards were discarded from..." messages
+    if (line.match(/\d+\s+cards?\s+were\s+discarded\s+from/i)) {
+      return null;
+    }
+    
+    // Skip "from xxx's yyy" patterns (these are descriptions, not card names)
+    if (line.match(/discarded\s+from\s+/i)) {
+      return null;
+    }
+    
     const match = line.match(/discarded\s+(.+?)(?:\.|$)/);
     if (!match) return null;
+    
+    let cardName = match[1].trim();
+    
+    // Clean up "from xxx's yyy" if it slipped through
+    cardName = cardName.replace(/^from\s+.*?'s\s+/i, '');
+    
+    // Determine the actual player from the action line, not the turn
+    const actualPlayer = this.getPlayerFromActionLine(line, metadata, player);
     
     return {
       id: `action-${actionId}`,
       turnNumber,
       timestamp,
-      player,
+      player: actualPlayer,
       actionType: 'DISCARD',
-      cardName: match[1].trim(),
+      cardName,
       details: line
     };
   }
@@ -571,57 +702,98 @@ export class BattleLogParser {
   }
 
   /**
-   * Extract complete deck lists for both players from battle actions
+   * Extract deck lists for both players based on cards seen in actions
+   * Note: This tracks cards used during battle with quantity estimation
+   * Quantities are estimated based on TCG rules (max 4 of non-basic energy)
    */
   private async extractDeckLists(
     actions: BattleAction[],
     metadata: ParsedMetadata,
   ): Promise<{ player1Deck: DeckCard[]; player2Deck: DeckCard[] }> {
-    const player1Cards = new Map<string, number>();
-    const player2Cards = new Map<string, number>();
+    const player1Cards = new Map<string, Set<string>>(); // Card name -> Set of action types
+    const player2Cards = new Map<string, Set<string>>();
 
-    // Scan all actions to find cards used by each player
+    // Scan all actions to find unique cards used by each player
     for (const action of actions) {
       const player = action.player;
       const cardMap = player === 'player1' ? player1Cards : player2Cards;
       
-      // Add main card from action
-      if (action.cardName && action.cardName !== 'Unknown Card') {
-        const currentCount = cardMap.get(action.cardName) || 0;
-        cardMap.set(action.cardName, currentCount + 1);
+      // Track main card from action (only count once per card name)
+      // Filter out generic placeholders and invalid card names
+      if (action.cardName && 
+          action.cardName !== 'Unknown Card' &&
+          action.cardName !== 'Card' &&
+          action.cardName !== 'A card' &&
+          !action.cardName.match(/^\d+\s+cards?$/i) &&  // "1 card", "2 cards", etc.
+          !action.cardName.match(/^Prize\s+cards?$/i) &&  // "Prize card", "Prize cards"
+          !action.cardName.match(/^from\s+.*?'s\s+/i)) {  // "from Silver_Poke's Mega Absol ex"
+        if (!cardMap.has(action.cardName)) {
+          cardMap.set(action.cardName, new Set());
+        }
+        cardMap.get(action.cardName)!.add(action.actionType);
       }
       
-      // Add cards from metadata (e.g., drawn cards, revealed cards)
+      // Track cards from metadata (e.g., drawn cards, revealed cards)
       if (action.metadata?.cardNames && Array.isArray(action.metadata.cardNames)) {
         for (const cardName of action.metadata.cardNames) {
-          if (cardName && cardName !== 'Card') {
-            const currentCount = cardMap.get(cardName) || 0;
-            cardMap.set(cardName, currentCount + 1);
+          // Filter out generic placeholders and invalid card names
+          if (cardName && 
+              cardName !== 'Card' &&
+              cardName !== 'A card' &&
+              !cardName.match(/^\d+\s+cards?$/i) &&
+              !cardName.match(/^Prize\s+cards?$/i) &&
+              !cardName.match(/^from\s+.*?'s\s+/i)) {
+            if (!cardMap.has(cardName)) {
+              cardMap.set(cardName, new Set());
+            }
+            cardMap.get(cardName)!.add('revealed');
           }
         }
       }
     }
 
-    // Convert maps to DeckCard arrays and resolve webCardIds
+    // Convert maps to DeckCard arrays with quantity estimation
     const player1Deck = await this.buildDeckList(player1Cards);
     const player2Deck = await this.buildDeckList(player2Cards);
 
+    const player1Total = player1Deck.reduce((sum, c) => sum + c.quantity, 0);
+    const player2Total = player2Deck.reduce((sum, c) => sum + c.quantity, 0);
+
     this.logger.log(
-      `Extracted decks: ${metadata.player1Name} (${player1Deck.length} unique cards), ${metadata.player2Name} (${player2Deck.length} unique cards)`,
+      `Extracted cards used: ${metadata.player1Name} (${player1Deck.length} unique, ${player1Total} total), ${metadata.player2Name} (${player2Deck.length} unique, ${player2Total} total)`,
     );
 
     return { player1Deck, player2Deck };
   }
 
   /**
-   * Build a deck list from card name counts and resolve webCardIds
+   * Build a deck list from card name sets and resolve webCardIds
+   * Estimates quantities based on TCG rules (max 4 of non-energy, unlimited basic energy)
    */
-  private async buildDeckList(cardCounts: Map<string, number>): Promise<DeckCard[]> {
+  private async buildDeckList(cardSets: Map<string, Set<string>>): Promise<DeckCard[]> {
     const deckList: DeckCard[] = [];
 
-    for (const [cardName, quantity] of cardCounts.entries()) {
+    for (const [cardName, actionTypes] of cardSets.entries()) {
       // Resolve card to webCardId
       const webCardId = await this.resolveCardName(cardName);
+      
+      // Estimate quantity based on card type and frequency
+      // Basic Energy: Typically run 4-10 copies, estimate 4 as baseline
+      // Other cards: Max 4 per TCG rules, estimate based on usage
+      const isBasicEnergy = cardName.includes('Basic') && cardName.includes('Energy');
+      
+      let quantity = 1; // Default: assume 1 copy if we only saw it once
+      
+      if (isBasicEnergy) {
+        // Basic energy can have more copies - estimate 4-8 based on usage
+        quantity = actionTypes.has('attach') ? 4 : 2;
+      } else if (actionTypes.size >= 3) {
+        // If card was used in multiple ways (drawn, played, evolved, etc), likely 3-4 copies
+        quantity = 3;
+      } else if (actionTypes.size === 2) {
+        // Used in 2 different ways, likely 2 copies
+        quantity = 2;
+      }
       
       deckList.push({
         name: cardName,

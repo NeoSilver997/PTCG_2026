@@ -12,9 +12,17 @@ const nextConfig: NextConfig = {
         protocol: 'http',
         hostname: 'localhost',
         port: '4000',
-        pathname: '/api/v1/cards/image/**',
+        pathname: '/api/v1/storage/cards/**',
       },
     ],
+  },
+  async rewrites() {
+    return [
+      {
+        source: '/api/v1/:path*',
+        destination: 'http://localhost:4000/api/v1/:path*',
+      },
+    ];
   },
 };
 

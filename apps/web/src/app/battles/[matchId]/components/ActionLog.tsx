@@ -7,9 +7,11 @@ import {
   Trophy,
   Layers,
   Sparkles,
-  RefreshCw
+  RefreshCw,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface ActionLogProps {
   actions: BattleAction[];
@@ -19,6 +21,19 @@ interface ActionLogProps {
 
 export function ActionLog({ actions, currentActionIndex, onActionClick }: ActionLogProps) {
   const currentActionRef = useRef<HTMLDivElement>(null);
+  const [expandedActions, setExpandedActions] = useState<Set<string>>(new Set());
+
+  const toggleExpand = (actionId: string) => {
+    setExpandedActions(prev => {
+      const next = new Set(prev);
+      if (next.has(actionId)) {
+        next.delete(actionId);
+      } else {
+        next.add(actionId);
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     currentActionRef.current?.scrollIntoView({
@@ -29,61 +44,115 @@ export function ActionLog({ actions, currentActionIndex, onActionClick }: Action
 
   return (
     <div className="bg-white border-l border-gray-200 overflow-y-auto h-full">
-      <div className="sticky top-0 bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-4 py-3 font-semibold">
+      <div className="sticky top-0 bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-6 py-4 font-bold text-lg shadow-md">
         Action Log
       </div>
       
-      <div className="p-4 space-y-2">
-        {actions.map((action, index) => (
+      <div className="p-4 space-y-3">
+        {actions.map((action, index) => {
+          const isExpanded = expandedActions.has(action.id);
+          const hasExpandableContent = action.damage || action.metadata?.attackName || action.metadata?.abilityName || action.metadata?.cardNames;
+          
+          return (
           <div
             key={action.id}
             ref={index === currentActionIndex ? currentActionRef : null}
-            onClick={() => onActionClick(index)}
-            className={`p-3 rounded-lg cursor-pointer transition-all ${
+            className={`rounded-lg border-2 transition-all ${
               index === currentActionIndex
-                ? 'bg-purple-100 border-2 border-purple-600 shadow-md'
+                ? 'bg-purple-100 border-purple-600 shadow-md'
                 : index < currentActionIndex
-                ? 'bg-gray-50 border border-gray-200 opacity-60 hover:opacity-100'
-                : 'bg-white border border-gray-200 hover:bg-gray-50'
+                ? 'bg-gray-50 border-gray-200 opacity-70 hover:opacity-100'
+                : 'bg-white border-gray-200 hover:bg-gray-50'
             }`}
           >
+            <div
+              onClick={() => onActionClick(index)}
+              className="p-4 cursor-pointer"
+            >
             <div className="flex items-start gap-2">
               <div className="mt-0.5">
                 {getActionIcon(action.actionType)}
               </div>
               
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-semibold text-gray-500">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-sm font-semibold text-gray-500">
                     Turn {action.turnNumber}
                   </span>
-                  <span className={`text-xs font-semibold ${
-                    action.player === 'player1' ? 'text-blue-600' : 'text-red-600'
+                  <span className={`text-sm font-bold px-2 py-0.5 rounded ${
+                    action.player === 'player1' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'
                   }`}>
                     {action.player === 'player1' ? 'P1' : 'P2'}
                   </span>
                 </div>
                 
-                <div className="text-sm font-medium text-gray-800 break-words">
+                <div className="text-base font-semibold text-gray-800 break-words">
                   {getActionDescription(action)}
                 </div>
-                
+              </div>
+              
+              {hasExpandableContent && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleExpand(action.id);
+                  }}
+                  className="ml-2 p-1 hover:bg-gray-200 rounded transition-colors"
+                >
+                  {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                </button>
+              )}
+              </div>
+            </div>
+            
+            {/* Expanded Details */}
+            {isExpanded && hasExpandableContent && (
+              <div className="px-4 pb-4 border-t border-gray-200 mt-2 pt-3 space-y-2">
                 {action.damage && (
-                  <div className="mt-1 text-xs text-red-600 font-semibold">
-                    -{action.damage} damage
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="font-semibold text-gray-600">Damage:</span>
+                    <span className="text-red-600 font-bold text-base">-{action.damage}</span>
+                  </div>
+                )}
+                {action.metadata?.attackName && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="font-semibold text-gray-600">Attack:</span>
+                    <span className="text-gray-800 font-semibold">{action.metadata.attackName}</span>
+                  </div>
+                )}
+                {action.metadata?.abilityName && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="font-semibold text-gray-600">Ability:</span>
+                    <span className="text-gray-800 font-semibold">{action.metadata.abilityName}</span>
+                  </div>
+                )}
+                {action.metadata?.cardNames && action.metadata.cardNames.length > 0 && (
+                  <div className="text-sm">
+                    <span className="font-semibold text-gray-600 block mb-1">Cards:</span>
+                    <div className="flex flex-wrap gap-1">
+                      {action.metadata.cardNames.map((cardName: string, idx: number) => (
+                        <span 
+                          key={idx} 
+                          className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs font-medium max-w-[200px] truncate inline-block"
+                          title={cardName}
+                        >
+                          {cardName}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
-            </div>
+            )}
           </div>
-        ))}
+        )})}
       </div>
     </div>
   );
 }
 
 function getActionIcon(actionType: string) {
-  const iconClass = "w-4 h-4";
+  const iconClass = "w-6 h-6";
   
   switch (actionType) {
     case 'ATTACK':

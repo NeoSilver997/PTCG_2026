@@ -25,13 +25,16 @@ export function ReplayControls({
       <div className="max-w-7xl mx-auto px-4 py-4">
         {/* Timeline */}
         <div className="mb-4">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-sm text-gray-600">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-base font-semibold text-gray-700">
               Action {currentActionIndex + 1} / {totalActions}
+            </span>
+            <span className="text-sm text-gray-500">
+              Keyboard: Space=Play/Pause, ←/→=Step, R=Restart
             </span>
           </div>
           <div
-            className="h-2 bg-gray-200 rounded-full cursor-pointer relative"
+            className="h-4 bg-gray-200 rounded-full cursor-pointer relative shadow-inner"
             onClick={(e) => {
               const rect = e.currentTarget.getBoundingClientRect();
               const x = e.clientX - rect.left;
@@ -45,8 +48,8 @@ export function ReplayControls({
               style={{ width: `${progress * 100}%` }}
             />
             <div
-              className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white border-2 border-purple-600 rounded-full shadow-md cursor-grab active:cursor-grabbing"
-              style={{ left: `calc(${progress * 100}% - 8px)` }}
+              className="absolute top-1/2 -translate-y-1/2 w-6 h-6 bg-white border-3 border-purple-600 rounded-full shadow-lg cursor-grab active:cursor-grabbing"
+              style={{ left: `calc(${progress * 100}% - 12px)` }}
             />
           </div>
         </div>
@@ -57,50 +60,50 @@ export function ReplayControls({
             {/* Restart */}
             <button
               onClick={controls.restart}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              title="Restart"
+              className="p-3 hover:bg-gray-100 rounded-lg transition-colors"
+              title="Restart (R)"
             >
-              <RotateCcw className="w-5 h-5" />
+              <RotateCcw className="w-8 h-8" />
             </button>
 
             {/* Previous */}
             <button
               onClick={controls.prevAction}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              title="Previous Action"
+              className="p-3 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-30"
+              title="Previous Action (←)"
               disabled={currentActionIndex === 0}
             >
-              <SkipBack className="w-5 h-5" />
+              <SkipBack className="w-8 h-8" />
             </button>
 
             {/* Play/Pause */}
             <button
               onClick={isPlaying ? controls.pause : controls.play}
-              className="p-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all shadow-md"
-              title={isPlaying ? 'Pause' : 'Play'}
+              className="p-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all shadow-lg"
+              title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}
             >
               {isPlaying ? (
-                <Pause className="w-6 h-6" />
+                <Pause className="w-8 h-8" />
               ) : (
-                <Play className="w-6 h-6" />
+                <Play className="w-8 h-8" />
               )}
             </button>
 
             {/* Next */}
             <button
               onClick={controls.nextAction}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              title="Next Action"
+              className="p-3 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-30"
+              title="Next Action (→)"
               disabled={currentActionIndex >= totalActions - 1}
             >
-              <SkipForward className="w-5 h-5" />
+              <SkipForward className="w-8 h-8" />
             </button>
           </div>
 
           {/* Speed Control */}
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600">Speed:</span>
-            <div className="flex gap-1">
+          <div className="flex items-center gap-3">
+            <span className="text-base text-gray-600 font-medium">Speed:</span>
+            <div className="flex gap-2">
               {speeds.map((speed) => (
                 <button
                   key={speed}

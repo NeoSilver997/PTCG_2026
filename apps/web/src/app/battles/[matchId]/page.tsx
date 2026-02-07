@@ -11,11 +11,21 @@ import { ReplayControls } from './components/ReplayControls';
 import { ActionLog } from './components/ActionLog';
 import { DrawCardNotification } from './components/DrawCardNotification';
 import { DeckViewer } from './components/DeckViewer';
-import { ArrowLeft, Trophy } from 'lucide-react';
+import { ArrowLeft, Trophy, Maximize2, Minimize2, PanelRightClose, PanelRightOpen, MonitorSmartphone, Columns2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
 export default function BattleReplayPage() {
   const params = useParams();
   const matchId = params.matchId as string;
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showActionLog, setShowActionLog] = useState(true);
+  const [boardLayout, setBoardLayout] = useState<'vertical' | 'horizontal'>('vertical');
+
+  // Set default layout based on screen size (horizontal for desktop)
+  useEffect(() => {
+    const isDesktop = window.innerWidth >= 1024;
+    setBoardLayout(isDesktop ? 'horizontal' : 'vertical');
+  }, []);
 
   const { data: battleLog, isLoading, error } = useQuery({
     queryKey: ['battles', matchId],
@@ -58,8 +68,9 @@ export default function BattleReplayPage() {
   const isPlayer2Winner = battleLog.winnerName === battleLog.player2Name;
 
   return (
-    <div className="h-screen flex flex-col bg-slate-50">
+    <div className={`${isFullscreen ? 'fixed inset-0' : 'h-screen'} flex flex-col bg-slate-50 z-40`}>
       {/* Header */}
+      {!isFullscreen && (
       <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
@@ -79,6 +90,31 @@ export default function BattleReplayPage() {
             </div>
 
             <div className="flex items-center gap-3">
+              {/* Layout Toggle Controls */}
+              <button
+                onClick={() => setBoardLayout(boardLayout === 'vertical' ? 'horizontal' : 'vertical')}
+                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                title={boardLayout === 'vertical' ? 'Horizontal Layout' : 'Vertical Layout'}
+              >
+                {boardLayout === 'vertical' ? <Columns2 className="w-5 h-5" /> : <MonitorSmartphone className="w-5 h-5" />}
+              </button>
+              
+              <button
+                onClick={() => setShowActionLog(!showActionLog)}
+                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                title={showActionLog ? 'Hide Action Log' : 'Show Action Log'}
+              >
+                {showActionLog ? <PanelRightClose className="w-5 h-5" /> : <PanelRightOpen className="w-5 h-5" />}
+              </button>
+              
+              <button
+                onClick={() => setIsFullscreen(!isFullscreen)}
+                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
+              >
+                {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+              </button>
+              
               {/* Deck Viewers */}
               <DeckViewer 
                 playerName={battleLog.player1Name}
@@ -102,6 +138,37 @@ export default function BattleReplayPage() {
           </div>
         </div>
       </div>
+      )}
+      
+      {/* Fullscreen Header (Minimal) */}
+      {isFullscreen && (
+        <div className="bg-gradient-to-r from-purple-600/90 to-indigo-600/90 backdrop-blur-sm text-white px-4 py-2 flex items-center justify-between">
+          <div className="text-lg font-bold">{battleLog.matchTitle}</div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setBoardLayout(boardLayout === 'vertical' ? 'horizontal' : 'vertical')}
+              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+              title={boardLayout === 'vertical' ? 'Horizontal Layout' : 'Vertical Layout'}
+            >
+              {boardLayout === 'vertical' ? <Columns2 className="w-5 h-5" /> : <MonitorSmartphone className="w-5 h-5" />}
+            </button>
+            <button
+              onClick={() => setShowActionLog(!showActionLog)}
+              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+              title={showActionLog ? 'Hide Action Log' : 'Show Action Log'}
+            >
+              {showActionLog ? <PanelRightClose className="w-5 h-5" /> : <PanelRightOpen className="w-5 h-5" />}
+            </button>
+            <button
+              onClick={() => setIsFullscreen(false)}
+              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+              title="Exit Fullscreen"
+            >
+              <Minimize2 className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Draw Card Notification */}
       <DrawCardNotification action={replay.currentAction} />
@@ -110,19 +177,19 @@ export default function BattleReplayPage() {
       <div className="flex-1 flex overflow-hidden">
         {/* Battle Board (Left/Center) */}
         <div className="flex-1 overflow-y-auto p-6">
-          <BattleBoard gameState={replay.gameState} />
+          <BattleBoard gameState={replay.gameState} layout={boardLayout} />
           
           {/* Current Action Display */}
           {replay.currentAction && (
-            <div className="mt-6 bg-white rounded-lg shadow-md p-4 max-w-2xl mx-auto">
-              <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
+            <div className="mt-6 bg-white rounded-lg shadow-md p-4 max-w-4xl mx-auto">
+              <div className="flex items-center gap-2 text-base text-gray-600 mb-2">
                 <span className="font-semibold">Turn {replay.currentAction.turnNumber}</span>
                 <span>•</span>
                 <span className={replay.currentAction.player === 'player1' ? 'text-blue-600' : 'text-red-600'}>
                   {replay.gameState[replay.currentAction.player].name}
                 </span>
               </div>
-              <div className="text-gray-800 font-medium">
+              <div className="text-gray-800 font-medium text-lg">
                 {replay.currentAction.details || replay.currentAction.cardName}
               </div>
             </div>
@@ -130,13 +197,15 @@ export default function BattleReplayPage() {
         </div>
 
         {/* Action Log (Right Sidebar) */}
-        <div className="w-80 flex flex-col">
+        {showActionLog && (
+        <div className="w-[480px] flex flex-col border-l-4 border-purple-200">
           <ActionLog
             actions={battleLog.actions}
             currentActionIndex={replay.currentActionIndex}
             onActionClick={replay.controls.seekToAction}
           />
         </div>
+        )}
       </div>
 
       {/* Fixed Controls at Bottom */}

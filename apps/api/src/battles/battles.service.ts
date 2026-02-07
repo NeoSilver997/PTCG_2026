@@ -18,14 +18,15 @@ export class BattlesService {
     this.logger.log('Parsing battle log...');
     
     // Parse the raw log and extract deck lists
-    const { metadata, actions, player1Deck, player2Deck } = await this.parser.parseLogText(createDto.rawLog);
+    const parseResult = await this.parser.parseLogText(createDto.rawLog);
+    const { metadata, actions, player1Deck, player2Deck } = parseResult;
     
     // Create battle log in database
     const battleLog = await this.prisma.battleLog.create({
       data: {
-        matchTitle: `${metadata.player1Name} vs ${metadata.player2Name}`,
-        player1Name: metadata.player1Name,
-        player2Name: metadata.player2Name,
+        matchTitle: `${metadata.player1Name || 'Unknown'} vs ${metadata.player2Name || 'Unknown'}`,
+        player1Name: metadata.player1Name || 'Unknown',
+        player2Name: metadata.player2Name || 'Unknown',
         player1Deck: player1Deck as any,
         player2Deck: player2Deck as any,
         winnerName: metadata.winnerName,
@@ -110,6 +111,46 @@ export class BattlesService {
     await this.prisma.battleLog.delete({
       where: { id },
     });
+  }
+
+  async reparse(id: string): Promise<BattleLogDTO> {
+    this.logger.log(`Re-parsing battle log: ${id}`);
+    
+    // Get existing battle log
+    const existingLog = await this.prisma.battleLog.findUnique({
+      where: { id },
+    });
+    
+    if (!existingLog) {
+      throw new NotFoundException(`Battle log with ID ${id} not found`);
+    }
+
+    if (!existingLog.rawLog) {
+      throw new NotFoundException(`Battle log ${id} has no raw log data`);
+    }
+    
+    // Re-parse the raw log
+    const parseResult = await this.parser.parseLogText(existingLog.rawLog);
+    const { metadata, actions, player1Deck, player2Deck } = parseResult;
+    
+    // Update battle log in database
+    const battleLog = await this.prisma.battleLog.update({
+      where: { id },
+      data: {
+        matchTitle: `${metadata.player1Name || 'Unknown'} vs ${metadata.player2Name || 'Unknown'}`,
+        player1Name: metadata.player1Name || 'Unknown',
+        player2Name: metadata.player2Name || 'Unknown',
+        player1Deck: player1Deck as any,
+        player2Deck: player2Deck as any,
+        winnerName: metadata.winnerName,
+        turnCount: metadata.turnCount,
+        actions: actions as any,
+      },
+    });
+    
+    this.logger.log(`Re-parsed battle log: ${battleLog.id}`);
+    
+    return this.toDTO(battleLog);
   }
 
   private toDTO(battleLog: any): BattleLogDTO {
