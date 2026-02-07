@@ -10,6 +10,10 @@ import { Plus, Trash2, Copy } from 'lucide-react';
 interface RelatedCardEntry {
   webCardId: string;
   note: string;
+  searchQuery: string;
+  searchResults: any[];
+  isSearching: boolean;
+  searchTimeoutId?: NodeJS.Timeout;
 }
 
 interface TournamentUsageEntry {
@@ -68,6 +72,7 @@ interface CardDetail {
     primaryExpansion: {
       code: string;
       nameEn: string;
+      releaseDate: string | null;
     } | null;
   };
   regionalExpansion: {
@@ -82,7 +87,7 @@ interface CardDetail {
 export default function CardEditPage({ params }: { params: Promise<{ webCardId: string }> }) {
   const { webCardId } = use(params);
   const [relatedCards, setRelatedCards] = useState<RelatedCardEntry[]>([
-    { webCardId: '', note: '' },
+    { webCardId: '', note: '', searchQuery: '', searchResults: [], isSearching: false },
   ]);
   const [evolutionChain, setEvolutionChain] = useState({
     base: '',
@@ -108,6 +113,7 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
     evolvesTo: '',
     artist: '',
     regulationMark: '',
+    customReleaseDate: '',
     imageUrl: '',
     imageUrlHiRes: '',
     sourceUrl: '',
@@ -148,6 +154,7 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
         sourceUrl: card.sourceUrl || '',
         artist: card.artist || '',
         regulationMark: card.regulationMark || '',
+        customReleaseDate: card.primaryCard?.primaryExpansion?.releaseDate ? new Date(card.primaryCard.primaryExpansion.releaseDate).toISOString().split('T')[0] : '',
         ruleBox: (card.ruleBox as '' | 'EX' | 'GX' | 'V' | 'VMAX' | 'VSTAR' | 'RADIANT' | 'MEGA') || '',
         text: card.text || '',
         flavorText: '',
@@ -160,6 +167,17 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
       });
     }
   }, [card]);
+
+  // Cleanup search timeouts on unmount
+  useEffect(() => {
+    return () => {
+      relatedCards.forEach(link => {
+        if (link.searchTimeoutId) {
+          clearTimeout(link.searchTimeoutId);
+        }
+      });
+    };
+  }, [relatedCards]);
 
   const addType = (type: string) => {
     if (!cardData.types.includes(type)) {
@@ -243,17 +261,68 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
   };
 
   const addRelatedLink = () => {
-    setRelatedCards(prev => [...prev, { webCardId: '', note: '' }]);
+    setRelatedCards(prev => [...prev, { webCardId: '', note: '', searchQuery: '', searchResults: [], isSearching: false }]);
   };
 
   const updateRelatedLink = (index: number, key: keyof RelatedCardEntry, value: string) => {
     setRelatedCards(prev => prev.map((link, i) =>
       i === index ? { ...link, [key]: value } : link
     ));
+
+    // Trigger search when searchQuery changes
+    if (key === 'searchQuery') {
+      // Debounce search
+      const timeoutId = setTimeout(() => {
+        searchCards(value, index);
+      }, 300);
+
+      // Clear previous timeout
+      setRelatedCards(prev => prev.map((link, i) =>
+        i === index ? { ...link, searchTimeoutId: timeoutId } : link
+      ));
+    }
   };
 
   const removeRelatedLink = (index: number) => {
     setRelatedCards(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const searchCards = async (query: string, index: number) => {
+    if (!query.trim()) {
+      setRelatedCards(prev => prev.map((link, i) =>
+        i === index ? { ...link, searchResults: [], isSearching: false } : link
+      ));
+      return;
+    }
+
+    setRelatedCards(prev => prev.map((link, i) =>
+      i === index ? { ...link, isSearching: true } : link
+    ));
+
+    try {
+      const { data } = await apiClient.get('/cards', {
+        params: { name: query, take: 5 }
+      });
+      setRelatedCards(prev => prev.map((link, i) =>
+        i === index ? { ...link, searchResults: data, isSearching: false } : link
+      ));
+    } catch (error) {
+      console.error('Search failed:', error);
+      setRelatedCards(prev => prev.map((link, i) =>
+        i === index ? { ...link, searchResults: [], isSearching: false } : link
+      ));
+    }
+  };
+
+  const selectCard = (index: number, card: any) => {
+    setRelatedCards(prev => prev.map((link, i) =>
+      i === index ? {
+        ...link,
+        webCardId: card.webCardId,
+        searchQuery: card.name,
+        searchResults: []
+      } : link
+    ));
   };
 
   return (
@@ -464,6 +533,16 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
                     onChange={(e) => updateCardData('regulationMark', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black"
                     placeholder="例: A, B, C..."
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">自訂發行日期</label>
+                  <input
+                    type="date"
+                    value={cardData.customReleaseDate}
+                    onChange={(e) => updateCardData('customReleaseDate', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black"
+                    placeholder="選擇發行日期"
                   />
                 </div>
               </div>
@@ -827,37 +906,111 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
                   新增連結
                 </button>
               </div>
-              <div className="space-y-3">
+              <div className="space-y-6">
                 {relatedCards.map((link, index) => (
-                  <div key={index} className="flex gap-3 items-end">
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">卡片 ID</label>
-                      <input
-                        type="text"
-                        value={link.webCardId}
-                        onChange={(e) => updateRelatedLink(index, 'webCardId', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black"
-                        placeholder="相關卡片 webCardId"
-                      />
+                  <div key={index} className="border border-gray-200 rounded-lg p-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                      <div className="relative">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">搜尋卡片</label>
+                        <input
+                          type="text"
+                          value={link.searchQuery}
+                          onChange={(e) => updateRelatedLink(index, 'searchQuery', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black"
+                          placeholder="輸入卡片名稱或 ID"
+                        />
+                        {link.isSearching && (
+                          <div className="absolute right-3 top-9 text-gray-400">
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400"></div>
+                          </div>
+                        )}
+                        {link.searchResults.length > 0 && (
+                          <div className="absolute z-10 w-full bg-white border border-gray-300 rounded-lg shadow-lg mt-1 max-h-60 overflow-y-auto">
+                            {link.searchResults.map((card: any) => (
+                              <div
+                                key={card.webCardId}
+                                className="px-3 py-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                                onClick={() => selectCard(index, card)}
+                              >
+                                <div className="flex items-center gap-3">
+                                  {card.imageUrl && (
+                                    <img
+                                      src={card.imageUrl}
+                                      alt={card.name}
+                                      className="w-8 h-8 object-cover rounded"
+                                    />
+                                  )}
+                                  <div>
+                                    <div className="font-medium text-sm">{card.name}</div>
+                                    <div className="text-xs text-gray-500">{card.webCardId}</div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">備註</label>
+                        <input
+                          type="text"
+                          value={link.note}
+                          onChange={(e) => updateRelatedLink(index, 'note', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black"
+                          placeholder="關聯說明"
+                        />
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">備註</label>
-                      <input
-                        type="text"
-                        value={link.note}
-                        onChange={(e) => updateRelatedLink(index, 'note', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black"
-                        placeholder="關聯說明"
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeRelatedLink(index)}
-                      className="flex items-center justify-center text-gray-400 hover:text-red-500 px-2 py-2"
-                      aria-label="移除連結"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+
+                    {/* Card Image Display */}
+                    {link.webCardId && (
+                      <div className="mt-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">卡片圖片</label>
+                        <div className="flex items-center gap-4">
+                          <div className="flex-shrink-0">
+                            {link.searchResults.find((card: any) => card.webCardId === link.webCardId)?.imageUrl ? (
+                              <img
+                                src={link.searchResults.find((card: any) => card.webCardId === link.webCardId)?.imageUrl}
+                                alt={link.searchQuery}
+                                className="w-20 h-28 object-cover rounded-lg border border-gray-200"
+                              />
+                            ) : (
+                              <div className="w-20 h-28 bg-gray-100 rounded-lg flex items-center justify-center border border-gray-200">
+                                <span className="text-xs text-gray-400">載入中...</span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <div className="text-sm font-medium text-gray-900">{link.searchQuery}</div>
+                            <div className="text-xs text-gray-500">ID: {link.webCardId}</div>
+                            {link.note && (
+                              <div className="text-xs text-gray-600 mt-1">備註: {link.note}</div>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeRelatedLink(index)}
+                            className="flex items-center justify-center text-gray-400 hover:text-red-500 p-2"
+                            aria-label="移除連結"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {!link.webCardId && (
+                      <div className="flex justify-end mt-4">
+                        <button
+                          type="button"
+                          onClick={() => removeRelatedLink(index)}
+                          className="flex items-center justify-center text-gray-400 hover:text-red-500 px-2 py-2"
+                          aria-label="移除連結"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

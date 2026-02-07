@@ -12,6 +12,7 @@ import { DecksModule } from './decks/decks.module';
 import { PricesModule } from './prices/prices.module';
 import { StorageModule } from './storage/storage.module';
 import { ProductsModule } from './products/products.module';
+import { BattlesModule } from './battles/battles.module';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { ProductsModule } from './products/products.module';
     PricesModule,
     StorageModule,
     ProductsModule,
+    BattlesModule,
   ],
 })
 export class AppModule {}

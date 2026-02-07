@@ -537,8 +537,12 @@ export class CardsService {
     const validSortFields = ['id', 'webCardId', 'name', 'hp', 'createdAt', 'updatedAt', 'rarity', 'supertype', 'expansionReleaseDate'];
     if (actualSortBy && validSortFields.includes(actualSortBy)) {
       if (actualSortBy === 'expansionReleaseDate') {
-        // For expansion release date, sort by createdAt since all release dates are NULL
-        orderBy.createdAt = actualSortOrder || 'desc';
+        // Sort by primary expansion release date
+        orderBy.primaryCard = {
+          primaryExpansion: {
+            releaseDate: actualSortOrder || 'desc'
+          }
+        };
       } else {
         orderBy[actualSortBy] = actualSortOrder || 'desc';
       }
@@ -648,6 +652,26 @@ export class CardsService {
         ? `WHERE ${baseWhereConditions.join(' AND ')}` 
         : '';
 
+      // Build dynamic ORDER BY clause
+      let orderByClause = 'c."createdAt"';
+      if (actualSortBy === 'expansionReleaseDate') {
+        orderByClause = 'pe."releaseDate"';
+      } else if (actualSortBy === 'name') {
+        orderByClause = 'c."name"';
+      } else if (actualSortBy === 'id') {
+        orderByClause = 'c."id"';
+      } else if (actualSortBy === 'webCardId') {
+        orderByClause = 'c."webCardId"';
+      } else if (actualSortBy === 'hp') {
+        orderByClause = 'c."hp"';
+      } else if (actualSortBy === 'updatedAt') {
+        orderByClause = 'c."updatedAt"';
+      } else if (actualSortBy === 'rarity') {
+        orderByClause = 'c."rarity"';
+      } else if (actualSortBy === 'supertype') {
+        orderByClause = 'c."supertype"';
+      }
+
       const [cards, totalResult] = await Promise.all([
         this.prisma.$queryRawUnsafe<any[]>(`
           SELECT c.*, 
@@ -659,13 +683,14 @@ export class CardsService {
                  re.region as "regionalExpansion_region",
                  pe.id as "primaryExpansion_id",
                  pe.code as "primaryExpansion_code",
-                 pe."nameEn" as "primaryExpansion_nameEn"
+                 pe."nameEn" as "primaryExpansion_nameEn",
+                 pe."releaseDate" as "primaryExpansion_releaseDate"
           FROM cards c
           LEFT JOIN primary_cards pc ON c."primaryCardId" = pc.id
           LEFT JOIN regional_expansions re ON c."regionalExpansionId" = re.id
           LEFT JOIN primary_expansions pe ON re."primaryExpansionId" = pe.id
           ${whereClause}
-          ORDER BY c."createdAt" ${actualSortOrder === 'asc' ? 'ASC' : 'DESC'}
+          ORDER BY ${orderByClause} ${actualSortOrder === 'asc' ? 'ASC' : 'DESC'} NULLS LAST
           LIMIT ${Math.min(take, 100)} OFFSET ${skip}
         `),
         this.prisma.$queryRawUnsafe<[{ count: bigint }]>(`
@@ -679,6 +704,11 @@ export class CardsService {
           primaryCard: {
             name: card.primaryCardName,
             skillsSignature: card.primaryCardSkillsSignature,
+            primaryExpansion: card.primaryExpansion_id ? {
+              code: card.primaryExpansion_code,
+              nameEn: card.primaryExpansion_nameEn,
+              releaseDate: card.primaryExpansion_releaseDate,
+            } : null,
           },
           regionalExpansion: card.regionalExpansion_id ? {
             id: card.regionalExpansion_id,
@@ -688,6 +718,7 @@ export class CardsService {
             primaryExpansion: card.primaryExpansion_id ? {
               code: card.primaryExpansion_code,
               nameEn: card.primaryExpansion_nameEn,
+              releaseDate: card.primaryExpansion_releaseDate,
             } : null,
           } : null,
         })),

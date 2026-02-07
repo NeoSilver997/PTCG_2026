@@ -9,6 +9,7 @@ export function Navbar() {
   const isProductsRoute = pathname.startsWith('/products');
   const isDeckBuilderRoute = pathname.startsWith('/deck-builder');
   const isDeckStudioRoute = pathname.startsWith('/deck-studio');
+  const isBattlesRoute = pathname.startsWith('/battles');
   const breadcrumbLabel = isCardsRoute
     ? pathname.endsWith('/new')
       ? '新增卡片'
@@ -46,6 +47,12 @@ export function Navbar() {
                 className={isProductsRoute ? 'text-white font-semibold' : 'hover:text-white'}
               >
                 商品管理
+              </Link>
+              <Link
+                href="/battles"
+                className={isBattlesRoute ? 'text-white font-semibold' : 'hover:text-white'}
+              >
+                Battle Replays
               </Link>
               <Link
                 href="/deck-builder/tournaments"

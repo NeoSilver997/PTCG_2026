@@ -44,6 +44,7 @@ interface CardDetail {
     primaryExpansion: {
       code: string;
       nameEn: string;
+      releaseDate: string | null;
     } | null;
   };
   regionalExpansion: {
@@ -330,6 +331,27 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
     enabled: !!card?.name,
   });
 
+  // Fetch related products for this card's expansion
+  const { data: relatedProducts = [] } = useQuery({
+    queryKey: ['relatedProducts', card?.primaryCard?.expansionId],
+    queryFn: async () => {
+      if (!card?.primaryCard?.expansionId) return [];
+      try {
+        const { data } = await apiClient.get('/products', {
+          params: {
+            search: card.primaryCard.expansionId,
+            take: 10
+          }
+        });
+        return data?.data || [];
+      } catch (error) {
+        console.error('Error fetching related products:', error);
+        return [];
+      }
+    },
+    enabled: !!card?.primaryCard?.expansionId,
+  });
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -479,6 +501,14 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                       {currentVariant.regionalExpansion.name && (
                         <span className="text-sm text-gray-600 ml-1">({currentVariant.regionalExpansion.name})</span>
                       )}
+                    </dd>
+                  </div>
+                )}
+                {card.primaryCard?.primaryExpansion?.releaseDate && (
+                  <div>
+                    <dt className="text-sm text-gray-600">發行日期</dt>
+                    <dd className="font-medium text-gray-900">
+                      {new Date(card.primaryCard.primaryExpansion.releaseDate).toLocaleDateString('zh-TW')}
                     </dd>
                   </div>
                 )}
@@ -930,12 +960,22 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
               <dl className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <dt className="text-gray-600">擴展包</dt>
-                  <dd className="font-medium text-gray-900">{card.primaryCard.expansionId}</dd>
+                  <dd className="font-medium text-gray-900">
+                    {relatedProducts.length > 0 ? relatedProducts[0].productName : card.primaryCard.expansionId}
+                  </dd>
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-gray-600">卡片編號</dt>
                   <dd className="font-medium text-gray-900">{card.primaryCard.cardNumber}</dd>
                 </div>
+                {card.primaryCard.primaryExpansion?.releaseDate && (
+                  <div className="flex justify-between">
+                    <dt className="text-gray-600">發行日期</dt>
+                    <dd className="font-medium text-gray-900">
+                      {new Date(card.primaryCard.primaryExpansion.releaseDate).toLocaleDateString('zh-TW')}
+                    </dd>
+                  </div>
+                )}
                 {card.region && (
                   <div className="flex justify-between">
                     <dt className="text-gray-600">地區</dt>
@@ -977,6 +1017,61 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                 </div>
               </div>
             </div>
+
+            {/* Related Products */}
+            {relatedProducts.length > 0 && (
+              <div className="bg-white rounded-lg p-6 shadow-sm">
+                <h2 className="text-xl font-semibold mb-4 text-gray-900">相關產品</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {relatedProducts.map((product: any) => (
+                    <Link
+                      key={product.id}
+                      href={`/products/${product.id}`}
+                      className="block bg-gray-50 border border-gray-200 rounded-lg p-4 hover:bg-gray-100 hover:border-gray-300 transition-colors"
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex-1">
+                          <h3 className="font-medium text-gray-900 text-sm mb-1">
+                            {product.name || product.productName}
+                          </h3>
+                          <div className="text-xs text-gray-600 space-y-1">
+                            {product.country && (
+                              <div>國家: {product.country}</div>
+                            )}
+                            {product.productType && (
+                              <div>類型: {product.productType}</div>
+                            )}
+                            {product.releaseDate && (
+                              <div>發行日期: {new Date(product.releaseDate).toLocaleDateString('zh-TW')}</div>
+                            )}
+                          </div>
+                        </div>
+                        {product.imageUrl && (
+                          <img
+                            src={product.imageUrl}
+                            alt={product.name || product.productName}
+                            className="w-12 h-12 object-cover rounded ml-3 flex-shrink-0"
+                          />
+                        )}
+                      </div>
+                      <div className="text-xs text-blue-600 hover:text-blue-800">
+                        查看產品詳情 →
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+                {relatedProducts.length >= 10 && (
+                  <div className="mt-4 text-center">
+                    <Link
+                      href={`/products?search=${encodeURIComponent(card.primaryCard.expansionId)}`}
+                      className="text-sm text-blue-600 hover:text-blue-800"
+                    >
+                      查看更多相關產品 →
+                    </Link>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Language Variants / Different Versions */}
             {card.languageVariants && card.languageVariants.length > 0 && (
