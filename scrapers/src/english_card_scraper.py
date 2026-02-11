@@ -479,7 +479,7 @@ class EnglishCardScraper:
         return None
 
     def _extract_attacks(self, soup: BeautifulSoup) -> List[Dict[str, Any]]:
-        """Extract attacks (exclude abilities with [Ability] prefix)"""
+        """Extract attacks (skills with damage)"""
         attacks = []
         skill_info = soup.find('div', class_='skillInformation')
         if not skill_info: return attacks
@@ -491,13 +491,13 @@ class EnglishCardScraper:
             
             name = name_span.get_text(strip=True)
             
-            # Skip if this is an ability (has [Ability] prefix)
-            if '[Ability]' in name:
-                continue
-            
             # Damage
             dmg_span = skill_div.find('span', class_='skillDamage')
             damage = dmg_span.get_text(strip=True) if dmg_span else None
+            
+            # Skip if no damage (it's an ability)
+            if not damage:
+                continue
             
             # Cost
             cost_span = skill_div.find('span', class_='skillCost')
@@ -538,7 +538,7 @@ class EnglishCardScraper:
         return symbols if symbols else None
 
     def _extract_abilities(self, soup: BeautifulSoup) -> List[Dict[str, str]]:
-        """Extract abilities (identified by [Ability] prefix)"""
+        """Extract abilities (skills without damage)"""
         abilities = []
         skill_info = soup.find('div', class_='skillInformation')
         if not skill_info: return abilities
@@ -549,13 +549,20 @@ class EnglishCardScraper:
             
             name_text = name_span.get_text(strip=True)
             
-            # Check if this is an ability (has [Ability] prefix)
-            if '[Ability]' in name_text:
-                # Remove the prefix to get clean name
-                name = name_text.replace('[Ability]', '').strip()
-                effect_p = skill_div.find('p', class_='skillEffect')
-                desc = effect_p.get_text(strip=True) if effect_p else None
-                abilities.append({'name': name, 'description': desc})
+            # Check if this has damage (if so, it's an attack)
+            dmg_span = skill_div.find('span', class_='skillDamage')
+            damage = dmg_span.get_text(strip=True) if dmg_span else None
+            if damage:
+                continue
+            
+            # It's an ability - remove [Ability] prefix if present
+            name = name_text
+            if '[Ability]' in name:
+                name = name.replace('[Ability]', '').strip()
+            
+            effect_p = skill_div.find('p', class_='skillEffect')
+            desc = effect_p.get_text(strip=True) if effect_p else None
+            abilities.append({'name': name, 'description': desc})
                 
         return abilities
 

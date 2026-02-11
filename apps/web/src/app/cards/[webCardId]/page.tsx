@@ -554,7 +554,18 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                 <p className="text-gray-800 whitespace-pre-wrap leading-relaxed">{card.text}</p>
               </div>
             )}
-
+            {/* Abilities */}
+            {card.abilities && Array.isArray(card.abilities) && card.abilities.length > 0 && (
+              <div className="bg-white rounded-lg p-3 shadow-sm">
+                <h2 className="text-xl font-semibold mb-3 text-gray-900">特性</h2>
+                {card.abilities.map((ability: any, index: number) => (
+                  <div key={index} className="mb-4 last:mb-0">
+                    <div className="font-semibold text-blue-700">{ability.name}</div>
+                    <div className="text-sm text-gray-800 mt-1">{ability.description}</div>
+                  </div>
+                ))}
+              </div>
+            )}
             {/* Attacks */}
             {card.attacks && Array.isArray(card.attacks) && card.attacks.length > 0 && (
               <div className="bg-white rounded-lg p-3 shadow-sm">
@@ -913,18 +924,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
               </div>
             )}
 
-            {/* Abilities */}
-            {card.abilities && Array.isArray(card.abilities) && card.abilities.length > 0 && (
-              <div className="bg-white rounded-lg p-3 shadow-sm">
-                <h2 className="text-xl font-semibold mb-3 text-gray-900">特性</h2>
-                {card.abilities.map((ability: any, index: number) => (
-                  <div key={index} className="mb-4 last:mb-0">
-                    <div className="font-semibold text-blue-700">{ability.name}</div>
-                    <div className="text-sm text-gray-800 mt-1">{ability.text}</div>
-                  </div>
-                ))}
-              </div>
-            )}
+            
 
             {/* Weaknesses & Resistances */}
             {((card.weaknesses && Array.isArray(card.weaknesses) && card.weaknesses.length > 0) ||

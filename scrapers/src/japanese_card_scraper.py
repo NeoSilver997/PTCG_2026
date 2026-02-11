@@ -789,19 +789,40 @@ class JapaneseCardScraper:
                 next_p = section.find_next('p')
                 if next_p:
                     text = next_p.get_text(strip=True)
-                    # Skip header/metadata paragraphs
-                    if text and len(text) > 15 and not text.startswith('高さ') and not text.startswith('重さ'):
+                    # Skip header/metadata paragraphs and copyright notices
+                    if (text and len(text) > 15 and 
+                        not text.startswith('高さ') and 
+                        not text.startswith('重さ') and
+                        not '©' in text and
+                        not 'ポケットモンスター' in text and
+                        not '任天堂' in text):
                         return text
         
-        # Method 2: Look for paragraphs with effect-like keywords (fallback)
+        # Method 2: Look for paragraphs with effect-like keywords (prioritize real effects over copyright)
+        effect_candidates = []
         for p in soup.find_all('p'):
             text = p.get_text(strip=True)
             if text and len(text) > 20:
                 # Check for effect-like keywords
-                if any(keyword in text for keyword in ['このカード', '自分の番', '相手の', 'ダメージ', 'ポケモン']):
-                    # Skip if it's flavor text indicators
-                    if not any(skip in text for skip in ['高さ：', '重さ：']):
-                        return text
+                if any(keyword in text for keyword in ['このカード', '自分の番', '相手の', 'ダメージ', 'ポケモン', 'トラッシュ', '手札', '山札']):
+                    # Skip copyright and metadata
+                    if not any(skip in text for skip in ['高さ：', '重さ：', '©', 'ポケットモンスター', '任天堂']):
+                        effect_candidates.append(text)
+        
+        # Return the first valid effect candidate
+        if effect_candidates:
+            return effect_candidates[0]
+        
+        # Method 3: Fallback - look for any substantial paragraph that's not copyright
+        for p in soup.find_all('p'):
+            text = p.get_text(strip=True)
+            if (text and len(text) > 30 and 
+                not '©' in text and 
+                not 'ポケットモンスター' in text and
+                not '任天堂' in text and
+                not text.startswith('高さ') and 
+                not text.startswith('重さ')):
+                return text
         
         return None
 
