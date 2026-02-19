@@ -862,4 +862,46 @@ export class CardsService {
       },
     });
   }
+
+  async updateCard(webCardId: string, dto: any): Promise<any> {
+    const card = await this.prisma.card.findUnique({
+      where: { webCardId },
+    });
+
+    if (!card) {
+      throw new NotFoundException(`Card with webCardId ${webCardId} not found`);
+    }
+
+    // Prepare update data
+    const updateData: any = {};
+
+    if (dto.name !== undefined) updateData.name = dto.name;
+    if (dto.supertype !== undefined) updateData.supertype = dto.supertype;
+    if (dto.hp !== undefined) updateData.hp = dto.hp;
+    if (dto.ruleBox !== undefined) updateData.ruleBox = dto.ruleBox;
+    if (dto.rarity !== undefined) updateData.rarity = dto.rarity;
+    if (dto.variantType !== undefined) updateData.variantType = dto.variantType;
+    if (dto.evolutionStage !== undefined) updateData.evolutionStage = dto.evolutionStage;
+    if (dto.evolvesFrom !== undefined) updateData.evolvesFrom = dto.evolvesFrom;
+    if (dto.evolvesTo !== undefined) updateData.evolvesTo = dto.evolvesTo;
+    if (dto.artist !== undefined) updateData.artist = dto.artist;
+    if (dto.regulationMark !== undefined) updateData.regulationMark = dto.regulationMark;
+    if (dto.imageUrl !== undefined) updateData.imageUrl = dto.imageUrl;
+    if (dto.imageUrlHiRes !== undefined) updateData.imageUrlHiRes = dto.imageUrlHiRes;
+    if (dto.sourceUrl !== undefined) updateData.sourceUrl = dto.sourceUrl;
+    if (dto.flavorText !== undefined) updateData.flavorText = dto.flavorText;
+    if (dto.text !== undefined) updateData.text = dto.text;
+
+    // Handle arrays
+    if (dto.subtypes !== undefined) updateData.subtypes = dto.subtypes;
+    if (dto.types !== undefined) updateData.types = dto.types;
+    if (dto.rules !== undefined) updateData.rules = dto.rules;
+    if (dto.abilities !== undefined) updateData.abilities = dto.abilities;
+    if (dto.attacks !== undefined) updateData.attacks = dto.attacks;
+
+    return await this.prisma.card.update({
+      where: { webCardId },
+      data: updateData,
+    });
+  }
 }

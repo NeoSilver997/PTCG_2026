@@ -250,6 +250,8 @@ export interface UserPayload {
 
 export type BattleActionType = 
   | 'DRAW'           // Drew N cards
+  | 'MULLIGAN'       // Mulligan open-hand reveal
+  | 'TURN_START'     // Start of a player's turn (useful to validate board state)
   | 'PLAY_POKEMON'   // Played to Active/Bench
   | 'PLAY_TRAINER'   // Item/Supporter/Stadium
   | 'ATTACH_ENERGY'  // Attach energy to Pokémon
@@ -257,6 +259,7 @@ export type BattleActionType =
   | 'ATTACK'         // Use attack
   | 'EVOLVE'         // Evolve Pokémon
   | 'RETREAT'        // Switch active
+  | 'ACTIVE_CHANGE'  // Pokemon moved to Active Spot
   | 'ABILITY'        // Use ability
   | 'KNOCKOUT'       // Pokémon knocked out
   | 'PRIZE'          // Take prize cards

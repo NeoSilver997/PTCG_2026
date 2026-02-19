@@ -97,6 +97,8 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
   const [tournamentUsage, setTournamentUsage] = useState<TournamentUsageEntry[]>([
     { event: '', deckName: '', placement: '' },
   ]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Card data state
   const [cardData, setCardData] = useState({
@@ -122,6 +124,12 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
     rules: [] as string[],
     abilities: [] as Ability[],
     attacks: [] as Attack[],
+    language: 'EN_US' as string,
+    weaknesses: null as any,
+    resistances: null as any,
+    retreatCost: null as any,
+    region: '' as string,
+    scrapedAt: null as string | null,
   });
 
 
@@ -159,11 +167,27 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
         text: card.text || '',
         flavorText: '',
         rules: [],
-        abilities: card.abilities || [],
-        attacks: card.attacks || [],
+        abilities: (card.abilities || []).map((ability: any) => ({
+          name: ability.name || '',
+          text: ability.description || ability.text || '',
+          type: ability.type || 'ABILITY'
+        })),
+        attacks: (card.attacks || []).map((attack: any) => ({
+          name: attack.name || '',
+          cost: Array.isArray(attack.cost) ? attack.cost : [],
+          damage: attack.damage || '',
+          effect: attack.effect || '',
+          text: attack.effect || attack.text || ''
+        })),
         evolvesFrom: card.evolvesFrom || '',
         evolvesTo: card.evolvesTo || '',
         evolutionStage: (card.evolutionStage as '' | 'BASIC' | 'STAGE_1' | 'STAGE_2') || '',
+        language: card.language || 'EN_US',
+        weaknesses: card.weaknesses,
+        resistances: card.resistances,
+        retreatCost: card.retreatCost,
+        region: card.region || '',
+        scrapedAt: card.scrapedAt,
       });
     }
   }, [card]);
@@ -325,6 +349,51 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
     ));
   };
 
+  const saveCard = async () => {
+    setIsSaving(true);
+    setSaveError(null);
+
+    try {
+      // Transform the data to match the API DTO
+      const updateData = {
+        name: cardData.name,
+        hp: cardData.hp ? parseInt(cardData.hp.toString()) : null,
+        types: cardData.types,
+        supertype: cardData.supertype,
+        subtypes: cardData.subtypes,
+        rarity: cardData.rarity,
+        variantType: cardData.variantType,
+        language: cardData.language,
+        imageUrl: cardData.imageUrl,
+        sourceUrl: cardData.sourceUrl,
+        artist: cardData.artist,
+        regulationMark: cardData.regulationMark,
+        ruleBox: cardData.ruleBox,
+        text: cardData.text,
+        abilities: cardData.abilities,
+        attacks: cardData.attacks,
+        weaknesses: cardData.weaknesses,
+        resistances: cardData.resistances,
+        retreatCost: cardData.retreatCost,
+        evolvesFrom: cardData.evolvesFrom,
+        evolvesTo: cardData.evolvesTo,
+        evolutionStage: cardData.evolutionStage,
+        region: cardData.region,
+        scrapedAt: cardData.scrapedAt
+      };
+
+      await apiClient.patch(`/cards/web/${webCardId}`, updateData);
+
+      // Redirect to card detail page on success
+      window.location.href = `/cards/${webCardId}`;
+    } catch (error: any) {
+      console.error('Save failed:', error);
+      setSaveError(error.response?.data?.message || '儲存失敗，請稍後再試');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
@@ -339,6 +408,12 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
             <div className="text-red-800">載入卡片資料時發生錯誤: {error.message}</div>
+          </div>
+        )}
+
+        {saveError && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+            <div className="text-red-800">儲存失敗: {saveError}</div>
           </div>
         )}
 
@@ -372,10 +447,11 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
             <div className="flex flex-wrap items-center gap-3">
               <button
                 type="button"
-                disabled
-                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg opacity-60 cursor-not-allowed"
+                onClick={saveCard}
+                disabled={isSaving}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                儲存變更 (待 API)
+                {isSaving ? '儲存中...' : '儲存變更'}
               </button>
               <button
                 type="button"

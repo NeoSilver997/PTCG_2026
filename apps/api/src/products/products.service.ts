@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { GetProductsDto } from './dto/get-products.dto';
+import { UpdateProductDto } from './dto/update-product.dto';
 
 @Injectable()
 export class ProductsService {
@@ -58,8 +59,16 @@ export class ProductsService {
       this.prisma.product.count({ where }),
     ]);
 
+    // Transform products for frontend
+    const transformedProducts = products.map(product => ({
+      ...product,
+      productType: product.productType?.code || null,
+      cardOnly: product.cardOnly === '1' || product.cardOnly === 'true' || product.cardOnly === 'Yes',
+      beginnerFlag: product.beginnerFlag === 1,
+    }));
+
     return {
-      data: products,
+      data: transformedProducts,
       pagination: {
         total,
         skip: Number(skip),
@@ -80,16 +89,54 @@ export class ProductsService {
       throw new NotFoundException(`Product with ID ${id} not found`);
     }
 
-    return product;
+    // Transform the data for the frontend
+    return {
+      ...product,
+      productType: product.productType?.code || null,
+      cardOnly: product.cardOnly === '1' || product.cardOnly === 'true' || product.cardOnly === 'Yes',
+      beginnerFlag: product.beginnerFlag === 1,
+    };
   }
 
-  async updateProduct(id: string, updateData: any) {
+  async updateProduct(id: string, updateData: UpdateProductDto) {
     try {
+      // Transform the data for the database
+      const dbData: any = { ...updateData };
+
+      if (updateData.cardOnly !== undefined) {
+        dbData.cardOnly = updateData.cardOnly ? 'Yes' : null;
+      }
+
+      if (updateData.beginnerFlag !== undefined) {
+        dbData.beginnerFlag = updateData.beginnerFlag ? 1 : 0;
+      }
+
+      // Handle productType - if it's provided, find the ProductType by code
+      if (updateData.productType) {
+        const productTypeRecord = await this.prisma.productType.findUnique({
+          where: { code: updateData.productType }
+        });
+        if (productTypeRecord) {
+          dbData.productTypeId = productTypeRecord.id;
+          delete dbData.productType; // Remove the code, use the ID
+        }
+      }
+
       const product = await this.prisma.product.update({
         where: { id },
-        data: updateData,
+        data: dbData,
+        include: {
+          productType: true,
+        },
       });
-      return product;
+
+      // Transform the response for the frontend
+      return {
+        ...product,
+        productType: product.productType?.code || null,
+        cardOnly: product.cardOnly === '1' || product.cardOnly === 'true' || product.cardOnly === 'Yes',
+        beginnerFlag: product.beginnerFlag === 1,
+      };
     } catch (error) {
       throw new NotFoundException(`Product with ID ${id} not found`);
     }

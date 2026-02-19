@@ -2,6 +2,7 @@ import { Controller, Get, Query, HttpCode, HttpStatus, Param, Put, Body } from '
 import { ApiTags, ApiOperation, ApiQuery, ApiParam, ApiBody } from '@nestjs/swagger';
 import { ProductsService } from './products.service';
 import { GetProductsDto } from './dto/get-products.dto';
+import { UpdateProductDto } from './dto/update-product.dto';
 
 @ApiTags('products')
 @Controller('products')
@@ -32,8 +33,8 @@ export class ProductsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update a product by ID' })
   @ApiParam({ name: 'id', type: String })
-  @ApiBody({ type: Object })
-  async updateProduct(@Param('id') id: string, @Body() updateData: any) {
+  @ApiBody({ type: UpdateProductDto })
+  async updateProduct(@Param('id') id: string, @Body() updateData: UpdateProductDto) {
     return this.productsService.updateProduct(id, updateData);
   }
 }

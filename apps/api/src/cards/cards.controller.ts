@@ -17,6 +17,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiConsumes, ApiBody } from '@nestj
 import { CardsService } from './cards.service';
 import { ImportJapaneseCardsDto } from './dto/import-japanese-cards.dto';
 import { FindAllCardsDto } from './dto/find-all-cards.dto';
+import { UpdateCardDto } from './dto/update-card.dto';
 import { LanguageCode } from '@ptcg/database';
 import * as fs from 'fs';
 
@@ -110,5 +111,17 @@ export class CardsController {
     @Body() dto: { evolvesFrom?: string; evolvesTo?: string }
   ): Promise<any> {
     return await this.cardsService.updateEvolution(webCardId, dto);
+  }
+
+  @Patch('web/:webCardId')
+  @ApiOperation({ summary: 'Update card by webCardId' })
+  @ApiResponse({ status: 200, description: 'Card updated successfully' })
+  @ApiResponse({ status: 404, description: 'Card not found' })
+  @ApiResponse({ status: 400, description: 'Invalid request data' })
+  async updateCard(
+    @Param('webCardId') webCardId: string,
+    @Body() dto: UpdateCardDto
+  ): Promise<any> {
+    return await this.cardsService.updateCard(webCardId, dto);
   }
 }

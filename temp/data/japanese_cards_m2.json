@@ -1,0 +1,42 @@
+[
+  {
+    "webCardId": "jp48347",
+    "name": "ルンパッパ",
+    "language": "JA_JP",
+    "region": "JP",
+    "supertype": "POKEMON",
+    "variantType": "NORMAL",
+    "rarity": "UNCOMMON",
+    "expansionCode": "m2",
+    "collectorNumber": "007/080",
+    "hp": 160,
+    "pokemonTypes": [
+      "GRASS"
+    ],
+    "evolutionStage": "STAGE_2",
+    "evolvesTo": "ルンパッパ, ハスブレロ, ハスボー",
+    "pokedexNumber": 272,
+    "weakness": {
+      "type": "FIRE",
+      "value": "×2"
+    },
+    "retreatCost": 2,
+    "abilities": [
+      {
+        "name": "エキサイトヒール",
+        "description": "自分の場にタイプの「メガシンカex」がいるなら、自分の番に1回使える。自分のポケモン1匹のHPを「60」回復する。"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "つきたおし",
+        "cost": "草無",
+        "damage": "120"
+      }
+    ],
+    "flavorText": "高さ：1.5 m 重さ：55.0 kg",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M2/048347_P_RUNPAPPA.jpg",
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/48347/regu/XY",
+    "scrapedAt": "2026-02-04T07:27:13.100859"
+  }
+]

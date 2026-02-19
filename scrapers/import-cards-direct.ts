@@ -10,7 +10,7 @@
  *    npx tsx scrapers/import-cards-direct.ts
  *
  * 2. Import from custom base directory:
- *    npx tsx scrapers/import-cards-direct.ts "../data/cards"
+ *    npx tsx scrapers/import-cards-direct.ts "data/cards"
  *
  * 3. Import specific region only:
  *    npx tsx scrapers/import-cards-direct.ts "../data/cards" "china"
@@ -331,6 +331,16 @@ async function importCardOptimized(prisma: PrismaClient, card: any) {
   };
   const language = card.language ? (languageMap[card.language] || LanguageCode.JA_JP) : LanguageCode.JA_JP;
 
+  // Handle trainer card effects - store effectText in abilities as JSON array
+  let abilities = card.abilities || null;
+  let text = card.effectText || card.text || null;
+
+  if (supertype === Supertype.TRAINER && card.effectText) {
+    // For trainer cards, store the effect text in abilities as a JSON array
+    abilities = [{ type: 'ABILITY', name: '', text: card.effectText }];
+    text = null; // Clear text field for trainer cards
+  }
+
   // 5. Upsert Card using webCardId as unique key
   await prisma.card.upsert({
     where: { webCardId: card.webCardId },
@@ -346,7 +356,7 @@ async function importCardOptimized(prisma: PrismaClient, card: any) {
       ruleBox,
       hp,
       types,
-      abilities: card.abilities || null,
+      abilities: abilities,
       attacks: card.attacks || null,
       rules: card.rules || [],
       text: card.effectText || card.text || null,
@@ -374,10 +384,10 @@ async function importCardOptimized(prisma: PrismaClient, card: any) {
       ruleBox,
       hp,
       types,
-      abilities: card.abilities || null,
+      abilities: abilities,
       attacks: card.attacks || null,
       rules: card.rules || [],
-      text: card.effectText || card.text || null,
+      text: text,
       flavorText: card.flavorText || null,
       artist: card.artist || null,
       rarity,

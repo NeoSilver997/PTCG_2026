@@ -526,6 +526,16 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                   <dt className="text-sm text-gray-600">變體類型</dt>
                   <dd className="font-medium text-gray-900">{currentVariant?.variantType || card.variantType}</dd>
                 </div>
+                {/* Added 擴展包 release date field */}
+                <div className="flex justify-between">
+                  <dt className="text-gray-600">擴展包發行日期</dt>
+                  <dd className="font-medium text-gray-900">
+                    {card.primaryCard.primaryExpansion?.releaseDate 
+                      ? new Date(card.primaryCard.primaryExpansion.releaseDate).toLocaleDateString('zh-TW')
+                      : 'N/A'}
+                  </dd>
+                </div>
+                
                 {card.artist && (
                   <div className="col-span-2">
                     <dt className="text-sm text-gray-600">繪師</dt>
