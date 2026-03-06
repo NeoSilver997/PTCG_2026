@@ -79,4 +79,5 @@ data/expansions_*.json
 data/html/**/*.html
 scrapers/src/*.json
 scrapers/*.json
-temp/data/*.json
+temp/data/*
+temp/src/*
