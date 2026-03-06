@@ -188,9 +188,9 @@ def run_single(model: str, prompt_name: str, prompt: str, images: list[tuple[str
         status = "✓" if success else "✗"
         line = f"    {status} {label:<35} {elapsed:5.1f}s"
         if parsed and success:
-            name = parsed.get("cardName", "?")[:20]
-            code = parsed.get("cardCode", "?")[:12]
-            rarity = parsed.get("rarity", "?")[:10]
+            name = str(parsed.get("cardName", "?"))[:20]
+            code = str(parsed.get("cardCode", "?"))[:12]
+            rarity = str(parsed.get("rarity", "?"))[:10]
             line += f"  → {name} | {code} | {rarity}"
         elif raw.startswith("Error:"):
             line += f"  {raw[:50]}"
@@ -202,7 +202,7 @@ def run_single(model: str, prompt_name: str, prompt: str, images: list[tuple[str
             "image": label,
             "success": success,
             "time_sec": round(elapsed, 2),
-            "raw": raw[:400],
+            "raw": raw,
             "parsed": parsed,
         })
 
@@ -246,8 +246,8 @@ def main():
     parser.add_argument("--image-dir",  default=r"C:\AI_Server\Coding\PTCG_2026\data\test_sample",
                         help="Directory containing test card images")
     parser.add_argument("--ollama-url", default=OLLAMA_BASE_URL)
-    parser.add_argument("--timeout",    type=int, default=120,
-                        help="Per-image timeout in seconds (default: 120)")
+    parser.add_argument("--timeout",    type=int, default=20,
+                        help="Per-image timeout in seconds (default: 20)")
     parser.add_argument("--output-dir", default="./benchmarks/prompts")
     parser.add_argument("--models",     nargs="*", default=None,
                         help="Override model list")
