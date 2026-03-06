@@ -904,4 +904,157 @@ export class CardsService {
       data: updateData,
     });
   }
+
+  /**
+   * 从 Qwen-VL 提取结果创建卡牌
+   * 用于将 AI 提取的数据保存到数据库
+   */
+  async createFromExtraction(
+    extractionData: any,
+    language: string,
+    webCardId?: string,
+  ): Promise<any> {
+    const languageCode = this.mapLanguageCode(language);
+
+    // 生成 webCardId（如果未提供）
+    if (!webCardId) {
+      const timestamp = Date.now();
+      const randomStr = Math.random().toString(36).substring(2, 8);
+      webCardId = `vl_${timestamp}_${randomStr}`;
+    }
+
+    // 准备卡牌数据
+    const cardData: any = {
+      webCardId,
+      language: languageCode,
+      name: extractionData.name,
+      supertype: extractionData.supertype || null,
+      subtypes: extractionData.subtypes || [],
+      types: extractionData.types || [],
+      hp: extractionData.hp || null,
+      abilities: extractionData.abilities || null,
+      attacks: extractionData.attacks || null,
+      evolutionStage: extractionData.evolutionStage || null,
+      evolvesFrom: extractionData.evolvesFrom || null,
+      evolvesTo: extractionData.evolvesTo || null,
+      flavorText: extractionData.flavorText || null,
+      artist: extractionData.artist || null,
+      rarity: extractionData.rarity || null,
+      cardNumber: extractionData.cardNumber || null,
+      variantType: 'NORMAL',
+    };
+
+    // 创建 PrimaryCard（如果不存在）
+    const skillsSignature = this.generateExtractionSignature(extractionData);
+    
+    const primaryCard = await this.prisma.primaryCard.upsert({
+      where: {
+        name_skillsSignature: {
+          name: extractionData.name,
+          skillsSignature,
+        },
+      },
+      update: {},
+      create: {
+        name: extractionData.name,
+        skillsSignature,
+        cardNumber: extractionData.cardNumber,
+      },
+    });
+
+    cardData.primaryCardId = primaryCard.id;
+
+    // 创建卡牌
+    return await this.prisma.card.create({
+      data: cardData,
+      include: {
+        primaryCard: true,
+      },
+    });
+  }
+
+  /**
+   * 为提取结果生成签名
+   */
+  private generateExtractionSignature(extractionData: any): string {
+    const crypto = require('crypto');
+    const skillsData = {
+      abilities: extractionData.abilities || [],
+      attacks: extractionData.attacks || [],
+    };
+    const hash = crypto
+      .createHash('sha256')
+      .update(JSON.stringify(skillsData))
+      .digest('hex');
+    return hash.substring(0, 16);
+  }
+
+  /**
+   * 映射语言代码
+   */
+  private mapLanguageCode(language: string): LanguageCode {
+    const mapping: Record<string, LanguageCode> = {
+      'ja-JP': LanguageCode.JA_JP,
+      'zh-HK': LanguageCode.ZH_TW,
+      'en-US': LanguageCode.EN_US,
+    };
+    return mapping[language] || LanguageCode.EN_US;
+  }
+
+  /**
+   * 使用提取数据更新现有卡牌
+   */
+  async updateWithExtraction(
+    webCardId: string,
+    extractionData: any,
+    mergeStrategy: 'overwrite' | 'merge' = 'merge',
+  ): Promise<any> {
+    const existingCard = await this.prisma.card.findUnique({
+      where: { webCardId },
+    });
+
+    if (!existingCard) {
+      throw new NotFoundException(`Card with webCardId ${webCardId} not found`);
+    }
+
+    const updateData: any = {};
+
+    if (mergeStrategy === 'overwrite') {
+      // 完全覆盖模式
+      Object.assign(updateData, {
+        name: extractionData.name,
+        hp: extractionData.hp,
+        supertype: extractionData.supertype,
+        subtypes: extractionData.subtypes,
+        types: extractionData.types,
+        abilities: extractionData.abilities,
+        attacks: extractionData.attacks,
+        evolutionStage: extractionData.evolutionStage,
+        evolvesFrom: extractionData.evolvesFrom,
+        evolvesTo: extractionData.evolvesTo,
+        flavorText: extractionData.flavorText,
+        artist: extractionData.artist,
+        rarity: extractionData.rarity,
+      });
+    } else {
+      // 合并模式：只更新非空字段
+      const fields = [
+        'name', 'hp', 'supertype', 'subtypes', 'types',
+        'abilities', 'attacks', 'evolutionStage',
+        'evolvesFrom', 'evolvesTo', 'flavorText',
+        'artist', 'rarity',
+      ];
+
+      for (const field of fields) {
+        if (extractionData[field] !== undefined && extractionData[field] !== null) {
+          updateData[field] = extractionData[field];
+        }
+      }
+    }
+
+    return await this.prisma.card.update({
+      where: { webCardId },
+      data: updateData,
+    });
+  }
 }
