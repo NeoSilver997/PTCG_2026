@@ -81,3 +81,7 @@ scrapers/src/*.json
 scrapers/*.json
 temp/data/*
 temp/src/*
+data/test_sample/*
+scripts/qwen-vl-finetune/.venv312/*
+scripts/qwen-vl-finetune/benchmarks/*
+scripts/qwen-vl-finetune/datasets/*
