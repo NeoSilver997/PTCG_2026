@@ -12,6 +12,7 @@ Features:
 
 Sample usage:
     python scrapers/src/hk_card_scraper.py --id-range 1000 100 --cache-html
+    python scrapers/src/hk_card_scraper.py --id-range 1000 18000 --cache-only --threads 10 --quiet
 """
 
 import requests
@@ -141,7 +142,7 @@ class HkCardScraper:
             self.html_dir = self.data_root / 'html' / 'hongkong'
         
         self.user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        self.min_request_interval = 2.0
+        self.min_request_interval = 0.8
         self.quiet = False
         self._html_index = None  # Lazy-loaded cache index
         self.cache_hits = 0
@@ -225,7 +226,7 @@ class HkCardScraper:
                         with open(cache_path, 'r', encoding='utf-8') as f:
                             sample = f.read(4096)  # Read first 4KB
                             # If HTML contains hk-en in image URLs but cache_path is in wrong location, re-scrape
-                            if '/hk-en/card-img/' in sample and '/hk/card-search/' in card_url:
+                            if '/hk-en/card-img/' in sample :
                                 if not self.quiet:
                                     logger.warning(f"Cache {card_id} has EN content but URL is HK, re-scraping")
                                 should_use_cache = False
@@ -532,6 +533,7 @@ class HkCardScraper:
             if skill_info:
                 for skill_div in skill_info.find_all('div', class_='skill'):
                     name_span = skill_div.find('span', class_='skillName')
+                    
                     if name_span:
                         name_text = name_span.get_text(strip=True)
                         # Check if this is Terastal
@@ -549,7 +551,8 @@ class HkCardScraper:
         section_titles = ' '.join(tag.get_text(strip=True) for tag in soup.select('h2,h3') if tag)
         if 'Tool' in section_titles or '道具' in section_titles: return 'TOOL'
         if 'Stadium' in section_titles or '競技場' in section_titles: return 'STADIUM'
-        if 'Supporter' in section_titles or '支援者' in section_titles: return 'SUPPORTER'
+        if 'Supporter' in section_titles or '支援者' in section_titles:
+            return 'SUPPORTER'
         return 'ITEM'
 
     def _determine_variant_type(self, rarity: Optional[str], collector_number: Optional[str]) -> str:
@@ -846,6 +849,12 @@ class HkCardScraper:
                     if not any(skip in text.lower() for skip in ['身高:', '體重:', 'height:', 'weight:']):
                         return text
         
+        skill_info = soup.find('div', class_='skillInformation')
+            
+        if skill_info:
+            for skill_div in skill_info.find_all('div', class_='skill'): 
+                effect_p = skill_div.find('p', class_='skillEffect')
+                return effect_p.getText(strip=True) if effect_p else None
         return None
 
     def _extract_flavor_text(self, soup: BeautifulSoup) -> Optional[str]:
@@ -877,7 +886,7 @@ def build_card_url(card_id: int) -> str:
 def scrape_batch(
     card_ids: List[int],
     scraper: HkCardScraper,
-    cache_html: bool = False,
+    cache_html: bool = True,
     refresh_cache: bool = False,
     cache_only: bool = False,
     threads: int = 1

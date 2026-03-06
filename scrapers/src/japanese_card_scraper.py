@@ -188,7 +188,7 @@ class JapaneseCardScraper:
         # Rate limiting
         self.request_lock = threading.Lock()
         self.last_request_ts = 0.0
-        self.min_request_interval = 2.0
+        self.min_request_interval = 0.8
         
         # Logging
         self.quiet = False
@@ -989,7 +989,7 @@ def build_card_url(card_id: int) -> str:
 def scrape_batch(
     card_ids: List[int],
     scraper: JapaneseCardScraper,
-    cache_html: bool = False,
+    cache_html: bool = True,
     refresh_cache: bool = False,
     cache_only: bool = False,
     threads: int = 1

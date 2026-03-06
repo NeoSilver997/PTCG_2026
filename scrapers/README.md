@@ -11,6 +11,25 @@ cd scrapers
 pip install -r requirements.txt
 ```
 
+### Python Environment
+
+The scrapers use Python 3.8+ and require the following packages:
+- `requests` - HTTP client
+- `beautifulsoup4` - HTML parsing
+- `lxml` - XML/HTML parser (faster than standard library)
+
+### Source Directory Structure
+
+```
+src/
+├── japanese_card_scraper.py    # Main Japanese card scraper
+├── hk_card_scraper.py          # Hong Kong card scraper
+├── english_card_scraper.py     # English card scraper
+├── download_images.py          # Image downloader
+├── save_event_data.py          # Tournament data manager
+└── utils.py                    # Shared utilities
+```
+
 ## Japanese Card Scraper
 
 Scrapes card details from pokemon-card.com (Japanese official site).
@@ -115,20 +134,84 @@ The scraper maps Japanese card data to PTCG_2026 database enums:
 
 Cards are automatically grouped by expansion code into separate JSON files.
 
-## Image Downloader
+## Recent Improvements
 
-Download card images from scraped data:
+### Effect Text Extraction (2026-02-08)
+- Enhanced copyright notice filtering for trainer cards
+- Added filtering for: `'©'`, `'ポケットモンスター'`, `'任天堂'`
+- Improved effect keyword detection: `'トラッシュ'`, `'手札'`, `'山札'`
+- Three-tier fallback system for effect text extraction
+
+### Database Integration (2026-02-08)
+- Trainer cards now properly store effect text in `abilities` field as JSON array
+- Format: `[{ "type": "ABILITY", "name": "", "text": "effect text" }]`
+- Import script automatically handles trainer card data mapping
+
+## Expansion Card Scraper
+
+Scrapes cards from specific expansions for Hong Kong and English regions.
+
+### Usage
 
 ```powershell
-python src/download_images.py --input data/cards/japan/japanese_cards_sv9.json
+# Scrape Hong Kong expansion
+python scrape_expansion.py --region hongkong --expansion sv9
+
+# Scrape English expansion  
+python scrape_expansion.py --region english --expansion sv9
 ```
 
-## Event Data Manager
+### Features
 
-Save tournament and event data:
+- Automatically discovers card IDs for a given expansion
+- Uses existing HK/English card scrapers for data extraction
+- Supports parallel processing for faster scraping
+
+## Utility Scripts
+
+### Expansion Analysis
 
 ```powershell
-python src/save_event_data.py --event-id jp_champs_2026
+# Extract expansion details from card data
+python extract_expansion_details.py
+
+# Get expansion information
+python get_expansions.py
+
+# Inspect specific expansion
+python inspect_expansion.py --expansion sv9
+```
+
+### Data Analysis & Debugging
+
+```powershell
+# Analyze HTML cache files
+python analyze_cache.py
+
+# Check for missing images
+python analyze_missing_images.py
+
+# Process cached HTML files
+python process_html_cache.py
+
+# Test individual card scraping
+python test_single_card.py --card-id 49355
+
+# Debug attack cost parsing
+python test_attack_cost.py
+```
+
+### Data Download & Import
+
+```powershell
+# Download missing card images
+python download_missing_images.py
+
+# Download search results
+python download_search.py
+
+# Import cards via API
+python import_cards_to_api.py --file data/cards/japan/japanese_cards_sv9.json
 ```
 
 ## Best Practices
@@ -151,9 +234,19 @@ python src/save_event_data.py --event-id jp_champs_2026
 - Some cards have incomplete data on the source website
 - Check raw HTML cache files to verify source data
 
+**Problem**: Trainer cards showing copyright notices instead of effects
+- Update to latest scraper version (2026-02-08+)
+- The scraper now properly filters copyright notices and extracts actual effect text
+- Trainer cards are stored in `abilities` field as JSON array
+
 **Problem**: Slow scraping
 - Use `--cache-html` then `--cache-only --threads 20` for fast re-processing
 - Reduce `--min-request-interval` carefully (not recommended below 1.0s)
+
+**Problem**: Expansion scraper not finding cards
+- Verify expansion code is correct
+- Check if expansion exists on the target region's website
+- May need to manually provide card ID ranges for new expansions
 
 ## Integration with NestJS API
 

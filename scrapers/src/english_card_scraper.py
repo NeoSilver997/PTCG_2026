@@ -136,7 +136,7 @@ class EnglishCardScraper:
         self.html_dir = self.data_root / 'html' / 'english'
         
         self.user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        self.min_request_interval = 2.0
+        self.min_request_interval = 0.8
         self.quiet = False
 
     def scrape_card_details(
@@ -717,7 +717,7 @@ def build_card_url(card_id: int) -> str:
 def scrape_batch(
     card_ids: List[int],
     scraper: EnglishCardScraper,
-    cache_html: bool = False,
+    cache_html: bool = True,
     refresh_cache: bool = False,
     cache_only: bool = False,
     threads: int = 1
