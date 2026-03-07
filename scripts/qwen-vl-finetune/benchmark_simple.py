@@ -100,7 +100,7 @@ def load_model(model_path):
 
 
 def load_test_data(test_data_path, language="zh-HK", max_samples=50):
-    """Load test data"""
+    """Load test data from JSONL (language='all' skips filter)"""
     print(f"\nLoading test data: {test_data_path}...")
     
     if not os.path.exists(test_data_path):
@@ -114,12 +114,12 @@ def load_test_data(test_data_path, language="zh-HK", max_samples=50):
                 if line.strip():
                     try:
                         sample = json.loads(line)
-                        if sample.get("metadata", {}).get("language") == language:
+                        if language == "all" or sample.get("metadata", {}).get("language") == language:
                             samples.append(sample)
                     except json.JSONDecodeError:
                         pass
         
-        print(f"OK: Found {len(samples)} {language} cards")
+        print(f"OK: Found {len(samples)} cards (language={language})")
         
         if len(samples) < max_samples:
             print(f"WARNING: Only {len(samples)} samples available (requested {max_samples})")
@@ -132,6 +132,21 @@ def load_test_data(test_data_path, language="zh-HK", max_samples=50):
     except Exception as e:
         print(f"ERROR: Failed to load test data: {e}")
         return []
+
+
+def load_image_dir(image_dir, max_samples=50):
+    """Load raw images from a directory (no ground truth)"""
+    from pathlib import Path
+    exts = {'.jpg', '.jpeg', '.png', '.webp', '.bmp'}
+    dir_path = Path(image_dir)
+    if not dir_path.is_dir():
+        print(f"ERROR: Image directory does not exist: {image_dir}")
+        return []
+    image_files = sorted([p for p in dir_path.iterdir() if p.suffix.lower() in exts])
+    if max_samples:
+        image_files = image_files[:max_samples]
+    print(f"OK: Found {len(image_files)} images in {image_dir}")
+    return image_files
 
 
 def load_image(image_path):
@@ -239,9 +254,11 @@ def main():
     parser.add_argument("--model-path", type=str, default="Qwen/Qwen2.5-VL-7B-Instruct",
                         help="Local model path or HuggingFace model ID (default: base Qwen2.5-VL-7B)")
     parser.add_argument("--test-data", type=str, default="./datasets/test.jsonl")
+    parser.add_argument("--image-dir", type=str, default=None,
+                        help="Directory of raw images to benchmark (no ground truth, overrides --test-data)")
     parser.add_argument("--samples", type=int, default=50)
-    parser.add_argument("--language", type=str, default="ja-JP",
-                        help="Language to benchmark: zh-HK, ja-JP, en-US (default: ja-JP, has local images)")
+    parser.add_argument("--language", type=str, default="all",
+                        help="Language to benchmark: zh-HK, ja-JP, en-US, all (default: all)")
     parser.add_argument("--output-dir", type=str, default="./benchmarks")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     
@@ -259,19 +276,32 @@ def main():
         print("\nERROR: Model loading failed")
         sys.exit(1)
     
-    # Load test data
-    test_samples = load_test_data(
-        args.test_data,
-        language=args.language,
-        max_samples=args.samples
-    )
+    # Load test data or image directory
+    image_dir_mode = args.image_dir is not None
     
-    if not test_samples:
-        print("\nERROR: No test data available")
-        sys.exit(1)
+    if image_dir_mode:
+        image_files = load_image_dir(args.image_dir, args.samples)
+        if not image_files:
+            print("\nERROR: No images found in image directory")
+            sys.exit(1)
+        print(f"\nImage-dir mode: {len(image_files)} images from {args.image_dir}")
+        test_samples = None
+    else:
+        # Load test data
+        test_samples = load_test_data(
+            args.test_data,
+            language=args.language,
+            max_samples=args.samples
+        )
+        if not test_samples:
+            print("\nERROR: No test data available")
+            sys.exit(1)
+        image_files = None
+    
+    n_total = len(image_files) if image_dir_mode else len(test_samples)
     
     # Run test
-    print(f"\nStarting test: {len(test_samples)} cards...")
+    print(f"\nStarting test: {n_total} cards...")
     print("-" * 60)
     
     results = []
@@ -281,22 +311,31 @@ def main():
     
     start_total = time.time()
     
-    for i, sample in enumerate(test_samples):
-        messages = sample["messages"]
-        metadata = sample.get("metadata", {})
-        
-        image_path = None
-        ground_truth_text = ""
-        
-        for msg in messages:
-            if msg["role"] == "user":
-                for content in msg["content"]:
-                    if content["type"] == "image":
-                        image_path = content["image"]
-            elif msg["role"] == "assistant":
-                for content in msg["content"]:
-                    if content["type"] == "text":
-                        ground_truth_text = content["text"]
+    items = image_files if image_dir_mode else test_samples
+    
+    for i, item in enumerate(items):
+        if image_dir_mode:
+            image_path = str(item)
+            card_name = item.name
+            ground_truth = None
+        else:
+            messages = item["messages"]
+            metadata = item.get("metadata", {})
+            image_path = None
+            ground_truth_text = ""
+            
+            for msg in messages:
+                if msg["role"] == "user":
+                    for content in msg["content"]:
+                        if content["type"] == "image":
+                            image_path = content["image"]
+                elif msg["role"] == "assistant":
+                    for content in msg["content"]:
+                        if content["type"] == "text":
+                            ground_truth_text = content["text"]
+            
+            ground_truth = parse_json_output(ground_truth_text)
+            card_name = metadata.get("name", Path(image_path or "").stem)[:20]
         
         image = load_image(image_path)
         
@@ -306,20 +345,20 @@ def main():
         inference_times.append(inference_time)
         
         predicted = parse_json_output(predicted_text)
-        ground_truth = parse_json_output(ground_truth_text)
         
         if success and predicted:
             success_count += 1
         
         status = "OK" if (success and predicted) else "FAIL"
-        card_name = metadata.get("name", "unknown")[:20]
-        print(f"[{i+1:3d}/{len(test_samples)}] {status:4s} {card_name:20s} - {inference_time:.2f}s")
+        print(f"[{i+1:3d}/{n_total}] {status:4s} {card_name:20s} - {inference_time:.2f}s")
         
         results.append({
             "idx": i,
             "name": card_name,
             "success": success and predicted is not None,
             "inference_time": inference_time,
+            "predicted": predicted,
+            "has_ground_truth": ground_truth is not None,
         })
     
     total_time = time.time() - start_total
@@ -329,13 +368,13 @@ def main():
     print("TEST RESULTS")
     print("=" * 60)
     
-    success_rate = success_count / len(test_samples) * 100
+    success_rate = success_count / n_total * 100
     avg_time = sum(inference_times) / len(inference_times)
     
     print(f"\nSummary:")
-    print(f"  Total samples: {len(test_samples)}")
-    print(f"  Success: {success_count}")
-    print(f"  Failed: {len(test_samples) - success_count}")
+    print(f"  Total samples: {n_total}")
+    print(f"  Success (valid JSON): {success_count}")
+    print(f"  Failed: {n_total - success_count}")
     print(f"  Success rate: {success_rate:.1f}%")
     print(f"  Total time: {total_time:.1f}s ({total_time/60:.1f} minutes)")
     print(f"  Average inference: {avg_time:.2f}s ({avg_time*1000:.0f}ms)")
@@ -346,7 +385,8 @@ def main():
     report = {
         "timestamp": datetime.now().isoformat(),
         "model_path": args.model_path,
-        "total_samples": len(test_samples),
+        "mode": "image-dir" if image_dir_mode else "jsonl",
+        "total_samples": n_total,
         "success_count": success_count,
         "success_rate": success_rate,
         "total_time_sec": total_time,
@@ -354,23 +394,24 @@ def main():
         "detailed_results": results,
     }
     
-    with open(output_dir / "benchmark_results.json", "w", encoding="utf-8") as f:
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    with open(output_dir / f"benchmark_results_{ts}.json", "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2, ensure_ascii=False)
     
-    with open(output_dir / "benchmark_report.txt", "w", encoding="utf-8") as f:
+    with open(output_dir / f"benchmark_report_{ts}.txt", "w", encoding="utf-8") as f:
         f.write(f"PTCG Qwen-VL Benchmark Report\n")
         f.write(f"=" * 60 + "\n\n")
         f.write(f"Timestamp: {report['timestamp']}\n")
-        f.write(f"Model: {args.model_path}\n\n")
+        f.write(f"Model: {args.model_path}\n")
+        f.write(f"Mode: {report['mode']}\n\n")
         f.write(f"Summary:\n")
-        f.write(f"  Samples: {len(test_samples)}\n")
+        f.write(f"  Samples: {n_total}\n")
         f.write(f"  Success rate: {success_rate:.1f}%\n")
         f.write(f"  Avg inference: {avg_time*1000:.0f}ms\n")
     
     print(f"\nResults saved to: {output_dir}")
-    print(f"  - benchmark_results.json")
-    print(f"  - benchmark_report.txt")
-    print("\n" + "=" * 60)
+    print(f"  - benchmark_results_{ts}.json")
+    print(f"  - benchmark_report_{ts}.txt")
 
 
 if __name__ == "__main__":

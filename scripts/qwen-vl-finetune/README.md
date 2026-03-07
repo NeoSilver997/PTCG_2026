@@ -94,47 +94,147 @@
 | Lambda Labs | RTX A6000 | $0.80/小时 |
 | Vast.ai | RTX 3090 | $0.25/小时 |
 
-## 📊 Pre-Finetune 基准测试结果
+## 📊 基准测试结果汇总
+
+### 阶段一：单模型基本测试（5 张本地卡牌）
 
 在微调之前，我们对所有本地 Ollama 视觉模型做了基准测试，用 5 张真实卡牌图片（含 zh-HK、ja-JP 三个系列）验证 JSON 提取成功率。
 
-### 模型对比（本地 Ollama，CPU 推理）
-
 | 模型 | 大小 | 成功率 | 平均时间/张 | 推荐 |
 |------|------|--------|------------|------|
-| `qwen3-vl:latest` | 6.1 GB | **5/5 (100%)** | 6.6s | ✅ 首选 |
-| `llava:13b` | 8.0 GB | **5/5 (100%)** | 2.1s | ✅ 更快，名称精度略低 |
+| `qwen3-vl:latest` | 6.1 GB | **5/5 (100%)** | 6.6s | ✅ 首选，提取最准确 |
+| `llava:13b` | 8.0 GB | **5/5 (100%)** | 2.1s | ✅ 更快，但名称有时幻觉 |
 | `llama3.2-vision:latest` | 7.8 GB | 2/5 (40%) | 24.5s | ⚠️ JP 古典卡牌超时 |
-| `glm-ocr:latest` | 2.2 GB | 2/5 (40%) | 1.2s | ⚠️ OCR 为主，结构不完整 |
+| `glm-ocr:latest` | 2.2 GB | 2/5 (40%) | 1.2s | ⚠️ 纯 OCR，结构不完整 |
 | `deepseek-ocr:latest` | 6.7 GB | 0/5 (0%) | 17.7s | ❌ 非 JSON 输出 |
 
-### qwen3-vl 提取示例（验证正确）
+### 阶段二：多 Prompt 对比测试（22 张 test_sample）
 
-| 图片来源 | 语言 | 卡牌名称 | 卡牌编号 | 稀有度 |
-|----------|------|---------|---------|-------|
-| hk/SV08 | zh-HK | 莉佳的口呆花 | 007/742 | Rare |
-| japan/sv8 | ja-JP | タマタマ | 001/106 | C |
-| japan/sv9 | ja-JP | キャタピー | 001/100 | Common |
-| japan_legacy | ja-JP | ビードル | 001/039 | Rare |
-| japan/m-p | ja-JP | チコリータ | 001/M-P | PROMO |
+对 top 3 模型分别用 3 种 prompt 风格（双语、英文、详细步骤）进行 3×3×22 全面测试：
 
-### 运行基准测试
+| 排名 | 模型 | Prompt 风格 | 成功率 | 平均时间 | 说明 |
+|------|------|------------|--------|---------|------|
+| ★1 | `llava:13b` | prompt_c_detailed | 22/22 (100%) | 0.8s | ⚠️ 常返回虚构名称 |
+| 2 | `llava:13b` | prompt_a_mixed | 22/22 (100%) | 1.1s | ⚠️ 同上 |
+| 3 | `qwen3-vl:latest` | prompt_a_mixed (双语) | 19/22 (86%) | 7.3s | ✅ 名称准确，推荐 |
+| 4 | `glm-ocr:latest` | prompt_c_detailed | 18/22 (82%) | 1.9s | 适合 Stage 1 探测 |
 
-```bash
+**关键发现**：llava JSON 格式正确率 100%，但经常幻觉卡牌名称；qwen3-vl 慢但提取内容真实可信。
+
+### 阶段三：三阶段流水线（22 张 test_sample，最终结果）
+
+```
+Stage 1: glm-ocr:latest  (8s)  → 探测卡牌数量、位置、名称/编号提示
+Stage 2: qwen3-vl:latest (30s) → 主提取（带 Stage 1 提示和语言 hint）
+Stage 3: llava:13b        (15s) → fallback（qwen3-vl 超时/占位符时）
+Stage 4: glm-ocr:latest  (16s) → OCR detail fallback（Stage 3 仍失败时）
+```
+
+| 运行时间 | 总成功率 | qwen3-vl (主) | llava (fallback) | glm-ocr detail | 失败 |
+|----------|---------|--------------|-----------------|----------------|------|
+| 2026-03-07 | **20/22 (91%)** | 14 | 2 | 4 | 2 |
+
+**各图片识别结果（最新运行）：**
+
+| 图片 | 识别结果 | 模型 | 语言 |
+|------|---------|------|------|
+| `1772464858989_media.jpg` | Drakloak / 248/217 / ★ | qwen3-vl | en-US |
+| `1772466303986_media.jpg` | **老大的指令** / 750/742 | qwen3-vl | zh-HK |
+| `1772524883686_media.jpg` | Pikachu / 001/100 | llava | en-US |
+| `1772545646419_media.jpg` | ❌ 失败（多卡图，模型误判1张） | — | — |
+| `1772619740614_media.jpg` | 皮皮 / 001/100（实为 3 张同卡） | qwen3-vl | zh-HK |
+| `1772629973487_media.jpg` | Iono / 254/193 / ★ | qwen3-vl | en-US |
+| `1772629977858_media.jpg` | Iono / 124 | qwen3-vl | en-US |
+| `1772632811566_media.jpg` | 吉雉雞ex（HK card） | glm-ocr detail | zh-HK |
+| `1772668182692_media.jpg` | 白薔雅 / 120/102 / H | qwen3-vl | zh-HK |
+| `1772815817120_media.jpg` | 夜巡靈 / 056/056 / AR | qwen3-vl | ja-JP |
+| `1772816972248_media.jpg` | 超级喷火龙X / 223/193 / EX | qwen3-vl | zh-HK |
+| `hk00014014.png` | 鬥子 / 166/086 / SR | qwen3-vl | zh-HK ✓hint |
+| `hk00014015.png` | 風妖精ex / 167/086 | qwen3-vl | zh-HK ✓hint |
+| `hk00014016.png` | 萊希拉姆ex | glm-ocr detail | zh-HK ✓hint |
+| `hk00014017.png` | 凱路迪歐ex / 169/086 / EX | qwen3-vl | zh-HK ✓hint |
+| `hk00014018.png` | 胖嘟嘟ex / 170/086 | qwen3-vl | zh-HK ✓hint |
+| `hk00014098.png` | 泡沫栗鼠 / 077/086 / ★ | qwen3-vl | zh-HK ✓hint |
+| `hk00014099.png` | 奇諾栗鼠 | glm-ocr detail | zh-HK ✓hint |
+| `hk00014100.png` | 能量硬幣 / 079/086 / U | qwen3-vl | zh-HK ✓hint |
+| `jpn47290.png` | ❌ 失败（三模型均超时/占位符） | — | ja-JP |
+| `jpn47291.png` | ダイゴのダンパル | glm-ocr detail | ja-JP ✓hint |
+| `jpn47295.png` | メタグラー / 001/260 / R | llava | ja-JP ✓hint |
+
+**已知难点：**
+- `1772545646419`：多张 SR 卡片叠放，glm-ocr 误判为 1 张，所有模型均失败
+- 部分 ja-JP 老卡图片：qwen3-vl 思考链 + 30s 仍超时
+
+### 运行基准测试 / 流水线
+
+```powershell
 cd scripts/qwen-vl-finetune
 
-# 对所有本地视觉模型做基准测试（自动检测）
+# 测试所有本地视觉模型（5 张本地卡牌图片）
 .venv312\Scripts\python.exe benchmark_all_models.py
 
-# 测试特定模型，自定义样本数
-.venv312\Scripts\python.exe benchmark_ollama.py \
-  --model qwen3-vl:latest \
-  --samples 20 \
-  --language all \
-  --ollama-url http://127.0.0.1:11434
+# 多模型 × 多 prompt 对比（22 张 test_sample）
+.venv312\Scripts\python.exe benchmark_prompts.py
+
+# 三阶段流水线（生成 HTML 报告，不覆盖旧结果）
+.venv312\Scripts\python.exe pipeline_two_stage.py
+# 报告位于 benchmarks/two_stage/report_YYYYMMDD_HHMMSS.html
 ```
 
 > **注意**：Ollama 在 Windows 上使用 `127.0.0.1`，不使用 `localhost`（后者在 WSL 环境下解析为 `::1`）
+
+---
+
+## 🔧 可微调模型推荐
+
+### 哪些模型可以用我们的卡牌 DB 微调？
+
+以下已安装模型中，支持对视觉-语言任务进行 LoRA/QLoRA 微调（需 HuggingFace 权重，非 GGUF）：
+
+| 模型 | HF 模型 ID | VRAM (4bit) | 微调难度 | 推荐度 | 说明 |
+|------|-----------|------------|---------|-------|------|
+| **Qwen2.5-VL-7B** | `Qwen/Qwen2.5-VL-7B-Instruct` | ~6GB | ⭐ 容易 | **✅ 首选** | 已有 finetune_qwen_vl.py，本项目主要目标 |
+| **Qwen2-VL-7B** | `Qwen/Qwen2-VL-7B-Instruct` | ~6GB | ⭐ 容易 | ✅ 备选 | 与 2.5 相似，更成熟 |
+| **LLaVA-1.6 (Mistral 7B)** | `llava-hf/llava-v1.6-mistral-7b-hf` | ~8GB | ⭐⭐ 中等 | ✅ 可行 | llava:13b 对应 HF 版本 |
+| **Llama-3.2-Vision 11B** | `meta-llama/Llama-3.2-11B-Vision-Instruct` | ~8GB | ⭐⭐ 中等 | ✅ 可行 | 需 Meta 授权 |
+| **GLM-4V-9B** | `THUDM/glm-4v-9b` | ~7GB | ⭐⭐ 中等 | ✅ 可行 | glm4 对应 HF 版本 |
+
+> **Ollama GGUF 模型无法直接微调**，需要从 HuggingFace 下载 FP16/BF16 原始权重，用 QLoRA 训练后可再量化为 GGUF 回传 Ollama。
+
+### 推荐优先顺序
+
+```
+1. Qwen2.5-VL-7B-Instruct  ← 本项目已配置 finetune_qwen_vl.py（优先）
+2. Qwen2-VL-7B-Instruct    ← 同框架，swap model_id 即可
+3. GLM-4V-9B               ← glm-ocr 底层模型，Stage 1 detect 可受益
+4. LLaVA-1.6-Mistral-7B   ← llava:13b 对应版本，Stage 3 fallback 可受益
+```
+
+### 微调数据集概况（已就绪）
+
+| 集合 | 样本数 | 语言分布 |
+|------|--------|---------|
+| train.jsonl | 1,437 | ja-JP / zh-HK / en-US |
+| validation.jsonl | 176 | ja-JP / zh-HK / en-US |
+| test.jsonl | 187 | ja-JP / zh-HK / en-US |
+| **合计** | **1,800** | 三语言均衡 |
+
+### 快速启动微调（Qwen2.5-VL）
+
+```powershell
+cd scripts/qwen-vl-finetune
+# 确保 .venv312 已激活（Python 3.12 + PyTorch nightly cu128）
+.venv312\Scripts\python.exe finetune_qwen_vl.py `
+  --data-dir ./datasets `
+  --output-dir ./outputs `
+  --epochs 3 `
+  --batch-size 1 `
+  --gradient-accumulation-steps 16 `
+  --lora-r 16 `
+  --lora-alpha 32
+```
+
+⚠️ **已知问题**：transformers 5.x 将 `AutoModelForVision2Seq` 改名为 `AutoModelForImageTextToText`，运行前请检查 `finetune_qwen_vl.py` 的导入。
 
 ---
 

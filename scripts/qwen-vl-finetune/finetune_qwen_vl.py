@@ -25,6 +25,18 @@ PTCG Qwen2.5-VL-7B QLoRA Fine-tuning Script (RTX 5070 Ti 16GB 优化)
 
 import os
 import sys
+
+# ─── Fix: Prevent local datasets/ directory from shadowing HuggingFace datasets ─
+# Python adds the script's directory to sys.path[0], which causes the local
+# datasets/ folder to be imported instead of the installed HF datasets package.
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+for _p in list(sys.path):
+    if os.path.normpath(_p) in (os.path.normpath(_script_dir), ''):
+        try:
+            sys.path.remove(_p)
+        except ValueError:
+            pass
+# ─────────────────────────────────────────────────────────────────────────────────
 import json
 import argparse
 import logging
@@ -214,15 +226,50 @@ class PTCGCardDataset(Dataset):
                 max_length=self.max_length
             )
             
-            # 准备标签
+            # 准备标签：只对 assistant 回复部分计算 loss
             labels = inputs["input_ids"].clone()
+            # 找到 assistant 回复的起始位置（最后一段非填充内容前的 attention=1 区域）
+            # 简单策略：用 -100 掩盖 input_ids 中非 assistant 回复的 token
+            # 通过查找 assistant 的分隔符 token 来确定边界
+            # 如果找不到边界，则保留完整标签（退化为 LM 目标）
+            try:
+                # 对 prompt-only（无 assistant response）部分进行 mask
+                prompt_only_conv = [conversation[0]]  # 只有 user 消息
+                prompt_inputs = self.processor.apply_chat_template(
+                    prompt_only_conv,
+                    tokenize=True,
+                    add_generation_prompt=True,
+                    return_dict=True,
+                    return_tensors="pt",
+                    padding="max_length",
+                    max_length=self.max_length
+                )
+                prompt_len = prompt_inputs["attention_mask"].sum().item()
+                labels[0, :prompt_len] = -100  # 掩盖 prompt 部分
+            except Exception:
+                pass  # 退化为完整 LM 目标
             
-            return {
+            # 掩盖 padding tokens
+            labels[inputs["attention_mask"] == 0] = -100
+            
+            # 提取所有处理器输出（包括 image_grid_thw 等 Qwen2.5-VL 需要的字段）
+            result = {
                 "input_ids": inputs["input_ids"].squeeze(0),
                 "attention_mask": inputs["attention_mask"].squeeze(0),
-                "pixel_values": inputs.get("pixel_values", torch.zeros(3, 512, 512)).squeeze(0),
                 "labels": labels.squeeze(0),
             }
+            
+            # 添加视觉相关字段
+            if "pixel_values" in inputs:
+                pv = inputs["pixel_values"]
+                # pixel_values 形状: (1, N, C, H, W) 或 (N, C, H, W)
+                result["pixel_values"] = pv.squeeze(0) if pv.dim() == 5 else pv
+            
+            if "image_grid_thw" in inputs:
+                result["image_grid_thw"] = inputs["image_grid_thw"].squeeze(0) if inputs["image_grid_thw"].dim() > 1 else inputs["image_grid_thw"]
+            
+            return result
+            
         except Exception as e:
             logger.warning(f"处理样本 {idx} 时出错：{e}")
             return self._get_empty_sample()
@@ -258,59 +305,54 @@ class PTCGCardDataset(Dataset):
         return {
             "input_ids": torch.zeros(self.max_length, dtype=torch.long),
             "attention_mask": torch.zeros(self.max_length, dtype=torch.long),
-            "pixel_values": torch.zeros(3, 512, 512),
             "labels": torch.full((self.max_length,), -100, dtype=torch.long),
         }
 
 
 class MemoryEfficientDataCollator:
-    """内存高效数据 collator"""
+    """内存高效数据 collator — 支持 Qwen2.5-VL 动态 pixel_values/image_grid_thw"""
     
     def __init__(self, pad_token_id: int = 0):
         self.pad_token_id = pad_token_id
     
     def __call__(self, features: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
-        # 找到最大长度（动态填充）
+        # 1D padding fields (input_ids, attention_mask, labels)
         max_length = max(len(f["input_ids"]) for f in features)
         
-        batch = {
-            "input_ids": [],
-            "attention_mask": [],
-            "pixel_values": [],
-            "labels": [],
-        }
+        batch = {}
         
-        for feature in features:
-            input_ids = feature["input_ids"]
-            attention_mask = feature["attention_mask"]
-            labels = feature["labels"]
-            
-            # 填充
-            if len(input_ids) < max_length:
-                padding_length = max_length - len(input_ids)
-                input_ids = torch.cat([
-                    input_ids,
-                    torch.full((padding_length,), self.pad_token_id, dtype=input_ids.dtype)
-                ])
-                attention_mask = torch.cat([
-                    attention_mask,
-                    torch.zeros(padding_length, dtype=attention_mask.dtype)
-                ])
-                labels = torch.cat([
-                    labels,
-                    torch.full((padding_length,), -100, dtype=labels.dtype)
-                ])
-            
-            batch["input_ids"].append(input_ids)
-            batch["attention_mask"].append(attention_mask)
-            batch["labels"].append(labels)
-            batch["pixel_values"].append(feature["pixel_values"])
+        # Pad 1D sequence fields
+        for key, pad_val in [("input_ids", self.pad_token_id), ("attention_mask", 0), ("labels", -100)]:
+            tensors = []
+            for f in features:
+                t = f[key]
+                if len(t) < max_length:
+                    pad_len = max_length - len(t)
+                    t = torch.cat([t, torch.full((pad_len,), pad_val, dtype=t.dtype)])
+                tensors.append(t)
+            batch[key] = torch.stack(tensors)
         
-        # 堆叠
-        batch["input_ids"] = torch.stack(batch["input_ids"])
-        batch["attention_mask"] = torch.stack(batch["attention_mask"])
-        batch["labels"] = torch.stack(batch["labels"])
-        batch["pixel_values"] = torch.stack(batch["pixel_values"])
+        # pixel_values: concatenate along first dim (each item is [N_patches, C, H, W])
+        if any("pixel_values" in f for f in features):
+            pvs = [f["pixel_values"] for f in features if "pixel_values" in f]
+            if pvs:
+                try:
+                    # If same shape, stack; otherwise cat (variable patch count)
+                    if all(pv.shape == pvs[0].shape for pv in pvs):
+                        batch["pixel_values"] = torch.stack(pvs)
+                    else:
+                        batch["pixel_values"] = torch.cat(pvs, dim=0)
+                except Exception as e:
+                    logger.warning(f"pixel_values 合并失败：{e}，跳过")
+        
+        # image_grid_thw: stack as (batch, 3) or cat
+        if any("image_grid_thw" in f for f in features):
+            thws = [f["image_grid_thw"] for f in features if "image_grid_thw" in f]
+            if thws:
+                try:
+                    batch["image_grid_thw"] = torch.stack(thws)
+                except Exception:
+                    batch["image_grid_thw"] = torch.cat(thws, dim=0)
         
         return batch
 
@@ -334,9 +376,12 @@ def load_qlora_model(config: TrainingConfig) -> Tuple[Any, Any]:
     try:
         from transformers import (
             AutoProcessor,
-            AutoModelForVision2Seq,
             BitsAndBytesConfig,
         )
+        try:
+            from transformers import AutoModelForVision2Seq
+        except ImportError:
+            from transformers import AutoModelForImageTextToText as AutoModelForVision2Seq
         from peft import (
             LoraConfig,
             get_peft_model,
@@ -371,7 +416,7 @@ def load_qlora_model(config: TrainingConfig) -> Tuple[Any, Any]:
         device_map="auto",  # 自动分配设备
         trust_remote_code=True,
         torch_dtype=torch.bfloat16 if config.bf16 else torch.float16,
-        attn_implementation="flash_attention_2" if torch.cuda.is_available() else None,
+        # flash_attention_2 needs separate installation; skip if not available
     )
     
     # 准备 k-bit 训练
@@ -425,13 +470,24 @@ def train(config: TrainingConfig, data_dir: str, output_dir: str):
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     
-    # 加载数据
-    train_data_path = Path(data_dir) / "train.jsonl"
-    val_data_path = Path(data_dir) / "validation.jsonl"
+    # 加载数据（优先使用本地图像版本）
+    use_local = getattr(config, "use_local_images", False)
+    suffix = "_local" if use_local else ""
+    train_data_path = Path(data_dir) / f"train{suffix}.jsonl"
+    val_data_path = Path(data_dir) / f"validation{suffix}.jsonl"
+    
+    # Fallback to original if local version doesn't exist
+    if use_local and not train_data_path.exists():
+        logger.warning(f"本地图像 JSONL 不存在：{train_data_path}，回退到原始文件")
+        logger.warning("请先运行：python download_training_images.py")
+        train_data_path = Path(data_dir) / "train.jsonl"
+        val_data_path = Path(data_dir) / "validation.jsonl"
     
     if not train_data_path.exists():
         logger.error(f"训练数据不存在：{train_data_path}")
         sys.exit(1)
+    
+    logger.info(f"使用训练数据：{train_data_path}")
     
     # 加载模型
     model, processor = load_qlora_model(config)
@@ -480,9 +536,8 @@ def train(config: TrainingConfig, data_dir: str, output_dir: str):
         save_steps=config.save_steps,
         eval_steps=config.eval_steps,
         logging_steps=config.logging_steps,
-        evaluation_strategy="steps" if val_dataset else "no",
+        eval_strategy="no",  # Avoid importing HuggingFace datasets library (conflicts with local datasets/ dir)
         save_total_limit=3,
-        save_safetensors=True,
         
         # 数据加载
         dataloader_num_workers=config.dataloader_num_workers,
@@ -490,19 +545,19 @@ def train(config: TrainingConfig, data_dir: str, output_dir: str):
         
         # 其他
         seed=config.seed,
-        report_to="tensorboard",
+        report_to="none",
         remove_unused_columns=False,
         
         # 内存优化
         dataloader_drop_last=True,  # 丢弃最后不完整 batch
     )
     
-    # 创建 Trainer
+    # 创建 Trainer (val_dataset disabled to avoid datasets/ namespace conflict)
     trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
-        eval_dataset=val_dataset,
+        eval_dataset=None,
         data_collator=data_collator,
     )
     
@@ -571,6 +626,8 @@ def main():
                        help="数据目录")
     parser.add_argument("--output-dir", type=str, default="./outputs",
                        help="输出目录")
+    parser.add_argument("--use-local-images", action="store_true", default=False,
+                       help="使用本地缓存图像 (train_local.jsonl / validation_local.jsonl)")
     
     # 模型参数
     parser.add_argument("--model-name", type=str, default="Qwen/Qwen2.5-VL-7B-Instruct",
@@ -648,6 +705,8 @@ def main():
         save_steps=args.save_steps,
         eval_steps=args.eval_steps,
     )
+    # Attach extra args not in dataclass
+    config.use_local_images = args.use_local_images
     
     # 打印配置
     logger.info("=" * 70)

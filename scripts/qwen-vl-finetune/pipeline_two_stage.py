@@ -57,7 +57,7 @@ EXTRACT_MODEL     = "qwen3-vl:latest"
 FALLBACK_MODEL    = "llava:13b"
 DEFAULT_IMAGE_DIR = r"C:\AI_Server\Coding\PTCG_2026\data\test_sample"
 
-MAX_PX_DETECT  = 1024
+MAX_PX_DETECT  = 1600
 MAX_PX_EXTRACT = 1024
 MAX_PX_THUMB   = 320
 
@@ -66,38 +66,113 @@ MAX_PX_THUMB   = 320
 # ---------------------------------------------------------------------------
 
 DETECT_PROMPT = (
-    "Look at this image. Count how many Pokemon TCG cards are visible.\n"
-    "For each card, estimate its bounding box as percentages of image dimensions,\n"
-    "and read the card name and card number printed on it.\n\n"
+    "Carefully inspect every part of this image.\n"
+    "Count exactly how many individual Pokemon TCG cards are visible (including partially visible ones).\n"
+    "A single photo can contain MULTIPLE cards laid side-by-side, stacked, or in a grid.\n"
+    "For each card, estimate its bounding box as percentages and read its printed name and number.\n\n"
     "Return ONLY this JSON (no other text):\n"
     '{"count":<n>,"cards":[{"id":1,"bbox_pct":[left%,top%,right%,bottom%],'
     '"hint_name":"card name or empty","hint_code":"card number or empty"}]}\n\n'
     "Rules:\n"
     "- bbox_pct integers 0-100\n"
-    "- Single card filling image: bbox_pct=[0,0,100,100]\n"
-    "- No Pokemon cards: {\"count\":0,\"cards\":[]}\n"
+    "- If only one card fills the whole image: bbox_pct=[0,0,100,100]\n"
+    "- If multiple cards, give correct separate bbox for EACH card\n"
+    "- No Pokemon cards visible: {\"count\":0,\"cards\":[]}\n"
     "Output ONLY the JSON."
 )
 
 EXTRACT_PROMPT_TEMPLATE = (
     "请分析图片中的Pokemon/宝可梦TCG卡牌。{hint_context}"
-    "请仔细阅读卡面文字，以JSON格式返回：\n"
-    '{{"isCard":true,"cardName":"名称","cardCode":"编号（如001/100）",'
-    '"set":"系列代码","rarity":"稀有度符号","language":"ja-JP或zh-HK或en-US"}}\n'
+    "请仔细阅读卡面文字，以JSON格式返回所有字段：\n"
+    '{{"isCard":true,'
+    '"cardName":"卡牌正式名称",'
+    '"supertype":"POKEMON或TRAINER或ENERGY",'
+    '"subtype":"BASIC,STAGE_1,STAGE_2,ITEM,SUPPORTER,STADIUM,TOOL等或null",'
+    '"hp":"HP数值字符串或null",'
+    '"types":["FIRE,WATER,GRASS,LIGHTNING,PSYCHIC,FIGHTING,DARKNESS,METAL,DRAGON,COLORLESS之一"],'
+    '"cardCode":"卡牌编号如001/100",'
+    '"set":"系列代码如SV9",'
+    '"rarity":"稀有度符号",'
+    '"language":"ja-JP或zh-HK或en-US",'
+    '"artist":"插画家名字或null"}}\n'
     "如果图片不是宝可梦卡，返回：{{\"isCard\":false}}\n"
     "只输出JSON，不要任何其他文字。"
 )
 
+# Placeholder strings that models echo when they cannot read the card
+PLACEHOLDER_NAMES = {
+    "卡片名称", "卡牌名称", "名称", "卡牌正式名称", "卡牌名",
+    "cardname", "card name", "the card name", "card_name",
+    "pokemon name", "pokémon name", "pokemon card", "ポケモンカード",
+    "编号（如001/100）", "卡牌编号如001/100", "稀有度符号", "系列代码如sv9",
+    "系列代码", "插画家名字或null", "supertype", "subtype", "rarity",
+    "exact card name", "exact name on card", "hp number or null",
+    "set number like 001/100", "rarity symbol", "illustrator name or null",
+}
 
-def build_extract_prompt(hint_name: str = "", hint_code: str = "") -> str:
+_PLACEHOLDER_LOWER = {p.lower() for p in PLACEHOLDER_NAMES}
+
+
+def is_placeholder(value: str) -> bool:
+    """Return True if the value looks like an unfilled template placeholder."""
+    if not value or not value.strip():
+        return True
+    v = value.lower().strip()
+    if v in _PLACEHOLDER_LOWER:
+        return True
+    # Chinese template echoes
+    if any(frag in value for frag in (
+        "卡牌名", "卡片名", "卡牌编号如", "如001/100",
+        "稀有度", "系列代码", "插画家", "宝可梦卡",
+    )):
+        return True
+    return False
+
+
+def build_extract_prompt(hint_name: str = "", hint_code: str = "", hint_lang: str = "") -> str:
     hints = []
     skip = {"", "empty", "card name or empty", "card number or empty"}
     if hint_name and hint_name not in skip:
         hints.append(f"卡牌名称可能是「{hint_name}」")
     if hint_code and hint_code not in skip:
         hints.append(f"卡牌编号可能是「{hint_code}」")
+    if hint_lang:
+        hints.append(f"语言很可能是{hint_lang}，请优先考虑该语言")
     hint_ctx = ("（提示：" + "，".join(hints) + "，请核实并精确提取。）\n") if hints else ""
     return EXTRACT_PROMPT_TEMPLATE.format(hint_context=hint_ctx)
+
+
+GLM_DETAIL_PROMPT_BASE = (
+    "This is a Pokemon TCG card."
+    " Use OCR to read every printed text character carefully.\n"
+    "Return ONLY this JSON (no other text):\n"
+    '{"isCard":true,"cardName":"exact card name","hp":"HP digits or null",'
+    '"cardCode":"set number like 001/100","set":"set abbreviation e.g. SV9",'
+    '"rarity":"rarity mark","language":"ja-JP or zh-HK or en-US",'
+    '"artist":"illustrator name or null"}\n'
+    'If image is not a Pokemon card: {"isCard":false}\n'
+    "Output ONLY the JSON object, nothing else."
+)
+
+
+def build_glm_detail_prompt(hint_lang: str = "") -> str:
+    lang_hint = f" The card language is likely {hint_lang}." if hint_lang else ""
+    # Insert lang hint after the opening sentence
+    return GLM_DETAIL_PROMPT_BASE.replace(
+        "This is a Pokemon TCG card.",
+        f"This is a Pokemon TCG card.{lang_hint}",
+        1
+    )
+
+
+def lang_hint_from_filename(label: str) -> str:
+    """Infer probable language from filename prefix."""
+    n = label.lower()
+    if n.startswith("hk"):
+        return "zh-HK"
+    if n.startswith("jpn") or n.startswith("jp"):
+        return "ja-JP"
+    return ""
 
 # ---------------------------------------------------------------------------
 # Image helpers
@@ -237,13 +312,24 @@ def _fallback_detection() -> dict:
                                     "hint_name": "", "hint_code": ""}]}
 
 
-def stage2_extract(card_img: "Image.Image", hint_name: str, hint_code: str,
-                   timeout: int, base_url: str, model: str) -> tuple["dict | None", float, str]:
-    prompt       = build_extract_prompt(hint_name, hint_code)
+def stage2_extract(card_img: "Image.Image", hint_name: str, hint_code: str, hint_lang: str,
+                   timeout: int, base_url: str, model: str) -> tuple["dict | None", float, str, str]:
+    prompt       = build_extract_prompt(hint_name, hint_code, hint_lang)
     raw, elapsed = ollama_infer(model, prompt, to_b64(card_img, MAX_PX_EXTRACT), timeout, base_url)
     if raw.startswith("Error:"):
-        return None, elapsed, raw
-    return parse_json(raw), elapsed, raw
+        return None, elapsed, raw, prompt
+    return parse_json(raw), elapsed, raw, prompt
+
+
+def stage4_glm_detail(card_img: "Image.Image", hint_lang: str, timeout: int,
+                      base_url: str, model: str) -> tuple["dict | None", float, str, str]:
+    """Stage 4 fallback: ask glm-ocr to do direct card detail extraction via OCR."""
+    prompt = build_glm_detail_prompt(hint_lang)
+    raw, elapsed = ollama_infer(model, prompt,
+                                to_b64(card_img, MAX_PX_EXTRACT), timeout, base_url)
+    if raw.startswith("Error:"):
+        return None, elapsed, raw, prompt
+    return parse_json(raw), elapsed, raw, prompt
 
 # ---------------------------------------------------------------------------
 # Per-image processing
@@ -280,6 +366,9 @@ def process_image(label: str, path: str, args) -> dict:
 
     # ── Stage 2 + fallback per card ────────────────────────────────────────
     extractions = []
+    hint_lang = lang_hint_from_filename(label)
+    if hint_lang:
+        print(f"  │  Lang hint from filename: {hint_lang}")
     for card in cards_info:
         card_id   = card.get("id", 1)
         bbox      = card.get("bbox_pct", [0, 0, 100, 100])
@@ -288,59 +377,93 @@ def process_image(label: str, path: str, args) -> dict:
         is_full   = (bbox == [0, 0, 100, 100])
         card_img  = img if is_full else crop_card(img, bbox)
 
-        # Stage 2: qwen3-vl (hints injected)
-        parsed, s2_time, s2_raw = stage2_extract(
-            card_img, hint_name, hint_code,
-            args.timeout_extract, args.ollama_url, args.extract_model)
+        prompt_log = [
+            {"stage": "detect", "model": args.detect_model, "prompt": DETECT_PROMPT},
+        ]
 
-        success      = parsed is not None and parsed.get("isCard") is not False
+        # Stage 2: qwen3-vl (hints injected)
+        parsed, s2_time, s2_raw, s2_prompt = stage2_extract(
+            card_img, hint_name, hint_code, hint_lang,
+            args.timeout_extract, args.ollama_url, args.extract_model)
+        prompt_log.append({"stage": "extract", "model": args.extract_model, "prompt": s2_prompt})
+
+        def _valid(p):
+            return (p is not None
+                    and p.get("isCard") is not False
+                    and not is_placeholder(str(p.get("cardName", ""))))
+
+        success      = _valid(parsed)
         model_used   = args.extract_model
         fallback_raw = None
         fb_time      = 0.0
 
         # Stage 3: llava fallback
         if not success:
-            fb_label = f"  │  Stage 2 [{args.extract_model}] {s2_time:.1f}s ✗ → [{args.fallback_model}]"
-            print(fb_label)
-            parsed_fb, fb_time, fallback_raw = stage2_extract(
-                card_img, hint_name, hint_code,
+            print(f"  │  Stage 2 [{args.extract_model}] {s2_time:.1f}s ✗ → [{args.fallback_model}]")
+            parsed_fb, fb_time, fallback_raw, fb_prompt = stage2_extract(
+                card_img, hint_name, hint_code, hint_lang,
                 args.timeout_fallback, args.ollama_url, args.fallback_model)
-            if parsed_fb is not None and parsed_fb.get("isCard") is not False:
+            prompt_log.append({"stage": "fallback", "model": args.fallback_model, "prompt": fb_prompt})
+            if _valid(parsed_fb):
                 parsed     = parsed_fb
                 success    = True
                 model_used = args.fallback_model
 
+        # Stage 4: glm-ocr direct OCR detail (if both Stage 2 & 3 failed/placeholder)
+        s4_time = 0.0
+        s4_raw  = None
+        if not success:
+            s4_timeout = max(args.timeout_detect * 2, 10)
+            print(f"  │  Stage 3 [{args.fallback_model}] failed → [{args.detect_model}] OCR detail ({s4_timeout}s)")
+            parsed_s4, s4_time, s4_raw, s4_prompt = stage4_glm_detail(
+                card_img, hint_lang, s4_timeout, args.ollama_url, args.detect_model)
+            prompt_log.append({"stage": "glm_detail", "model": args.detect_model, "prompt": s4_prompt})
+            if _valid(parsed_s4):
+                parsed     = parsed_s4
+                success    = True
+                model_used = args.detect_model + " (detail)"
+
         # Console log
-        t_used = fb_time if model_used == args.fallback_model else s2_time
+        if model_used.endswith("(detail)"):
+            t_used = s4_time
+        elif model_used == args.fallback_model:
+            t_used = fb_time
+        else:
+            t_used = s2_time
         if success and parsed:
             name   = str(parsed.get("cardName", "?"))[:24]
             code   = str(parsed.get("cardCode", "?"))[:14]
             rarity = str(parsed.get("rarity",   "?"))[:10]
             lang   = str(parsed.get("language", "?"))[:8]
-            tag    = "fb" if model_used == args.fallback_model else "  "
+            if model_used.endswith("(detail)"):  tag = "s4"
+            elif model_used == args.fallback_model: tag = "fb"
+            else: tag = "  "
             print(f"  │  Card {card_id} [{model_used}] {t_used:.1f}s ✓{tag} → {name} | {code} | {rarity} | {lang}")
         else:
-            print(f"  │  Card {card_id} ✗ no JSON (both models failed)")
+            print(f"  │  Card {card_id} ✗ no JSON (all 3 models failed)")
 
         extractions.append({
-            "card_id":      card_id,
-            "bbox_pct":     bbox,
-            "hint_name":    hint_name,
-            "hint_code":    hint_code,
-            "success":      success,
-            "model_used":   model_used,
-            "stage2_time":  round(s2_time, 2),
-            "stage2_raw":   s2_raw,
+            "card_id":       card_id,
+            "bbox_pct":      bbox,
+            "hint_name":     hint_name,
+            "hint_code":     hint_code,
+            "success":       success,
+            "model_used":    model_used,
+            "stage2_time":   round(s2_time, 2),
+            "stage2_raw":    s2_raw,
             "fallback_time": round(fb_time, 2),
-            "fallback_raw": fallback_raw,
-            "parsed":       parsed,
-            "thumb_b64":    to_b64(card_img, MAX_PX_THUMB),
+            "fallback_raw":  fallback_raw,
+            "stage4_time":   round(s4_time, 2),
+            "stage4_raw":    s4_raw,
+            "prompt_log":    prompt_log,
+            "parsed":        parsed,
+            "thumb_b64":     to_b64(card_img, MAX_PX_THUMB),
         })
 
     annotated    = draw_boxes(img, cards_info) if len(cards_info) > 1 else img
     overview_b64 = to_b64(annotated, MAX_PX_THUMB)
     total_t      = round(s1_time + sum(
-        e["stage2_time"] + e["fallback_time"] for e in extractions), 2)
+        e["stage2_time"] + e["fallback_time"] + e["stage4_time"] for e in extractions), 2)
     ok_n = sum(1 for e in extractions if e["success"])
     print(f"  └─ {total_t}s total  ({ok_n}/{len(extractions)} ok)")
 
@@ -401,6 +524,7 @@ def print_summary(results: list, extract_model: str):
 STATUS_COLOR = {
     "ok_primary":  "#22c55e",
     "ok_fallback": "#f59e0b",
+    "ok_glm":      "#06b6d4",
     "fail":        "#ef4444",
     "no_card":     "#94a3b8",
 }
@@ -426,8 +550,12 @@ def generate_html(results: list, detect_model: str,
             thumb      = e.get("thumb_b64", "")
 
             if success:
-                key = "ok_primary" if model_used == extract_model else "ok_fallback"
-                badge_txt = "✓ " + model_used.split(":")[0]
+                if "(detail)" in model_used:
+                    key = "ok_glm"; badge_txt = "✓ glm-detail"
+                elif model_used == extract_model:
+                    key = "ok_primary"; badge_txt = "✓ " + model_used.split(":")[0]
+                else:
+                    key = "ok_fallback"; badge_txt = "✓ " + model_used.split(":")[0]
             elif not is_card:
                 key = "no_card"; badge_txt = "✗ not a card"
             else:
@@ -444,20 +572,44 @@ def generate_html(results: list, detect_model: str,
             fields_html = ""
             if success and parsed:
                 rows_f = [
-                    ("Name",   parsed.get("cardName",  "")),
-                    ("Code",   parsed.get("cardCode",  "")),
-                    ("Set",    parsed.get("set",        "")),
-                    ("Rarity", parsed.get("rarity",    "")),
-                    ("Lang",   parsed.get("language",   "")),
+                    ("Name",      parsed.get("cardName",  "")),
+                    ("Supertype", parsed.get("supertype", "")),
+                    ("Subtype",   parsed.get("subtype",   "")),
+                    ("HP",        parsed.get("hp",        "")),
+                    ("Types",     ", ".join(parsed.get("types", [])) if isinstance(parsed.get("types"), list) else parsed.get("types", "")),
+                    ("Code",      parsed.get("cardCode",  "")),
+                    ("Set",       parsed.get("set",        "")),
+                    ("Rarity",    parsed.get("rarity",    "")),
+                    ("Lang",      parsed.get("language",  "")),
+                    ("Artist",    parsed.get("artist",    "")),
                 ]
                 fields_html = "<table class='fld'>" + "".join(
                     f"<tr><td class='fk'>{_e(k)}</td><td class='fv'>{_e(v)}</td></tr>"
-                    for k, v in rows_f if v
+                    for k, v in rows_f if v and not is_placeholder(str(v))
                 ) + "</table>"
 
-            t2  = e.get("stage2_time", 0)
-            tfb = e.get("fallback_time", 0)
-            time_str = f"{t2:.1f}s" + (f" +{tfb:.1f}s fb" if tfb > 0 else "")
+            t2   = e.get("stage2_time", 0)
+            tfb  = e.get("fallback_time", 0)
+            ts4  = e.get("stage4_time", 0)
+            time_str = f"{t2:.1f}s"
+            if tfb > 0: time_str += f" +{tfb:.1f}s fb"
+            if ts4 > 0: time_str += f" +{ts4:.1f}s ocr"
+
+            prompt_log_entries = e.get("prompt_log", [])
+            if prompt_log_entries:
+                pl_items = "".join(
+                    f'<div class="pl-item">'
+                    f'<span class="pl-stage">[{_e(p["stage"])}] {_e(p["model"])}</span>'
+                    f'<pre class="pl-txt">{_e((p.get("prompt") or "")[:700])}</pre>'
+                    f'</div>'
+                    for p in prompt_log_entries
+                )
+                prompt_log_html = (
+                    f'<details class="pl"><summary>\U0001f4cb Prompts ({len(prompt_log_entries)})</summary>'
+                    f'{pl_items}</details>'
+                )
+            else:
+                prompt_log_html = ""
 
             img_tag = (
                 f'<img src="data:image/jpeg;base64,{thumb}" class="thumb" alt="card">'
@@ -472,6 +624,7 @@ def generate_html(results: list, detect_model: str,
                   <span class="tm">{_e(time_str)}</span>
                   {hint_html}
                   {fields_html}
+                  {prompt_log_html}
                 </div>
               </div>""")
 
@@ -534,19 +687,28 @@ table.fld{{width:100%;border-collapse:collapse}}
 table.fld td{{padding:1px 3px;font-size:12px}}
 .fk{{color:#64748b;width:44px;white-space:nowrap}}
 .fv{{color:#f1f5f9;font-weight:500;word-break:break-word}}
+details.pl{{margin-top:6px;font-size:11px}}
+details.pl summary{{cursor:pointer;color:#94a3b8;user-select:none;padding:2px 0}}
+details.pl summary:hover{{color:#cbd5e1}}
+.pl-item{{margin:4px 0;background:#0a1628;border-radius:4px;padding:5px 7px;border:1px solid #1e3a4a}}
+.pl-stage{{display:block;color:#60a5fa;font-size:10px;font-weight:700;margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em}}
+pre.pl-txt{{color:#94a3b8;white-space:pre-wrap;word-break:break-word;font-size:10.5px;max-height:260px;overflow-y:auto;margin:0;font-family:'Cascadia Code','Fira Mono',monospace;line-height:1.5;background:#060f1e;padding:5px 7px;border-radius:3px}}
+pre.pl-txt::selection{{background:#1e3a6a}}
 </style>
 </head>
 <body>
 <h1>PTCG Card Extraction — Pipeline Report</h1>
 <div class="meta">
   <b>Generated:</b> {ts}<br>
-  <b>Stage 1 detect:</b> {_e(detect_model)} (5s) &nbsp;
-  <b>Stage 2 extract:</b> {_e(extract_model)} (10s) &nbsp;
-  <b>Stage 3 fallback:</b> {_e(fallback_model)} (15s)
+  <b>Stage 1 detect:</b> {_e(detect_model)} &nbsp;
+  <b>Stage 2 extract:</b> {_e(extract_model)} &nbsp;
+  <b>Stage 3 fallback:</b> {_e(fallback_model)} &nbsp;
+  <b>Stage 4 glm-detail:</b> {_e(detect_model)} (ocr mode)
 </div>
 <div class="legend">
   <div class="leg"><div class="dot" style="background:#22c55e"></div>Extracted (primary)</div>
   <div class="leg"><div class="dot" style="background:#f59e0b"></div>Extracted (fallback)</div>
+  <div class="leg"><div class="dot" style="background:#06b6d4"></div>Extracted (glm OCR detail)</div>
   <div class="leg"><div class="dot" style="background:#ef4444"></div>Failed</div>
   <div class="leg"><div class="dot" style="background:#94a3b8"></div>Not a card</div>
 </div>
@@ -579,8 +741,8 @@ def main():
     parser.add_argument("--detect-model",     default=DETECT_MODEL)
     parser.add_argument("--extract-model",    default=EXTRACT_MODEL)
     parser.add_argument("--fallback-model",   default=FALLBACK_MODEL)
-    parser.add_argument("--timeout-detect",   type=int, default=5)
-    parser.add_argument("--timeout-extract",  type=int, default=10)
+    parser.add_argument("--timeout-detect",   type=int, default=8)
+    parser.add_argument("--timeout-extract",  type=int, default=30)
     parser.add_argument("--timeout-fallback", type=int, default=15)
     parser.add_argument("--output-dir",       default="./benchmarks/two_stage")
     args = parser.parse_args()
@@ -608,6 +770,8 @@ def main():
 
     print_summary(all_results, args.extract_model)
 
+    run_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+
     # JSON (strip embedded b64 to keep file small)
     json_results = []
     for r in all_results:
@@ -616,7 +780,7 @@ def main():
                              for e in r.get("extractions", [])]
         json_results.append(jr)
 
-    json_path = Path(args.output_dir) / "pipeline_results.json"
+    json_path = Path(args.output_dir) / f"pipeline_results_{run_ts}.json"
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump({
             "timestamp":      datetime.now().isoformat(),
@@ -628,7 +792,7 @@ def main():
         }, f, ensure_ascii=False, indent=2)
     print(f"  JSON results → {json_path}")
 
-    html_path = Path(args.output_dir) / "report.html"
+    html_path = Path(args.output_dir) / f"report_{run_ts}.html"
     generate_html(all_results, args.detect_model, args.extract_model,
                   args.fallback_model, str(html_path))
 
