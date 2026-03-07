@@ -27,8 +27,9 @@ except ImportError:
     sys.exit(1)
 
 
-def download_image(url: str, dest_path: Path, timeout: int = 15, retries: int = 3) -> bool:
-    """Download a single image with retry logic."""
+def download_image(url: str, dest_path: Path, timeout: int = 15, retries: int = 3,
+                   max_px: int = 448, jpeg_quality: int = 85) -> bool:
+    """Download a single image, resize to max_px, save as JPEG for smaller cache."""
     if dest_path.exists():
         return True  # Already cached
 
@@ -36,31 +37,77 @@ def download_image(url: str, dest_path: Path, timeout: int = 15, retries: int = 
         try:
             resp = requests.get(url, timeout=timeout, stream=True)
             resp.raise_for_status()
+            from io import BytesIO
+            img = Image.open(BytesIO(resp.content)).convert("RGB")
+            # Resize: keep aspect ratio, longest side ≤ max_px
+            if max(img.width, img.height) > max_px:
+                img.thumbnail((max_px, max_px), Image.LANCZOS)
             dest_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(dest_path, "wb") as f:
-                for chunk in resp.iter_content(chunk_size=8192):
-                    f.write(chunk)
-            # Verify it's a valid image
-            img = Image.open(dest_path)
-            img.verify()
+            # Always save as JPEG regardless of original format
+            jpeg_path = dest_path.with_suffix(".jpg")
+            img.save(jpeg_path, "JPEG", quality=jpeg_quality, optimize=True)
+            # If dest_path had a different suffix, update to .jpg
+            if dest_path.suffix.lower() != ".jpg":
+                dest_path = jpeg_path
             return True
         except Exception as e:
             if attempt < retries - 1:
                 time.sleep(1 + attempt)
             else:
                 print(f"  FAIL: {url} → {e}")
-                if dest_path.exists():
-                    dest_path.unlink()
+                for p in [dest_path, dest_path.with_suffix(".jpg")]:
+                    if p.exists():
+                        p.unlink()
     return False
 
 
 def url_to_filename(url: str) -> str:
-    """Convert image URL to a safe local filename."""
+    """Convert image URL to a safe local filename (always .jpg after compression)."""
     parsed = urlparse(url)
-    return Path(parsed.path).name
+    stem = Path(parsed.path).stem
+    return stem + ".jpg"
 
 
-def collect_urls_from_jsonl(jsonl_path: Path):
+def compress_existing_cache(cache_dir: Path, max_px: int = 448, quality: int = 85):
+    """Recompress already-cached images: resize + convert to JPEG."""
+    from io import BytesIO
+    files = list(cache_dir.iterdir())
+    image_files = [f for f in files if f.suffix.lower() in {'.jpg', '.jpeg', '.png', '.webp'}]
+    print(f"  Found {len(image_files)} cached images to compress...")
+    
+    saved_bytes = 0
+    converted = 0
+    errors = 0
+    
+    for f in image_files:
+        try:
+            img = Image.open(f).convert("RGB")
+            orig_size = f.stat().st_size
+            
+            # Resize if needed
+            if max(img.width, img.height) > max_px:
+                img.thumbnail((max_px, max_px), Image.LANCZOS)
+            
+            # Save as JPEG (overwrite, normalize to .jpg extension)
+            out_path = f.with_suffix(".jpg")
+            img.save(out_path, "JPEG", quality=quality, optimize=True)
+            
+            # Remove original if it was a different format (e.g. .png)
+            if f.suffix.lower() != ".jpg" and out_path != f:
+                f.unlink()
+            
+            new_size = out_path.stat().st_size
+            saved_bytes += orig_size - new_size
+            converted += 1
+        except Exception as e:
+            print(f"  Error compressing {f.name}: {e}")
+            errors += 1
+        
+        if converted % 200 == 0 and converted > 0:
+            print(f"  Compressed {converted}/{len(image_files)} ({saved_bytes/1024/1024:.1f} MB saved so far)")
+    
+    print(f"  Done: {converted} compressed, {errors} errors, {saved_bytes/1024/1024:.1f} MB saved")
+    return saved_bytes
     """Collect all image URLs from a JSONL file."""
     urls = set()
     with open(jsonl_path, "r", encoding="utf-8") as f:
@@ -117,12 +164,31 @@ def main():
     parser.add_argument("--cache-dir", type=str, default="./image_cache")
     parser.add_argument("--threads", type=int, default=8, help="Parallel download threads")
     parser.add_argument("--timeout", type=int, default=15, help="Request timeout seconds")
+    parser.add_argument("--max-px", type=int, default=448, help="Max image dimension (resize to fit, default 448)")
+    parser.add_argument("--quality", type=int, default=85, help="JPEG quality 1-95 (default 85)")
     parser.add_argument("--skip-download", action="store_true", help="Only rewrite JSONL paths, skip download")
+    parser.add_argument("--compress-existing", action="store_true",
+                        help="Recompress already-downloaded images and exit")
     args = parser.parse_args()
 
     data_dir = Path(args.data_dir)
     cache_dir = Path(args.cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
+
+    # --compress-existing: just recompress cached files and update JSONLs
+    if args.compress_existing:
+        before_size = sum(f.stat().st_size for f in cache_dir.iterdir() if f.is_file())
+        print(f"\nCache before: {before_size/1024/1024:.1f} MB ({sum(1 for _ in cache_dir.iterdir())} files)")
+        print(f"Compressing to max {args.max_px}px JPEG Q{args.quality}...")
+        compress_existing_cache(cache_dir, args.max_px, args.quality)
+        after_size = sum(f.stat().st_size for f in cache_dir.iterdir() if f.is_file())
+        print(f"Cache after:  {after_size/1024/1024:.1f} MB (saved {(before_size-after_size)/1024/1024:.1f} MB)")
+        print(f"\nRewriting JSONL files with updated local paths...")
+        jsonl_files = [f for f in data_dir.glob("*.jsonl") if not f.name.endswith("_local.jsonl")]
+        for f in jsonl_files:
+            local_f = f.parent / (f.stem + "_local.jsonl")
+            rewrite_jsonl_with_local_paths(f, local_f, cache_dir)
+        return
 
     jsonl_files = list(data_dir.glob("*.jsonl"))
     # Focus on source files (not already-local versions)
@@ -153,7 +219,8 @@ def main():
             def worker(args_tuple):
                 nonlocal success, fail
                 url, path = args_tuple
-                ok = download_image(url, path, timeout=args.timeout)
+                ok = download_image(url, path, timeout=args.timeout,
+                                    max_px=args.max_px, jpeg_quality=args.quality)
                 with lock:
                     if ok:
                         success += 1

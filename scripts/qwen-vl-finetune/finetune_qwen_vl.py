@@ -58,6 +58,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Suppress noisy HF Hub HTTP request logs
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+
 # 检查 GPU
 if torch.cuda.is_available():
     gpu_name = torch.cuda.get_device_name(0)
@@ -102,7 +107,7 @@ class TrainingConfig:
     batch_size: int = 1  # 16GB VRAM 推荐 batch size 1
     gradient_accumulation_steps: int = 16  # 增加累积步数补偿小 batch
     num_epochs: int = 3
-    max_seq_length: int = 1024  # 降低长度减少显存
+    max_seq_length: int = 512  # PTCG JSON responses are concise; 512 is sufficient
     warmup_ratio: float = 0.05  # 增加 warmup 比例
     
     # 优化器配置
@@ -115,8 +120,8 @@ class TrainingConfig:
     
     # 内存优化
     gradient_checkpointing: bool = True  # 节省 40% 显存
-    dataloader_num_workers: int = 2  # 减少 worker 数量
-    dataloader_pin_memory: bool = True
+    dataloader_num_workers: int = 0  # 0 = main process; avoids Windows CUDA multiprocessing deadlocks
+    dataloader_pin_memory: bool = False  # No benefit with workers=0
     
     # 保存配置
     save_steps: int = 100  # 更频繁保存
@@ -528,7 +533,7 @@ def train(config: TrainingConfig, data_dir: str, output_dir: str):
         fp16=config.fp16,
         
         # 优化
-        optim="paged_adamw_8bit",  # 分页优化器减少显存峰值
+        optim="adamw_torch",  # Blackwell-safe: avoid bitsandbytes CUDA crash on resume
         gradient_checkpointing=config.gradient_checkpointing,
         max_grad_norm=config.max_grad_norm,
         
@@ -569,7 +574,7 @@ def train(config: TrainingConfig, data_dir: str, output_dir: str):
     logger.info(f"梯度累积：{config.gradient_accumulation_steps} 步")
     logger.info(f"有效 batch size: {config.batch_size * config.gradient_accumulation_steps}")
     
-    train_result = trainer.train()
+    train_result = trainer.train(resume_from_checkpoint=getattr(config, 'resume_from_checkpoint', None))
     
     # 保存模型
     logger.info("保存模型...")
@@ -676,6 +681,8 @@ def main():
     # 其他
     parser.add_argument("--seed", type=int, default=42,
                        help="随机种子")
+    parser.add_argument("--resume-from-checkpoint", type=str, default=None,
+                       help="从指定 checkpoint 路径继续训练")
     parser.add_argument("--save-steps", type=int, default=100,
                        help="保存步数")
     parser.add_argument("--eval-steps", type=int, default=50,
@@ -707,6 +714,7 @@ def main():
     )
     # Attach extra args not in dataclass
     config.use_local_images = args.use_local_images
+    config.resume_from_checkpoint = args.resume_from_checkpoint
     
     # 打印配置
     logger.info("=" * 70)

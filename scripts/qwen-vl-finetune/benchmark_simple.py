@@ -66,7 +66,7 @@ except ImportError:
 
 
 def load_model(model_path):
-    """Load model (supports local path or HuggingFace model ID)"""
+    """Load model (supports local path, HuggingFace model ID, or LoRA adapter path)"""
     print(f"\nLoading model: {model_path}...")
     
     is_hf_id = "/" in model_path and not os.path.exists(model_path)
@@ -74,18 +74,38 @@ def load_model(model_path):
         print(f"ERROR: Model path does not exist: {model_path}")
         return None, None
     
+    # Check if this is a LoRA adapter (has adapter_config.json but no model.safetensors)
+    is_lora = (os.path.exists(model_path) and
+               os.path.exists(os.path.join(model_path, "adapter_config.json")) and
+               not os.path.exists(os.path.join(model_path, "model.safetensors")) and
+               not any(f.startswith("model-") for f in os.listdir(model_path) if f.endswith(".safetensors")))
+    
     try:
-        processor = AutoProcessor.from_pretrained(
-            model_path,
-            trust_remote_code=True,
-        )
+        dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
         
-        model = AutoModelForVision2Seq.from_pretrained(
-            model_path,
-            trust_remote_code=True,
-            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-            device_map="auto" if torch.cuda.is_available() else None,
-        )
+        if is_lora:
+            from peft import PeftConfig, PeftModel
+            peft_cfg = PeftConfig.from_pretrained(model_path)
+            base_model_id = peft_cfg.base_model_name_or_path
+            print(f"  LoRA adapter detected. Base model: {base_model_id}")
+            
+            processor = AutoProcessor.from_pretrained(base_model_id, trust_remote_code=True)
+            base_model = AutoModelForVision2Seq.from_pretrained(
+                base_model_id,
+                trust_remote_code=True,
+                torch_dtype=dtype,
+                device_map="auto" if torch.cuda.is_available() else None,
+            )
+            model = PeftModel.from_pretrained(base_model, model_path)
+            print("  LoRA adapter loaded")
+        else:
+            processor = AutoProcessor.from_pretrained(model_path, trust_remote_code=True)
+            model = AutoModelForVision2Seq.from_pretrained(
+                model_path,
+                trust_remote_code=True,
+                torch_dtype=dtype,
+                device_map="auto" if torch.cuda.is_available() else None,
+            )
         
         if not torch.cuda.is_available():
             model = model.to('cpu')
@@ -96,6 +116,7 @@ def load_model(model_path):
     
     except Exception as e:
         print(f"ERROR: Model loading failed: {e}")
+        import traceback; traceback.print_exc()
         return None, None
 
 
@@ -213,10 +234,16 @@ def run_inference(model, processor, image, prompt, device="cuda"):
             skip_special_tokens=True,
         ).strip()
         
+        if not generated_text:
+            return "[EMPTY OUTPUT]", False
+        
         return generated_text, True
     
     except Exception as e:
-        return f"Error: {e}", False
+        import traceback
+        err_msg = f"Error: {e}\n{traceback.format_exc()}"
+        print(f"  [inference error] {e}")
+        return err_msg, False
 
 
 def parse_json_output(text):
@@ -357,6 +384,7 @@ def main():
             "name": card_name,
             "success": success and predicted is not None,
             "inference_time": inference_time,
+            "raw_text": predicted_text[:300] if predicted_text else None,
             "predicted": predicted,
             "has_ground_truth": ground_truth is not None,
         })

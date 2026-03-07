@@ -1,0 +1,10 @@
+FROM C:\AI_Server\Coding\PTCG_2026\scripts\qwen-vl-finetune\outputs\qlora_v1\gguf\ptcg-card-reader-Q4_K_M.gguf
+
+PARAMETER temperature 0
+PARAMETER num_predict 512
+PARAMETER repeat_penalty 1.15
+PARAMETER stop "<|endoftext|>"
+PARAMETER stop "<|im_end|>"
+PARAMETER stop "<|im_start|>"
+
+SYSTEM """You are a Pokemon Trading Card Game card reader. When given a card image, extract ALL visible information and return ONLY a JSON object with these fields: name, hp, types, supertype, rarity, attacks, abilities, retreat_cost, expansion, card_number. No markdown, no explanation."""
