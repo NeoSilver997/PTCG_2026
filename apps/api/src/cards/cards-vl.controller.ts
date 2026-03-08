@@ -230,7 +230,7 @@ export class CardsVlController {
     return {
       success: true,
       results,
-      totalTimeMs,
+      total_time_ms: totalTimeMs,
     };
   }
 
@@ -256,6 +256,11 @@ export class CardsVlController {
   @ApiOperation({ summary: '保存提取结果到数据库' })
   @ApiBody({ type: UpdateCardDto })
   @ApiQuery({
+    name: 'webCardId',
+    required: true,
+    description: '卡牌的唯一标识符',
+  })
+  @ApiQuery({
     name: 'language',
     required: true,
     enum: ['ja-JP', 'zh-HK', 'en-US'],
@@ -264,15 +269,19 @@ export class CardsVlController {
   @ApiResponse({ status: 400, description: '数据验证失败' })
   async saveExtraction(
     @Body() extractionData: UpdateCardDto,
+    @Query('webCardId') webCardId: string,
     @Query('language') language: string,
   ) {
     // 验证必要字段
+    if (!webCardId) {
+      throw new BadRequestException('webCardId 为必填参数');
+    }
     if (!extractionData.name) {
       throw new BadRequestException('卡牌名称为必填字段');
     }
 
     // 保存到数据库
-    return await this.cardsService.createWithExtraction(extractionData, language);
+    return await this.cardsService.updateWithExtraction(webCardId, extractionData, 'merge');
   }
 
   /**

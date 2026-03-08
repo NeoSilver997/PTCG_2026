@@ -79,8 +79,8 @@ interface CardDetail {
 async function fetchCardDetail(webCardId: string) {
   try {
     console.log('Fetching card detail for:', webCardId);
-    // Try with fetch instead of axios
-    const response = await fetch(`http://localhost:4000/api/v1/cards/web/${webCardId}`);
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api/v1';
+    const response = await fetch(`${apiUrl}/cards/web/${webCardId}`);
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }

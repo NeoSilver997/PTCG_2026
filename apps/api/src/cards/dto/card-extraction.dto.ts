@@ -1,6 +1,60 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsString, IsInt, IsArray, IsEnum, Min, Max } from 'class-validator';
-import { PokemonType, Supertype, Subtype, EvolutionStage, Rarity, LanguageCode } from '@prisma/client';
+import { PokemonType, Supertype, Subtype, EvolutionStage, Rarity, LanguageCode } from '@ptcg/database';
+
+/**
+ * 能力 DTO
+ */
+export class AbilityDto {
+  @ApiProperty({ description: '能力名称', example: 'ようがんポケモン' })
+  @IsString()
+  name: string;
+
+  @ApiProperty({ description: '能力效果', example: 'このポケモンは、バトル場に出したターンに、相手のポケモンにワザを使うことができる。' })
+  @IsString()
+  effect: string;
+
+  @ApiProperty({ description: '能力类型（特性/等等）', required: false })
+  @IsOptional()
+  @IsString()
+  type?: string;
+}
+
+/**
+ * 攻击 DTO
+ */
+export class AttackDto {
+  @ApiProperty({ description: '攻击名称', example: 'かえんほうしゃ' })
+  @IsString()
+  name: string;
+
+  @ApiProperty({ description: '能量费用', example: ['FIRE', 'FIRE', 'COLORLESS'] })
+  @IsArray()
+  @IsString({ each: true })
+  cost: string[];
+
+  @ApiProperty({ description: '伤害', example: '120' })
+  @IsString()
+  damage: string;
+
+  @ApiProperty({ description: '攻击效果', required: false })
+  @IsOptional()
+  @IsString()
+  effect?: string;
+}
+
+/**
+ * 弱点/抵抗力 DTO
+ */
+export class WeaknessResistanceDto {
+  @ApiProperty({ description: '属性', example: 'WATER' })
+  @IsString()
+  type: string;
+
+  @ApiProperty({ description: '倍率/值', example: '×2' })
+  @IsString()
+  value: string;
+}
 
 /**
  * 卡牌提取结果 DTO
@@ -107,60 +161,6 @@ export class CardExtractionDto {
   @IsOptional()
   @IsString()
   flavorText?: string;
-}
-
-/**
- * 能力 DTO
- */
-export class AbilityDto {
-  @ApiProperty({ description: '能力名称', example: 'ようがんポケモン' })
-  @IsString()
-  name: string;
-
-  @ApiProperty({ description: '能力效果', example: 'このポケモンは、バトル場に出したターンに、相手のポケモンにワザを使うことができる。' })
-  @IsString()
-  effect: string;
-
-  @ApiProperty({ description: '能力类型（特性/等等）', required: false })
-  @IsOptional()
-  @IsString()
-  type?: string;
-}
-
-/**
- * 攻击 DTO
- */
-export class AttackDto {
-  @ApiProperty({ description: '攻击名称', example: 'かえんほうしゃ' })
-  @IsString()
-  name: string;
-
-  @ApiProperty({ description: '能量费用', example: ['FIRE', 'FIRE', 'COLORLESS'] })
-  @IsArray()
-  @IsString({ each: true })
-  cost: string[];
-
-  @ApiProperty({ description: '伤害', example: '120' })
-  @IsString()
-  damage: string;
-
-  @ApiProperty({ description: '攻击效果', required: false })
-  @IsOptional()
-  @IsString()
-  effect?: string;
-}
-
-/**
- * 弱点/抵抗力 DTO
- */
-export class WeaknessResistanceDto {
-  @ApiProperty({ description: '属性', example: 'WATER' })
-  @IsString()
-  type: string;
-
-  @ApiProperty({ description: '倍率/值', example: '×2' })
-  @IsString()
-  value: string;
 }
 
 /**

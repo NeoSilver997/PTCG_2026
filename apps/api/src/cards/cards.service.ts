@@ -574,10 +574,11 @@ export class CardsService {
 
     let countQuery = this.prisma.card.count({ where });
 
-    // Apply hasAbilities, hasAttackText, evolvesTo, or attackName filter using raw SQL if specified
+    // Apply hasAbilities, hasAttackText, evolvesTo, attackName or expansionReleaseDate sort using raw SQL
     // hasAbilities, hasAttackText, and attackName require raw SQL due to Prisma JSON field limitations
     // evolvesTo requires raw SQL for exact CSV value matching
-    if (hasAbilities !== undefined || hasAttackText !== undefined || evolvesTo || attackName) {
+    // expansionReleaseDate requires raw SQL because Prisma does not support two-level nested orderBy
+    if (hasAbilities !== undefined || hasAttackText !== undefined || evolvesTo || attackName || actualSortBy === 'expansionReleaseDate') {
       const jsonFieldConditions: string[] = [];
       
       // For JSON fields: null (JSON null) is different from NULL (SQL null)
@@ -635,6 +636,7 @@ export class CardsService {
           if (key === 'rarity' && typeof value === 'string') return `c."${key}" = '${value}'`;
           if (key === 'language' && typeof value === 'string') return `c."${key}" = '${value}'`;
           if (key === 'regulationMark' && typeof value === 'string') return `c."${key}" = '${value}'`;
+          if (key === 'variantType' && typeof value === 'string') return `c."${key}" = '${value}'`;
           // Handle subtypes array filter
           if (key === 'subtypes' && typeof value === 'object' && value !== null && 'hasSome' in value && Array.isArray(value.hasSome)) {
             const subtypeConditions = value.hasSome.map(st => `c."${key}" @> '["${st}"]'::jsonb`);
