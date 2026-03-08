@@ -108,6 +108,9 @@ def compress_existing_cache(cache_dir: Path, max_px: int = 448, quality: int = 8
     
     print(f"  Done: {converted} compressed, {errors} errors, {saved_bytes/1024/1024:.1f} MB saved")
     return saved_bytes
+
+
+def collect_urls_from_jsonl(jsonl_path: Path) -> set:
     """Collect all image URLs from a JSONL file."""
     urls = set()
     with open(jsonl_path, "r", encoding="utf-8") as f:

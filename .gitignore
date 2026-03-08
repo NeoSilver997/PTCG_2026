@@ -86,3 +86,5 @@ scripts/qwen-vl-finetune/.venv312/*
 scripts/qwen-vl-finetune/benchmarks/*
 scripts/qwen-vl-finetune/datasets/*
 scripts/qwen-vl-finetune/image_cache/*
+scripts/qwen-vl-finetune/llama-prebuilt/*
+scripts/qwen-vl-finetune/outputs/*
