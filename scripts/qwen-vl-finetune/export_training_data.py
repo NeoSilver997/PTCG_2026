@@ -154,13 +154,48 @@ def get_language_code(lang: str) -> str:
     return mapping.get(lang, lang)
 
 
+# Rarity tier scores — higher = more valuable for training
+RARITY_SCORE: Dict[str, int] = {
+    "HYPER_RARE": 10,
+    "SPECIAL_ILLUSTRATION_RARE": 9,
+    "ULTRA_RARE": 8,
+    "ACE_SPEC_RARE": 8,
+    "ILLUSTRATION_RARE": 7,
+    "DOUBLE_RARE": 6,
+    "PROMO": 5,
+    "RARE": 4,
+    "UNCOMMON": 2,
+    "COMMON": 1,
+}
+
+
+def calculate_priority_score(card: Any) -> float:
+    """Score cards by rarity tier + description richness for sampling priority."""
+    rarity_score = RARITY_SCORE.get(card.rarity or "", 0)
+
+    # Description richness: total character count of ability/attack effect text
+    desc_len = 0
+    if card.abilities:
+        for ab in (card.abilities if isinstance(card.abilities, list) else []):
+            if isinstance(ab, dict):
+                desc_len += len(ab.get("effect", "") or ab.get("description", ""))
+    if card.attacks:
+        for atk in (card.attacks if isinstance(card.attacks, list) else []):
+            if isinstance(atk, dict):
+                desc_len += len(atk.get("effect", "") or "")
+
+    # Normalize: cap at 500 chars → max 5 bonus points
+    desc_score = min(desc_len / 100.0, 5.0)
+    return rarity_score + desc_score
+
+
 def calculate_complexity(card: Any) -> str:
     """
-    计算卡牌复杂度（用于平衡训练集）
-    
-    simple: 基础宝可梦，1-2 个攻击
-    medium: 1 进化，1-2 个能力，2-3 个攻击
-    complex: 2 进化，2+ 能力，3+ 攻击，或特殊机制（ex/V/VSTAR）
+    Card complexity tier for dataset balance.
+
+    simple: basic, 1-2 attacks
+    medium: stage 1, 1-2 abilities, 2-3 attacks
+    complex: stage 2, 2+ abilities, 3+ attacks, or special rule box (ex/V/VSTAR)
     """
     complexity_score = 0
     
@@ -220,16 +255,11 @@ def format_card_for_training(
         card_data = {
             "name": card.name,
             "hp": card.hp,
-            "type": card.types[0] if card.types else None,
             "types": card.types,
-            "subtype": card.subtypes[0] if card.subtypes else None,
             "subtypes": card.subtypes,
             "supertype": card.supertype,
             "abilities": card.abilities if card.abilities else [],
             "attacks": card.attacks if card.attacks else [],
-            "weakness": None,
-            "resistance": None,
-            "retreatCost": None,
             "setCode": card.regionalExpansion.code if card.regionalExpansion else None,
             "cardNumber": card.cardNumber,
             "rarity": card.rarity,
@@ -237,10 +267,8 @@ def format_card_for_training(
             "evolutionStage": card.evolutionStage,
             "evolvesFrom": card.evolvesFrom,
             "evolvesTo": card.evolvesTo,
-            "flavorText": card.flavorText,
             "regulationMark": card.regulationMark,
             "language": get_language_code(card.language),
-            "primaryCardId": card.primaryCardId,
             "webCardId": card.webCardId
         }
         
@@ -250,11 +278,11 @@ def format_card_for_training(
         # 构建多语言提示词
         language = card.language
         if language == "JA_JP":
-            prompt = "カードのすべての情報を JSON 形式で抽出してください。フィールド：name, hp, type, subtype, abilities (name/effect の配列), attacks (name/cost/damage/effect の配列), weakness, resistance, retreatCost, setCode, cardNumber, rarity, artist"
+            prompt = "カードのすべての情報を JSON 形式で抽出してください。フィールド：name, hp, types, subtypes, supertype, abilities (name/effect の配列), attacks (name/cost/damage/effect の配列), setCode, cardNumber, rarity, artist, evolutionStage, regulationMark"
         elif language == "ZH_TW":
-            prompt = "以 JSON 格式提取所有卡牌資訊，包含欄位：name, hp, type, subtype, abilities (name/effect 陣列), attacks (name/cost/damage/effect 陣列), weakness, resistance, retreatCost, setCode, cardNumber, rarity, artist"
+            prompt = "以 JSON 格式提取所有卡牌資訊，包含欄位：name, hp, types, subtypes, supertype, abilities (name/effect 陣列), attacks (name/cost/damage/effect 陣列), setCode, cardNumber, rarity, artist, evolutionStage, regulationMark"
         else:  # EN_US
-            prompt = "Extract all card information in JSON format with fields: name, hp, type, subtype, abilities (array with name/effect), attacks (array with name/cost/damage/effect), weakness, resistance, retreatCost, setCode, cardNumber, rarity, artist"
+            prompt = "Extract all card information in JSON format with fields: name, hp, types, subtypes, supertype, abilities (array with name/effect), attacks (array with name/cost/damage/effect), setCode, cardNumber, rarity, artist, evolutionStage, regulationMark"
         
         # 处理图像
         processed_image_path = None
@@ -303,9 +331,9 @@ def format_card_for_training(
                 "hasAbilities": len(card.abilities) > 0 if card.abilities else False,
                 "hasAttacks": len(card.attacks) > 0 if card.attacks else False,
                 "supertype": card.supertype,
+                "rarity": card.rarity,
                 "complexity": calculate_complexity(card),
-                "originalImagePath": image_path,
-                "processedImagePath": processed_image_path
+                "priorityScore": calculate_priority_score(card)
             }
         }
     except Exception as e:
@@ -490,27 +518,27 @@ def query_cards_with_balance(
             
             logger.info(f"  ✓ 找到 {len(valid_cards)} 张有效卡牌")
             
-            # 按复杂度分层采样
+            # Sort by rarity + description priority (highest first)
+            valid_cards.sort(key=calculate_priority_score, reverse=True)
+
+            # Stratify by complexity within top priority cards
             complexity_groups = {"simple": [], "medium": [], "complex": []}
             for card in valid_cards:
                 complexity = calculate_complexity(card)
                 complexity_groups[complexity].append(card)
-            
-            # 目标复杂度分布
-            target_distribution = {"simple": 0.4, "medium": 0.4, "complex": 0.2}
+
+            # Keep natural priority order within each tier (already sorted)
+            # Target distribution: prefer complex/medium over simple
+            target_distribution = {"complex": 0.35, "medium": 0.40, "simple": 0.25}
             sampled_cards = []
-            
+
             for complexity, target_ratio in target_distribution.items():
                 target_count = int(samples_per_language * target_ratio)
                 available = complexity_groups[complexity]
-                
-                if len(available) >= target_count:
-                    sampled = random.sample(available, target_count)
-                else:
-                    sampled = available
-                
+                # Take top-N by priority score (list is already sorted)
+                sampled = available[:target_count]
                 sampled_cards.extend(sampled)
-                logger.info(f"    {complexity}: {len(sampled)} 张")
+                logger.info(f"    {complexity}: {len(sampled)} cards")
             
             # 如果不够，补充
             if len(sampled_cards) < samples_per_language:

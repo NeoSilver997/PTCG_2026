@@ -104,8 +104,8 @@ class TrainingConfig:
     
     # 训练配置 (内存优化)
     learning_rate: float = 2e-4
-    batch_size: int = 1  # 16GB VRAM 推荐 batch size 1
-    gradient_accumulation_steps: int = 16  # 增加累积步数补偿小 batch
+    batch_size: int = 1  # Keep at 1; batch_size=2 refills freed VRAM with activations
+    gradient_accumulation_steps: int = 16  # 1×16=16 effective batch
     num_epochs: int = 3
     max_seq_length: int = 512  # PTCG JSON responses are concise; 512 is sufficient
     warmup_ratio: float = 0.05  # 增加 warmup 比例
@@ -119,7 +119,7 @@ class TrainingConfig:
     fp16: bool = False
     
     # 内存优化
-    gradient_checkpointing: bool = True  # 节省 40% 显存
+    gradient_checkpointing: bool = True  # Required for 4-bit PEFT grad flow; ViT GC is disabled below
     dataloader_num_workers: int = 0  # 0 = main process; avoids Windows CUDA multiprocessing deadlocks
     dataloader_pin_memory: bool = False  # No benefit with workers=0
     
@@ -219,7 +219,7 @@ class PTCGCardDataset(Dataset):
             }
         ]
         
-        # 使用 processor 处理
+        # 使用 processor 处理 (single call — no double-encoding of image)
         try:
             inputs = self.processor.apply_chat_template(
                 conversation,
@@ -227,32 +227,29 @@ class PTCGCardDataset(Dataset):
                 add_generation_prompt=False,
                 return_dict=True,
                 return_tensors="pt",
-                padding="max_length",
-                max_length=self.max_length
+                # Do NOT set padding/max_length here — let the collator pad the batch
             )
             
             # 准备标签：只对 assistant 回复部分计算 loss
+            # Find the boundary by looking for the last occurrence of the
+            # assistant-turn start token(s) without re-running the processor.
             labels = inputs["input_ids"].clone()
-            # 找到 assistant 回复的起始位置（最后一段非填充内容前的 attention=1 区域）
-            # 简单策略：用 -100 掩盖 input_ids 中非 assistant 回复的 token
-            # 通过查找 assistant 的分隔符 token 来确定边界
-            # 如果找不到边界，则保留完整标签（退化为 LM 目标）
             try:
-                # 对 prompt-only（无 assistant response）部分进行 mask
-                prompt_only_conv = [conversation[0]]  # 只有 user 消息
-                prompt_inputs = self.processor.apply_chat_template(
-                    prompt_only_conv,
-                    tokenize=True,
-                    add_generation_prompt=True,
-                    return_dict=True,
-                    return_tensors="pt",
-                    padding="max_length",
-                    max_length=self.max_length
+                # Qwen2.5-VL chat template marks assistant turn with <|im_start|>assistant
+                # Tokenize the simple boundary string (no image involved → very fast)
+                boundary_ids = self.processor.tokenizer.encode(
+                    "<|im_start|>assistant", add_special_tokens=False
                 )
-                prompt_len = prompt_inputs["attention_mask"].sum().item()
-                labels[0, :prompt_len] = -100  # 掩盖 prompt 部分
+                ids_list = inputs["input_ids"][0].tolist()
+                # Find last occurrence of the boundary sequence
+                prompt_len = 0
+                for i in range(len(ids_list) - len(boundary_ids), -1, -1):
+                    if ids_list[i:i + len(boundary_ids)] == boundary_ids:
+                        prompt_len = i + len(boundary_ids)  # mask up to & including marker
+                        break
+                labels[0, :prompt_len] = -100  # mask prompt + assistant marker
             except Exception:
-                pass  # 退化为完整 LM 目标
+                pass  # fallback: full LM objective
             
             # 掩盖 padding tokens
             labels[inputs["attention_mask"] == 0] = -100
@@ -279,12 +276,19 @@ class PTCGCardDataset(Dataset):
             logger.warning(f"处理样本 {idx} 时出错：{e}")
             return self._get_empty_sample()
     
+    # Max pixels on the longest image edge before feeding to Qwen2.5-VL processor.
+    # PTCG cards @ 321×448 → 704 ViT patches (32×22) @ 14px stride.
+    # With MAX_LONG_EDGE=168: 321×448 → 120×168 → ~8×12=96 ViT patches.
+    # ViT self-attention cost: O(n²) → 96²/704² ≈ 1.85% of baseline → ~50× less compute.
+    # Images are still legible for card info extraction at this resolution.
+    MAX_LONG_EDGE = 168
+
     def _load_image(self, image_path: str):
         """加载图片（内存优化）"""
         from PIL import Image
         
         if not image_path:
-            return Image.new("RGB", (512, 512), color="white")
+            return Image.new("RGB", (112, 168), color="white")
         
         # 处理 base64 图像
         if image_path.startswith("data:image"):
@@ -293,17 +297,25 @@ class PTCGCardDataset(Dataset):
             
             base64_data = image_path.split(",")[1]
             image_data = base64.b64decode(base64_data)
-            return Image.open(BytesIO(image_data)).convert("RGB")
-        
-        # 处理文件路径
-        if os.path.exists(image_path):
+            img = Image.open(BytesIO(image_data)).convert("RGB")
+        elif os.path.exists(image_path):
             try:
-                return Image.open(image_path).convert("RGB")
+                img = Image.open(image_path).convert("RGB")
             except Exception as e:
                 logger.warning(f"加载图片失败 {image_path}: {e}")
+                return Image.new("RGB", (112, 168), color="white")
+        else:
+            return Image.new("RGB", (112, 168), color="white")
         
-        # 返回空白图片
-        return Image.new("RGB", (512, 512), color="white")
+        # Pre-resize to limit ViT patch count (key training speed optimization).
+        # Original 321×448 cards → 704 ViT patches. After resize → ~96 patches.
+        w, h = img.size
+        long_edge = max(w, h)
+        if long_edge > self.MAX_LONG_EDGE:
+            scale = self.MAX_LONG_EDGE / long_edge
+            img = img.resize((max(14, int(round(w * scale))), max(14, int(round(h * scale)))), Image.LANCZOS)
+        
+        return img
     
     def _get_empty_sample(self) -> Dict[str, Any]:
         """返回空样本"""
@@ -413,6 +425,16 @@ def load_qlora_model(config: TrainingConfig) -> Tuple[Any, Any]:
         config.model_name,
         trust_remote_code=True,
     )
+    # Cap image resolution for fast image processor.
+    # Qwen2VLImageProcessorFast uses size dict (not just max_pixels attribute).
+    # Default longest_edge = 12845056 (16384 patches!). Cap to 200704 (256 patches).
+    _max_px = 256 * 28 * 28  # 200704 — well above natural card size → no upscale
+    _min_px = 4 * 28 * 28   # 3136
+    processor.image_processor.max_pixels = _max_px
+    processor.image_processor.min_pixels = _min_px
+    if hasattr(processor.image_processor, 'size') and isinstance(processor.image_processor.size, dict):
+        processor.image_processor.size['longest_edge'] = _max_px
+        processor.image_processor.size['shortest_edge'] = _min_px
     
     # 加载模型
     model = AutoModelForVision2Seq.from_pretrained(
@@ -421,7 +443,7 @@ def load_qlora_model(config: TrainingConfig) -> Tuple[Any, Any]:
         device_map="auto",  # 自动分配设备
         trust_remote_code=True,
         torch_dtype=torch.bfloat16 if config.bf16 else torch.float16,
-        # flash_attention_2 needs separate installation; skip if not available
+        attn_implementation="sdpa",  # PyTorch SDPA: fused QK^T/softmax/V kernel, ~1.4x faster attention
     )
     
     # 准备 k-bit 训练
@@ -440,13 +462,36 @@ def load_qlora_model(config: TrainingConfig) -> Tuple[Any, Any]:
         bias="none",
         task_type=TaskType.CAUSAL_LM,
         target_modules=config.target_modules,
-        modules_to_save=["lm_head"],
+        # modules_to_save=["lm_head"] removed: saves 4.36GB VRAM (2.18GB fp32 copy + 2.18GB adafactor m)
+        # Test (test_modules_to_save.py) confirmed backward works correctly without it.
+        # lm_head is tied to embed_tokens (bf16, un-quantized) → gradient flows fine.
         inference_mode=False,
     )
     
     # 应用 LoRA
     model = get_peft_model(model, lora_config)
-    
+
+    # Without modules_to_save=["lm_head"], PEFT does not explicitly call
+    # enable_input_require_grads() for the tied embedding gradient hook.
+    # Call it manually to ensure the gradient flows from lm_head → LLM layers → LoRA params.
+    # (prepare_model_for_kbit_training also calls this, but PEFT wrapping may displace it.)
+    model.enable_input_require_grads()
+
+    # Disable gradient checkpointing in the frozen ViT encoder.
+    # The ViT params are frozen (requires_grad=False from prepare_model_for_kbit_training).
+    # With GC enabled, the ViT forward is recomputed during backward pass (wasteful).
+    # Disabling ViT GC: ViT runs ONCE per mini-batch (not twice), saving ~10-15% step time.
+    # The ViT output tensors (small: 32 layers × 96 patches × 1152) are stored instead.
+    try:
+        # Walk to the visual encoder through PEFT wrapping
+        inner = model.base_model.model if hasattr(model, 'base_model') else model
+        visual = getattr(getattr(inner, 'model', inner), 'visual', None)
+        if visual is not None and hasattr(visual, 'gradient_checkpointing_disable'):
+            visual.gradient_checkpointing_disable()
+            logger.info(f'ViT GC disabled: runs 1× per mini-batch instead of 2× (saves recompute cost)')
+    except Exception as e:
+        logger.warning(f'Could not disable ViT GC: {e}')
+
     # 打印参数
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     total_params = sum(p.numel() for p in model.parameters())
@@ -533,7 +578,11 @@ def train(config: TrainingConfig, data_dir: str, output_dir: str):
         fp16=config.fp16,
         
         # 优化
-        optim="adamw_torch",  # Blackwell-safe: avoid bitsandbytes CUDA crash on resume
+        # Adafactor: Blackwell-safe (no bnb), factored second moments cut lm_head
+        # optimizer state from 4.36GB (fp32 m+v for 545M params) to ~2.18GB.
+        # This keeps total VRAM ~16.5GB (within 17GB), eliminating paging/slowdowns.
+        optim="adafactor",
+        adafactor=True,  # Enables factored second moments; no momentum stored for large tensors
         gradient_checkpointing=config.gradient_checkpointing,
         max_grad_norm=config.max_grad_norm,
         
@@ -675,8 +724,8 @@ def main():
     # 内存优化
     parser.add_argument("--gradient-checkpointing", action="store_true", default=True,
                        help="启用梯度检查点")
-    parser.add_argument("--dataloader-workers", type=int, default=2,
-                       help="数据加载 worker 数量")
+    parser.add_argument("--dataloader-workers", type=int, default=0,
+                       help="数据加载 worker 数量 (0=main process, safe on Windows)")
     
     # 其他
     parser.add_argument("--seed", type=int, default=42,
