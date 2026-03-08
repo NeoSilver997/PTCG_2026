@@ -67,13 +67,13 @@ logging.getLogger("urllib3").setLevel(logging.WARNING)
 if torch.cuda.is_available():
     gpu_name = torch.cuda.get_device_name(0)
     gpu_memory = torch.cuda.get_device_properties(0).total_memory / 1e9
-    logger.info(f"检测到 GPU: {gpu_name} ({gpu_memory:.1f} GB)")
+    logger.info(f"GPU detected: {gpu_name} ({gpu_memory:.1f} GB)")
     
-    # RTX 5070 Ti 检查
+    # RTX 5070 Ti check
     if "5070" in gpu_name or "5090" in gpu_name:
-        logger.info("✓ NVIDIA Blackwell 架构检测到，启用优化")
+        logger.info("✓ NVIDIA Blackwell architecture detected, enabling optimizations")
 else:
-    logger.warning("⚠ 未检测到 GPU，训练将非常缓慢")
+    logger.warning("⚠ No GPU detected, training will be very slow")
 
 
 # ============================================================================
@@ -158,7 +158,7 @@ class PTCGCardDataset(Dataset):
                 if line.strip():
                     self.data.append(json.loads(line))
         
-        logger.info(f"加载数据集：{len(self.data)} 样本")
+        logger.info(f"Dataset loaded: {len(self.data)} samples")
         self._compute_stats()
     
     def _compute_stats(self):
@@ -174,8 +174,8 @@ class PTCGCardDataset(Dataset):
                 lang_counts[lang] = lang_counts.get(lang, 0) + 1
                 complexity_counts[complexity] = complexity_counts.get(complexity, 0) + 1
         
-        logger.info(f"语言分布：{lang_counts}")
-        logger.info(f"复杂度分布：{complexity_counts}")
+        logger.info(f"Language distribution: {lang_counts}")
+        logger.info(f"Complexity distribution: {complexity_counts}")
     
     def __len__(self) -> int:
         return len(self.data)
@@ -376,7 +376,7 @@ def load_qlora_model(config: TrainingConfig) -> Tuple[Any, Any]:
     - 梯度 + 优化器：~6-8GB
     - 总计：~12-14GB
     """
-    logger.info(f"加载模型：{config.model_name}")
+    logger.info(f"Loading model: {config.model_name}")
     
     try:
         from transformers import (
@@ -394,8 +394,8 @@ def load_qlora_model(config: TrainingConfig) -> Tuple[Any, Any]:
             TaskType,
         )
     except ImportError as e:
-        logger.error(f"缺少依赖：{e}")
-        logger.error("请运行：pip install transformers peft bitsandbytes")
+        logger.error(f"Missing dependency: {e}")
+        logger.error("Please run: pip install transformers peft bitsandbytes")
         sys.exit(1)
     
     # 配置 4-bit 量化
@@ -432,7 +432,7 @@ def load_qlora_model(config: TrainingConfig) -> Tuple[Any, Any]:
     )
     
     # 配置 LoRA
-    logger.info("配置 LoRA...")
+    logger.info("Configuring LoRA...")
     lora_config = LoraConfig(
         r=config.lora_r,
         lora_alpha=config.lora_alpha,
@@ -451,14 +451,14 @@ def load_qlora_model(config: TrainingConfig) -> Tuple[Any, Any]:
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     total_params = sum(p.numel() for p in model.parameters())
     
-    logger.info(f"可训练参数：{trainable_params:,} / {total_params:,} ({100*trainable_params/total_params:.2f}%)")
+    logger.info(f"Trainable parameters: {trainable_params:,} / {total_params:,} ({100*trainable_params/total_params:.2f}%)")
     logger.info(f"LoRA 配置：r={config.lora_r}, alpha={config.lora_alpha}")
     
     # 显存使用估算
     if torch.cuda.is_available():
         memory_allocated = torch.cuda.memory_allocated(0) / 1e9
         memory_reserved = torch.cuda.memory_reserved(0) / 1e9
-        logger.info(f"当前显存使用：{memory_allocated:.2f} GB (分配), {memory_reserved:.2f} GB (保留)")
+        logger.info(f"Current VRAM usage: {memory_allocated:.2f} GB (allocated), {memory_reserved:.2f} GB (reserved)")
     
     return model, processor
 
@@ -483,16 +483,16 @@ def train(config: TrainingConfig, data_dir: str, output_dir: str):
     
     # Fallback to original if local version doesn't exist
     if use_local and not train_data_path.exists():
-        logger.warning(f"本地图像 JSONL 不存在：{train_data_path}，回退到原始文件")
-        logger.warning("请先运行：python download_training_images.py")
+        logger.warning(f"Local image JSONL not found: {train_data_path}, falling back to original file")
+        logger.warning("Please run first: python download_training_images.py")
         train_data_path = Path(data_dir) / "train.jsonl"
         val_data_path = Path(data_dir) / "validation.jsonl"
     
     if not train_data_path.exists():
-        logger.error(f"训练数据不存在：{train_data_path}")
+        logger.error(f"Training data not found: {train_data_path}")
         sys.exit(1)
     
-    logger.info(f"使用训练数据：{train_data_path}")
+    logger.info(f"Using training data: {train_data_path}")
     
     # 加载模型
     model, processor = load_qlora_model(config)
@@ -567,17 +567,17 @@ def train(config: TrainingConfig, data_dir: str, output_dir: str):
     )
     
     # 开始训练
-    logger.info("开始训练...")
-    logger.info(f"训练样本：{len(train_dataset)}")
-    logger.info(f"验证样本：{len(val_dataset) if val_dataset else 0}")
+    logger.info("Starting training...")
+    logger.info(f"Training samples: {len(train_dataset)}")
+    logger.info(f"Validation samples: {len(val_dataset) if val_dataset else 0}")
     logger.info(f"Batch size: {config.batch_size}")
-    logger.info(f"梯度累积：{config.gradient_accumulation_steps} 步")
-    logger.info(f"有效 batch size: {config.batch_size * config.gradient_accumulation_steps}")
+    logger.info(f"Gradient accumulation steps: {config.gradient_accumulation_steps}")
+    logger.info(f"Effective batch size: {config.batch_size * config.gradient_accumulation_steps}")
     
     train_result = trainer.train(resume_from_checkpoint=getattr(config, 'resume_from_checkpoint', None))
     
     # 保存模型
-    logger.info("保存模型...")
+    logger.info("Saving model...")
     trainer.save_model(str(output_path / "final"))
     processor.save_pretrained(str(output_path / "final"))
     
@@ -586,13 +586,13 @@ def train(config: TrainingConfig, data_dir: str, output_dir: str):
     with open(output_path / "training_metrics.json", "w", encoding="utf-8") as f:
         json.dump(metrics, f, indent=2, ensure_ascii=False)
     
-    logger.info(f"训练完成！指标：{metrics}")
+    logger.info(f"Training complete! Metrics: {metrics}")
     
-    # 最终显存统计
+    # Final VRAM stats
     if torch.cuda.is_available():
         memory_allocated = torch.cuda.memory_allocated(0) / 1e9
         memory_reserved = torch.cuda.memory_reserved(0) / 1e9
-        logger.info(f"最终显存使用：{memory_allocated:.2f} GB (分配), {memory_reserved:.2f} GB (保留)")
+        logger.info(f"Final VRAM usage: {memory_allocated:.2f} GB (allocated), {memory_reserved:.2f} GB (reserved)")
     
     return trainer, metrics
 
@@ -718,26 +718,26 @@ def main():
     
     # 打印配置
     logger.info("=" * 70)
-    logger.info("PTCG Qwen-VL QLoRA 微调配置 (RTX 5070 Ti 16GB 优化)")
+    logger.info("PTCG Qwen-VL QLoRA Fine-tuning Config (RTX 5070 Ti 16GB optimized)")
     logger.info("=" * 70)
-    logger.info(f"模型：{config.model_name}")
-    logger.info(f"4-bit 量化：{config.load_in_4bit}")
+    logger.info(f"Model: {config.model_name}")
+    logger.info(f"4-bit quantization: {config.load_in_4bit}")
     logger.info(f"LoRA: r={config.lora_r}, alpha={config.lora_alpha}")
     logger.info(f"Batch size: {config.batch_size}")
-    logger.info(f"梯度累积：{config.gradient_accumulation_steps}")
-    logger.info(f"有效 batch size: {config.batch_size * config.gradient_accumulation_steps}")
-    logger.info(f"最大序列长度：{config.max_seq_length}")
-    logger.info(f"学习率：{config.learning_rate}")
-    logger.info(f"训练轮数：{config.num_epochs}")
+    logger.info(f"Gradient accumulation: {config.gradient_accumulation_steps}")
+    logger.info(f"Effective batch size: {config.batch_size * config.gradient_accumulation_steps}")
+    logger.info(f"Max sequence length: {config.max_seq_length}")
+    logger.info(f"Learning rate: {config.learning_rate}")
+    logger.info(f"Epochs: {config.num_epochs}")
     logger.info("=" * 70)
     
     # 显存检查
     if torch.cuda.is_available():
         total_memory = torch.cuda.get_device_properties(0).total_memory / 1e9
-        logger.info(f"GPU 总显存：{total_memory:.1f} GB")
+        logger.info(f"Total GPU VRAM: {total_memory:.1f} GB")
         
         if total_memory < 15:
-            logger.warning("⚠ 显存小于 15GB，可能需要进一步减小 batch size")
+            logger.warning("⚠ VRAM < 15GB, may need to reduce batch size further")
     
     # 开始训练
     train(config, args.data_dir, args.output_dir)

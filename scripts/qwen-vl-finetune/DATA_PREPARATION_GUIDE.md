@@ -9,6 +9,8 @@
 4. 分割为训练/验证/测试集
 5. 验证数据质量
 
+> **当前状态**：已完成初次训练（1800 样本，1 轮）。如果需要增加更多卡牌重新训练，请直接跳到 [➕ 扩展训练数据（添加更多卡牌）](#-扩展训练数据添加更多卡牌) 章节。
+
 ## 🚀 快速开始
 
 ### 基础命令
@@ -325,6 +327,145 @@ python finetune_qwen_vl.py \
     --output-dir ./outputs \
     --epochs 3
 ```
+
+## ➕ 扩展训练数据（添加更多卡牌）
+
+当数据库中导入了新系列卡牌，或需要提升模型对特定语言/稀有度的识别准确率时，可按以下步骤增加训练数据。
+
+### 当前数据状态
+
+```powershell
+# 查看当前数据集大小
+Get-Content .\datasets\dataset_info.json | ConvertFrom-Json | `
+    Select-Object total_samples, train_samples, val_samples, test_samples
+```
+
+当前：**1800 样本**（train 1437 / val 176 / test 187）
+
+### 决定目标样本数
+
+| 数据库卡牌数量 | 推荐 --samples | 效果提升 |
+|--------------|---------------|--------|
+| 2000-4000 张 | **3000** | +中等，覆盖更多系列 |
+| 4000-8000 张 | **5000** | +显著，跨系列泛化 |
+| > 8000 张 | **8000** | +大幅，接近饱和 |
+
+### 导出新训练集
+
+```powershell
+cd scripts/qwen-vl-finetune
+
+# 备份旧数据集（可选）
+Copy-Item -Recurse .\datasets .\datasets_backup_1800
+
+# 导出更多样本（以 3000 为例）
+.venv312\Scripts\python.exe export_training_data.py `
+    --samples 3000 `
+    --preprocess-images `
+    --output-dir ./datasets
+```
+
+**常见问题**：若某语言图像数量不足，脚本会输出警告并用其他类型卡牌补充。
+可以先检查各语言状态：
+
+```powershell
+# 按语言统计数据库中有图像的卡牌数量（需 DATABASE_URL 已设置）
+.venv312\Scripts\python.exe -c "
+import os, psycopg2
+conn = psycopg2.connect(os.environ['DATABASE_URL'])
+cur = conn.cursor()
+cur.execute(\"\"\"
+    SELECT language, COUNT(*) FROM cards
+    WHERE image_url IS NOT NULL
+    GROUP BY language ORDER BY language
+\"\"\")
+for row in cur.fetchall():
+    print(f'{row[0]}: {row[1]}')
+conn.close()
+"
+```
+
+### 下载缺失的图像（如有需要）
+
+```powershell
+# 为新导入的卡牌下载图像
+.venv312\Scripts\python.exe download_training_images.py `
+    --dataset-dir ./datasets `
+    --output-dir ./image_cache
+
+# 若只需补充特定系列
+.venv312\Scripts\python.exe download_training_images.py `
+    --expansion SV9 `
+    --output-dir ./image_cache
+```
+
+### 验证扩展后的数据集
+
+```powershell
+.venv312\Scripts\python.exe validate_dataset.py `
+    --dataset-dir ./datasets `
+    --output-report ./datasets/validation_report.txt
+
+# 确认样本数增加
+Get-Content .\datasets\dataset_info.json | ConvertFrom-Json | `
+    Select-Object total_samples, train_samples
+```
+
+### 选择训练策略
+
+**策略 A（推荐）：重新完整训练**
+- 适合：数据增加了 50% 以上，或新增了全新语言区域
+- 优点：避免遗忘旧数据，收敛更稳定
+
+```powershell
+Copy-Item -Recurse .\outputs\qlora_v1 .\outputs\qlora_v1_backup
+.venv312\Scripts\python.exe finetune_qwen_vl.py `
+    --data-dir ./datasets `
+    --output-dir ./outputs/qlora_v2 `
+    --epochs 3 `
+    --batch-size 1 `
+    --gradient-accumulation-steps 16 `
+    --lora-r 16 `
+    --lora-alpha 32
+```
+
+**策略 B：从检查点继续训练**
+- 适合：仅增加了 10-30% 样本，希望快速迭代
+
+```powershell
+# 找到最后一个 checkpoint
+Get-ChildItem .\outputs\qlora_v1\checkpoint-* | Sort-Object Name | Select-Object -Last 1
+
+.venv312\Scripts\python.exe finetune_qwen_vl.py `
+    --data-dir ./datasets `
+    --output-dir ./outputs/qlora_v1 `
+    --resume-from-checkpoint ./outputs/qlora_v1/checkpoint-last `
+    --epochs 2 `
+    --batch-size 1 `
+    --gradient-accumulation-steps 16
+```
+
+### 重新合并与部署
+
+训练完成后，重新合并 LoRA 并导出 GGUF：
+
+```powershell
+# 合并 LoRA + 导出 GGUF（Q4_K_M）
+.venv312\Scripts\python.exe merge_and_export.py
+
+# 重启 llama-server（使用新 GGUF）
+.\llama.cpp\build_server\bin\llama-server.exe `
+    --model .\outputs\qlora_v1\gguf\ptcg-card-reader-Q4_K_M.gguf `
+    --mmproj .\outputs\qlora_v1\gguf\mmproj-ptcg-f16.gguf `
+    --port 8080 --host 0.0.0.0 -ngl 99
+
+# 验证新模型
+.venv312\Scripts\python.exe use_finetuned_model.py `
+    --backend llama-server `
+    --image "path/to/test_card.jpg"
+```
+
+完整的部署步骤参见 [README.md Phase 6](README.md#phase-6-扩展训练数据添加更多卡牌)。
 
 ## 📚 相关文档
 

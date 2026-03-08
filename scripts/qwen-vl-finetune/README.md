@@ -14,6 +14,7 @@
 - [Phase 3: 模型微调](#phase-3-模型微调)
 - [Phase 4: 模型评估](#phase-4-模型评估)
 - [Phase 5: 服务部署](#phase-5-服务部署)
+- [Phase 6: 扩展训练数据（添加更多卡牌）](#phase-6-扩展训练数据添加更多卡牌)
 - [故障排除](#故障排除)
 
 ## 系统概述
@@ -481,6 +482,194 @@ curl -X POST http://localhost:3000/api/cards/vl/extract \
   -F "language=ja-JP"
 ```
 
+## Phase 6: 扩展训练数据（添加更多卡牌）
+
+当模型精度不足，或者数据库中导入了新系列卡牌后，可以通过增加训练样本来改善效果。本节说明如何在现有 1800 条基础上扩展到更大数据集并重新训练。
+
+### 概述
+
+| 步骤 | 操作 | 时间估计 |
+|------|------|---------|
+| 1 | 导出更多训练样本 | 5-15 分钟 |
+| 2 | 验证新数据集 | 1-2 分钟 |
+| 3 | 重新训练（继续或从头开始） | 6-12 小时 |
+| 4 | 重新合并 LoRA + 导出 GGUF | 30-60 分钟 |
+| 5 | 重新部署 llama-server | 1-2 分钟 |
+
+---
+
+### 步骤 1：导出更多样本
+
+```powershell
+cd scripts/qwen-vl-finetune
+
+# 推荐：增加到 3000 样本（涵盖更多系列）
+.venv312\Scripts\python.exe export_training_data.py `
+    --samples 3000 `
+    --preprocess-images `
+    --output-dir ./datasets
+
+# 或更大规模（如数据库已有 5000+ 张卡牌）
+.venv312\Scripts\python.exe export_training_data.py `
+    --samples 5000 `
+    --preprocess-images `
+    --output-dir ./datasets
+```
+
+> **注意**：脚本会自动平衡三种语言（ja-JP / zh-HK / en-US）和三种复杂度（simple / medium / complex）。
+> 若某语言样本不足，会自动从其他类型补充。
+
+**预期输出：**
+```
+datasets/
+├── train.jsonl          # 80% 训练集
+├── validation.jsonl     # 10% 验证集
+├── test.jsonl           # 10% 测试集
+└── dataset_info.json    # 数据集统计
+```
+
+### 步骤 2：验证新数据集
+
+```powershell
+.venv312\Scripts\python.exe validate_dataset.py `
+    --dataset-dir ./datasets `
+    --output-report ./datasets/validation_report.txt
+
+# 检查摘要
+Get-Content .\datasets\dataset_info.json | ConvertFrom-Json | `
+    Select-Object total_samples, train_samples, val_samples, test_samples
+```
+
+---
+
+### 步骤 3：重新训练
+
+根据情况选择以下两种方式之一：
+
+#### 方式 A：从头完整训练（推荐，数据集变化较大时）
+
+```powershell
+# 备份旧模型（可选但推荐）
+Copy-Item -Recurse .\outputs\qlora_v1 .\outputs\qlora_v1_backup_1800
+
+# 从头开始训练（新输出目录）
+.venv312\Scripts\python.exe finetune_qwen_vl.py `
+    --data-dir ./datasets `
+    --output-dir ./outputs/qlora_v2 `
+    --epochs 3 `
+    --batch-size 1 `
+    --gradient-accumulation-steps 16 `
+    --lora-r 16 `
+    --lora-alpha 32
+```
+
+#### 方式 B：从上次检查点继续训练（适合增量微调）
+
+如果已有训练好的 LoRA 权重，可继续训练以利用先验知识：
+
+```powershell
+# 以最后一个 checkpoint 为起点继续训练
+.venv312\Scripts\python.exe finetune_qwen_vl.py `
+    --data-dir ./datasets `
+    --output-dir ./outputs/qlora_v1 `
+    --resume-from-checkpoint ./outputs/qlora_v1/checkpoint-last `
+    --epochs 2 `
+    --batch-size 1 `
+    --gradient-accumulation-steps 16
+```
+
+> **什么时候用哪种方式？**
+> - ✅ **方式 A（从头）**：数据增加了 50%+ 以上；或新增了一个全新语言区域；或模型出现灾难性遗忘
+> - ✅ **方式 B（继续）**：仅增加了 10-30% 样本；希望快速迭代；数据分布与原来相近
+
+**训练时间参考（RTX 5070 Ti 16GB）：**
+
+| 样本数 | Epochs | 预计时间 |
+|--------|--------|---------|
+| 1800 | 3 | 6-8 小时 |
+| 3000 | 3 | 10-13 小时 |
+| 5000 | 3 | 16-20 小时 |
+
+---
+
+### 步骤 4：重新合并 LoRA + 导出 GGUF
+
+```powershell
+# 合并 LoRA 权重到 base 模型，并导出 Q4_K_M GGUF
+.venv312\Scripts\python.exe merge_and_export.py
+
+# 如果使用了新的输出目录（如 qlora_v2），需手动指定路径：
+# 1. 编辑 merge_and_export.py 顶部的路径常量：
+#    ADAPTER_PATH = "outputs/qlora_v2/final"
+#    MERGED_PATH  = "outputs/qlora_v2/merged"
+#    GGUF_DIR     = "outputs/qlora_v2/gguf"
+# 2. 再运行脚本
+```
+
+**输出文件：**
+```
+outputs/qlora_v1/gguf/
+├── ptcg-card-reader-f16.gguf       # 完整精度（14GB）
+├── ptcg-card-reader-Q4_K_M.gguf   # 量化版本（4.36GB，推理用）
+└── mmproj-ptcg-f16.gguf            # 视觉投影器（1.26GB）
+```
+
+---
+
+### 步骤 5：重新部署 llama-server（Vulkan GPU）
+
+```powershell
+# 停止旧服务（如果在运行）
+# Ctrl+C 或关闭对应终端
+
+# 用新 GGUF 启动 llama-server（Vulkan，RTX 5070 Ti）
+.\llama.cpp\build_server\bin\llama-server.exe `
+    --model .\outputs\qlora_v1\gguf\ptcg-card-reader-Q4_K_M.gguf `
+    --mmproj .\outputs\qlora_v1\gguf\mmproj-ptcg-f16.gguf `
+    --port 8080 `
+    --host 0.0.0.0 `
+    --gpu-layers 35 `
+    --ctx-size 4096 `
+    -ngl 99
+
+# 快速验证（发送一张测试卡牌图片）
+.venv312\Scripts\python.exe use_finetuned_model.py `
+    --backend llama-server `
+    --image "path/to/test_card.jpg"
+```
+
+> **Ollama 状态**：Ollama 0.17.6 暂不支持 `qwen2vl` 架构的视觉渲染器，视觉推理无法正常工作。
+> 文字推理可用，但图像识别请始终用 llama-server（端口 8080）。
+> 详见 [TROUBLESHOOTING.md](TROUBLESHOOTING.md)。
+
+---
+
+### 样本数量选择建议
+
+| 数据库卡牌数量 | 推荐 `--samples` | 理由 |
+|--------------|----------------|------|
+| < 3000 张 | 1800 | 当前默认，数据不足时多样性差 |
+| 3000-6000 张 | 3000 | 覆盖更多系列和稀有度 |
+| 6000-12000 张 | 5000 | 更好的泛化能力 |
+| > 12000 张 | 8000-10000 | 接近预训练数据量级 |
+
+> **提示**：每增加 1000 张样本，训练时间约增加 3-4 小时（RTX 5070 Ti，3 epochs）。
+> 建议从 3000 开始，评估后再决定是否增加到 5000+。
+
+### 验证改进效果
+
+重新训练后，用 benchmark 脚本对比新旧模型：
+
+```powershell
+# 对比新模型 vs 两阶段流水线
+.venv312\Scripts\python.exe benchmark_vs_pipeline.py
+
+# 结果保存在 benchmarks/vs_pipeline/
+# 打开 HTML 报告查看详细对比
+```
+
+---
+
 ## 故障排除
 
 ### CUDA Out of Memory
@@ -556,7 +745,18 @@ python finetune_qwen_vl.py --batch-size 2
 
 ## 📝 更新日志
 
-### 2026-06 (当前)
+### 2026-07 (当前)
+
+- ✅ **Phase 6 文档**：新增扩展训练数据指南（添加更多卡牌、重新训练、重新部署）
+- ✅ **Ollama 部署诊断**：ptcg-card-reader 已部署到 Ollama（6.0GB，含 mmproj），但视觉推理受限
+  - Ollama 0.17.6 不支持 `qwen2vl` 架构渲染器 → 文字推理可用，图像推理需用 llama-server
+  - 解决方案：llama-server（Vulkan，端口 8080）作为图像推理主入口
+- ✅ **双后端客户端**：`use_finetuned_model.py` 支持 `--backend llama-server|ollama`
+  - llama-server：完整视觉推理，~10-30s/张
+  - ollama：仅文字安全，端口 11434（使用 `127.0.0.1`，非 `localhost`）
+- ✅ **基准测试**：`benchmark_vs_pipeline.py` 对比 fine-tuned 模型与两阶段流水线
+
+### 2026-06
 
 - ✅ Ollama 后端集成（`qwen3-vl:latest` 主推理路径）
 - ✅ 5 模型基准测试：qwen3-vl 100% / llava 100% / llama3.2-vision 40%
@@ -565,6 +765,9 @@ python finetune_qwen_vl.py --batch-size 2
 - ✅ `benchmark_all_models.py` 自动检测并测试所有本地视觉模型
 - ✅ 1800 条训练样本导出（train 1437 / val 176 / test 187）
 - ✅ Python 3.12 venv `.venv312`（PyTorch nightly cu128，sm_120 Blackwell）
+- ✅ QLoRA 微调完成（Qwen2.5-VL-7B，qlora_v1）
+- ✅ LoRA 合并 + GGUF 导出（Q4_K_M 4.36GB + mmproj 1.26GB）
+- ✅ llama-server Vulkan 部署（端口 8080，RTX 5070 Ti）
 
 ### 2026-03-06
 
