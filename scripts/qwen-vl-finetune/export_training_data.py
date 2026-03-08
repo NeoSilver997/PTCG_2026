@@ -401,6 +401,24 @@ def get_image_path(card: Any, data_dir: Path) -> Tuple[str, bool]:
     return "", False
 
 
+def _parse_pg_array(val) -> List[str]:
+    """Parse a PostgreSQL array literal string like '{DRAGON,FIRE}' → ['DRAGON', 'FIRE'].
+    If psycopg2 registered the type it already returns a Python list; pass it through.
+    Handles None, empty string, and malformed values gracefully."""
+    if val is None:
+        return []
+    if isinstance(val, list):
+        return [str(v) for v in val]
+    if isinstance(val, str):
+        val = val.strip()
+        if val.startswith('{') and val.endswith('}'):
+            inner = val[1:-1].strip()
+            if not inner:
+                return []
+            return [x.strip().strip('"') for x in inner.split(',') if x.strip()]
+    return []
+
+
 def _rows_to_cards(rows) -> List[Any]:
     """Convert psycopg2 RealDict rows to SimpleNamespace objects matching old Prisma API."""
     cards = []
@@ -427,9 +445,9 @@ def _rows_to_cards(rows) -> List[Any]:
             variantType=row.get("variantType"),
             name=row.get("name") or "",
             supertype=row.get("supertype"),
-            subtypes=list(row.get("subtypes") or []),
+            subtypes=_parse_pg_array(row.get("subtypes")),
             hp=row.get("hp"),
-            types=list(row.get("types") or []),
+            types=_parse_pg_array(row.get("types")),
             ruleBox=row.get("ruleBox"),
             abilities=abilities if abilities else [],
             attacks=attacks if attacks else [],
