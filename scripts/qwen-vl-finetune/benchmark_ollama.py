@@ -23,8 +23,8 @@ except ImportError:
     print("ERROR: Pillow not installed. Run: pip install Pillow")
     sys.exit(1)
 
-OLLAMA_BASE_URL = "http://127.0.0.1:11434"
-DEFAULT_MODEL = "qwen3-vl:latest"
+OLLAMA_BASE_URL = "http://192.168.50.56:11434"
+DEFAULT_MODEL = "ptcg-card-reader-v4:latest"
 
 
 def check_ollama(base_url: str = OLLAMA_BASE_URL):
@@ -56,13 +56,14 @@ def load_image_as_b64(image_path: str) -> str | None:
             print(f"  WARNING: Image not found: {image_path[:80]}...")
             return None
 
-        # Resize to 1024px max to keep tokens reasonable
+        # Resize to 448px max — matches training resolution for qwen2vl models.
+        # Higher resolutions create too many visual tiles and produce garbled output.
         img = Image.open(BytesIO(img_bytes)).convert("RGB")
-        max_size = 1024
+        max_size = 448
         if max(img.size) > max_size:
             img.thumbnail((max_size, max_size), Image.LANCZOS)
         buf = BytesIO()
-        img.save(buf, format="PNG")
+        img.save(buf, format="JPEG", quality=85)
         return base64.b64encode(buf.getvalue()).decode("utf-8")
 
     except Exception as e:
@@ -71,16 +72,12 @@ def load_image_as_b64(image_path: str) -> str | None:
 
 
 def ollama_infer(model: str, prompt: str, image_b64: str | None, timeout: int = 120, base_url: str = OLLAMA_BASE_URL) -> tuple[str, bool]:
-    """Run inference via Ollama /api/chat endpoint."""
-    message = {"role": "user", "content": prompt}
-    if image_b64:
-        message["images"] = [image_b64]
-
+    """Run inference via Ollama /api/generate endpoint (confirmed working for ptcg-card-reader-v4)."""
     payload = {
         "model": model,
-        "messages": [message],
+        "prompt": prompt,
+        "images": [image_b64] if image_b64 else [],
         "stream": False,
-        "think": False,  # Disable qwen3-vl thinking mode; content would otherwise be empty
         "options": {
             "temperature": 0.1,
             "num_predict": 4096,
@@ -89,18 +86,12 @@ def ollama_infer(model: str, prompt: str, image_b64: str | None, timeout: int = 
 
     try:
         r = requests.post(
-            f"{base_url}/api/chat",
+            f"{base_url}/api/generate",
             json=payload,
             timeout=timeout,
         )
         r.raise_for_status()
-        data = r.json()
-        msg = data.get("message", {})
-        text = msg.get("content", "").strip()
-        # Qwen3 thinking models put reasoning in 'thinking' and answer in 'content'.
-        # If think=False was honoured content will be populated; otherwise fall back.
-        if not text:
-            text = msg.get("thinking", "").strip()
+        text = r.json().get("response", "").strip()
         return text, True
     except requests.exceptions.Timeout:
         return "Error: timeout", False
@@ -173,7 +164,7 @@ def main():
                         help="Per-request timeout in seconds (default: 120)")
     parser.add_argument("--prompt", type=str, default=None,
                         help="Override the default prompt with a custom one")
-    parser.add_argument("--ollama-url", type=str, default="http://127.0.0.1:11434")
+    parser.add_argument("--ollama-url", type=str, default="http://192.168.50.56:11434")
     args = parser.parse_args()
 
     base_url = args.ollama_url
