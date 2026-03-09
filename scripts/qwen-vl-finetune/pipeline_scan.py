@@ -71,6 +71,10 @@ MAX_PX_EXTRACT    = 1024     # pixels for extraction crops
 MAX_PX_THUMB      = 320      # pixels for HTML thumbnails
 SUPPORTED_EXT     = {".jpg", ".jpeg", ".png", ".webp"}
 
+# YOLOv8 model cache — loaded once on first auto_count_cards call
+_yolo_model = None
+_YOLO_MODEL_PATH = str(Path(__file__).parent / "yolov8n.pt")
+
 # ---------------------------------------------------------------------------
 # Detection prompt (copied from pipeline_two_stage.py)
 # ---------------------------------------------------------------------------
@@ -335,8 +339,26 @@ def auto_count_cards(img: Image.Image,
         sy_prof = np.convolve(sy.mean(axis=1), np.ones(sy_k) / sy_k, mode="same")
         n_sy, s_sy = _grid_snap(sy_prof, th)
         if n_sy > 0:
-            row_votes[n_sy + 1] += 2.0 * s_sy
-            print(f"  │  (auto-grid/SobelY) {n_sy} divider(s) → {n_sy+1} row(s)  (score={s_sy:.2f})")
+            # Midpoint gate (rows only): if grid-snap picks N≥2 rows but the
+            # profile has no clear edge at 50% (midpoint), the winner is
+            # likely artwork edges within a single card, not a real card border.
+            # Real stacked images always have SOME visual edge near their midpoint.
+            # (Not applied to SobelX/cols because 3-col layouts have no 50% edge.)
+            _sy_base = float(sy_prof.mean())
+            _p50 = th // 2
+            _w50 = max(2, int(th * 0.05))
+            _lo50 = max(int(th * 0.10), _p50 - _w50)
+            _hi50 = min(th - int(th * 0.10) - 1, _p50 + _w50)
+            _n2_ok = True
+            if _lo50 < _hi50 and _sy_base > 0:
+                _n2_score = (float(sy_prof[_lo50:_hi50+1].max()) - _sy_base) / _sy_base
+                _n2_ok = _n2_score >= 0.35
+            if _n2_ok:
+                row_votes[n_sy + 1] += 2.0 * s_sy
+                print(f"  │  (auto-grid/SobelY) {n_sy} divider(s) → {n_sy+1} row(s)  (score={s_sy:.2f})")
+            else:
+                print(f"  │  (auto-grid/SobelY) {n_sy} divider(s) suppressed "
+                      f"(no midpoint edge, n2={_n2_score:.2f})")
         else:
             print(f"  │  (auto-grid/SobelY) no dividers found")
 
@@ -364,6 +386,16 @@ def auto_count_cards(img: Image.Image,
             else:
                 print(f"  │  (auto-grid/AutoCorr) no periodic pattern found")
 
+        # ── Shared helper: cluster 1-D positions into bins ──────────────────
+        def _unique_bins(vals: list, total: int, gap_pct: float = 0.10) -> int:
+            s = sorted(vals)
+            bins: list = [s[0]]
+            gap = total * gap_pct
+            for v in s[1:]:
+                if v - bins[-1] > gap:
+                    bins.append(v)
+            return len(bins)
+
         # ── Strategy 5: Contour detection (cards on visible background) ─────
         sat = hsv[:, :, 1]
         _, sat_thresh = cv2.threshold(sat, 30, 255, cv2.THRESH_BINARY)
@@ -384,15 +416,6 @@ def auto_count_cards(img: Image.Image,
                 card_centres.append((x + w / 2, y + h / 2))
 
         if len(card_centres) >= 2:
-            def _unique_bins(vals: list[float], total: int,
-                             gap_pct: float = 0.10) -> int:
-                s = sorted(vals)
-                bins: list[float] = [s[0]]
-                gap = total * gap_pct
-                for v in s[1:]:
-                    if v - bins[-1] > gap:
-                        bins.append(v)
-                return len(bins)
             c_c = min(6, _unique_bins([cx for cx, _ in card_centres], tw))
             c_r = min(4, _unique_bins([cy for _, cy in card_centres], th))
             col_votes[c_c] += 3.0   # contour-based result is highest confidence
@@ -403,6 +426,49 @@ def auto_count_cards(img: Image.Image,
             col_votes[1] += 3.0
             row_votes[1] += 3.0
 
+        # ── Strategy 6: YOLOv8 detection (card-bbox clustering) ─────────────
+        # YOLOv8n is agnostic to COCO class labels — we only use the bounding
+        # box positions and sizes to vote for a grid layout.
+        try:
+            global _yolo_model
+            from ultralytics import YOLO as _YOLO
+            if _yolo_model is None:
+                _yolo_model = _YOLO(_YOLO_MODEL_PATH)
+            yolo_res  = _yolo_model(thumb, conf=0.08, iou=0.3, verbose=False)
+            yolo_boxes = yolo_res[0].boxes
+            # Keep boxes that are large enough and plausibly card-shaped
+            good_boxes: list[tuple[float, float, float, float]] = []
+            for _box in yolo_boxes:
+                _x1, _y1, _x2, _y2 = _box.xyxy[0].tolist()
+                _bw = _x2 - _x1; _bh = _y2 - _y1
+                if _bh < 1:
+                    continue
+                _area_pct = _bw * _bh / img_area * 100
+                _ratio    = _bw / _bh
+                # Accept portrait-ish boxes with enough area
+                if (_area_pct >= 5.0 and
+                        CARD_RATIO * (1 - RATIO_TOL) <= _ratio <= CARD_RATIO * (1 + RATIO_TOL)):
+                    good_boxes.append((_x1, _y1, _x2, _y2))
+            if len(good_boxes) >= 2:
+                _cx = [(_x1+_x2)/2 for _x1,_y1,_x2,_y2 in good_boxes]
+                _cy = [(_y1+_y2)/2 for _x1,_y1,_x2,_y2 in good_boxes]
+                n_yc = min(6, _unique_bins(_cx, tw, 0.15))
+                n_yr = min(4, _unique_bins(_cy, th, 0.15))
+                col_votes[n_yc] += 1.5
+                row_votes[n_yr] += 1.5
+                print(f"  │  (auto-grid/YOLO) {len(good_boxes)} det → {n_yc}×{n_yr}")
+            elif len(good_boxes) == 1:
+                col_votes[1] += 1.5
+                row_votes[1] += 1.5
+                print(f"  │  (auto-grid/YOLO) 1 detection → 1×1")
+            else:
+                print(f"  │  (auto-grid/YOLO) no card-like detections "
+                      f"({len(yolo_boxes)} total boxes)")
+        except ImportError:
+            pass
+        except Exception as _ye:
+            print(f"  │  (auto-grid/YOLO) error: {_ye}")
+
     except ImportError:
         print("  │  (auto-grid) cv2 not available")
     except Exception as exc:
@@ -411,9 +477,11 @@ def auto_count_cards(img: Image.Image,
     # ── Combine votes → final grid ─────────────────────────────────────────
     ratio_cols, ratio_rows = _ratio_fallback()
 
-    # Plausibility filter: each column strip must be plausibly card-shaped.
-    # cell W/H = iw/N / ih  (for N cols, 1 row).  Must be in [0.40, 1.50].
-    # Too narrow (< 0.40) means more cols/rows were found than physically possible.
+    # Plausibility filter: each strip must be plausibly card-shaped.
+    # col cell W/H = (iw/N)/ih — portrait card ~0.714, allow [0.40, 1.50]
+    # row cell H/W = (ih/N)/iw — portrait card ~1.40, require ≥1.0
+    #   An image with H/W≈1.78 cannot hold 2+ stacked portrait cards
+    #   (that would need H/W≈2.80). Sub-cell H/W for n=2 on H/W=1.78 → 0.89 < 1.0 → rejected.
     CELL_MIN, CELL_MAX = 0.40, 1.50
     valid_col_votes = {
         n: w for n, w in col_votes.items()
@@ -421,7 +489,7 @@ def auto_count_cards(img: Image.Image,
     }
     valid_row_votes = {
         n: w for n, w in row_votes.items()
-        if n >= 1 and CELL_MIN <= (ih / n / iw) <= CELL_MAX
+        if n >= 1 and 1.0 <= (ih / n / iw) <= CELL_MAX
     }
 
     if valid_col_votes:

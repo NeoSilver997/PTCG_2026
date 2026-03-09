@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>auto_count_cards() — Logic Explainer</title>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff;
+    --green: #3fb950; --orange: #d29922; --red: #f85149;
+    --purple: #bc8cff; --teal: #39d353;
+    --card-bg: #1c2128; --tag-bg: #21262d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 15px; line-height: 1.6; }
+
+  header { background: linear-gradient(135deg, #161b22 0%, #0d1117 60%); border-bottom: 1px solid var(--border); padding: 32px 48px 28px; }
+  header h1 { font-size: 26px; font-weight: 700; color: var(--accent); letter-spacing: -0.5px; }
+  header p  { color: var(--muted); margin-top: 6px; font-size: 14px; }
+  header .badge { display: inline-block; background: var(--tag-bg); border: 1px solid var(--border); border-radius: 20px; padding: 2px 12px; font-size: 12px; color: var(--muted); margin-top: 10px; margin-right: 8px; }
+  header .badge span { color: var(--accent); font-weight: 600; }
+
+  main { max-width: 1100px; margin: 0 auto; padding: 36px 48px 80px; }
+
+  /* ── Flow diagram ─────────────────────────────────────────────────── */
+  .flow { display: flex; align-items: center; gap: 0; margin: 28px 0 36px; flex-wrap: wrap; }
+  .flow-step { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 10px 18px; font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; }
+  .flow-step.priority { border-color: var(--accent); color: var(--accent); }
+  .flow-arrow { color: var(--muted); padding: 0 10px; font-size: 18px; }
+
+  /* ── Section headings ─────────────────────────────────────────────── */
+  h2 { font-size: 19px; font-weight: 700; color: var(--text); margin: 44px 0 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  h3 { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+
+  /* ── Strategy cards ───────────────────────────────────────────────── */
+  .strategies { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 16px; margin-top: 16px; }
+  .strategy { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 20px 22px; position: relative; overflow: hidden; }
+  .strategy::before { content: ""; position: absolute; top: 0; left: 0; width: 4px; height: 100%; border-radius: 12px 0 0 12px; }
+  .s1::before { background: #58a6ff; }
+  .s2::before { background: #bc8cff; }
+  .s3::before { background: #f0883e; }
+  .s3-gate::before { background: #f85149; }
+  .s4::before { background: #3fb950; }
+  .s5::before { background: #d29922; }
+  .s6::before { background: #39d353; }
+  .sfb::before { background: var(--muted); }
+
+  .strat-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .strat-num { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+  .s1 .strat-num  { background: rgba(88,166,255,0.15); color: #58a6ff; }
+  .s2 .strat-num  { background: rgba(188,140,255,0.15); color: #bc8cff; }
+  .s3 .strat-num  { background: rgba(240,136,62,0.15); color: #f0883e; }
+  .s3-gate .strat-num { background: rgba(248,81,73,0.15); color: #f85149; }
+  .s4 .strat-num  { background: rgba(63,185,80,0.15); color: #3fb950; }
+  .s5 .strat-num  { background: rgba(210,153,34,0.15); color: #d29922; }
+  .s6 .strat-num  { background: rgba(57,211,83,0.15); color: #39d353; }
+  .sfb .strat-num { background: rgba(139,148,158,0.15); color: var(--muted); }
+
+  .strat-title { font-size: 14px; font-weight: 700; }
+  .strat-label { font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+  .strategy p { font-size: 13px; color: var(--muted); margin-bottom: 10px; line-height: 1.55; }
+  .strategy p strong { color: var(--text); }
+
+  /* ── Weight badge ─────────────────────────────────────────────────── */
+  .weight { display: inline-flex; align-items: center; gap: 6px; background: var(--tag-bg); border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; font-size: 12px; margin-top: 2px; }
+  .weight .val { font-weight: 700; }
+  .w-high  .val { color: var(--orange); }
+  .w-med   .val { color: var(--accent); }
+  .w-low   .val { color: var(--green); }
+  .w-extra .val { color: var(--red); }
+
+  /* ── Tags ─────────────────────────────────────────────────────────── */
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .tag { background: var(--tag-bg); border: 1px solid var(--border); border-radius: 4px; padding: 1px 8px; font-size: 11px; color: var(--muted); }
+  .tag.cols { border-color: #58a6ff44; color: #58a6ff; }
+  .tag.rows { border-color: #f0883e44; color: #f0883e; }
+  .tag.both { border-color: #3fb95044; color: #3fb950; }
+  .tag.gate { border-color: #f8514944; color: #f85149; }
+
+  /* ── Info boxes ───────────────────────────────────────────────────── */
+  .info-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-top: 16px; }
+  .info-box { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
+  .info-box .ico { font-size: 22px; margin-bottom: 8px; }
+  .info-box h4 { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+  .info-box p  { font-size: 12px; color: var(--muted); line-height: 1.5; }
+  .info-box code { background: var(--tag-bg); border-radius: 3px; padding: 0 4px; font-family: monospace; font-size: 11px; color: var(--accent); }
+
+  /* ── Code blocks ──────────────────────────────────────────────────── */
+  pre { background: #010409; border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 12.5px; line-height: 1.6; margin: 12px 0; }
+  code.kw { color: #ff7b72; }
+  code.fn { color: #d2a8ff; }
+  code.st { color: #a5d6ff; }
+  code.cm { color: #8b949e; font-style: italic; }
+  code.nm { color: #79c0ff; }
+  code.op { color: #e6edf3; }
+
+  /* ── Vote table ───────────────────────────────────────────────────── */
+  .vote-table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 13px; }
+  .vote-table th { background: var(--tag-bg); border: 1px solid var(--border); padding: 8px 14px; text-align: left; color: var(--muted); font-weight: 600; font-size: 12px; }
+  .vote-table td { border: 1px solid var(--border); padding: 8px 14px; vertical-align: top; }
+  .vote-table tr:nth-child(even) td { background: #161b2244; }
+  .vote-table .score { font-weight: 700; color: var(--orange); }
+  .vote-table .votes-col { color: #58a6ff; }
+  .vote-table .votes-row { color: #f0883e; }
+  .vote-table .target { color: var(--muted); font-size: 11px; }
+
+  /* ── Filter diagram ───────────────────────────────────────────────── */
+  .filter-box { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 20px 22px; margin-top: 14px; }
+  .filter-formula { background: #010409; border: 1px solid #30363d; border-radius: 6px; padding: 12px 16px; font-family: monospace; font-size: 13px; margin: 10px 0; }
+  .filter-formula .var { color: var(--accent); }
+  .filter-formula .op  { color: var(--text); }
+  .filter-formula .val { color: #79c0ff; }
+  .filter-formula .cmt { color: var(--muted); }
+
+  /* ── Examples ─────────────────────────────────────────────────────── */
+  .examples { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin-top: 12px; }
+  .example { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+  .example .filename { font-size: 11px; color: var(--muted); font-family: monospace; margin-bottom: 6px; }
+  .example .dims { font-size: 12px; color: var(--text); margin-bottom: 4px; }
+  .example .result { font-size: 14px; font-weight: 700; color: var(--green); }
+  .example .result.fail { color: var(--red); }
+  .example .note { font-size: 11px; color: var(--muted); margin-top: 4px; line-height: 1.4; }
+  td .pill { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  td .pill.cols { background: rgba(88,166,255,0.12); color: #58a6ff; border: 1px solid rgba(88,166,255,0.25); }
+  td .pill.rows { background: rgba(240,136,62,0.12); color: #f0883e; border: 1px solid rgba(240,136,62,0.25); }
+
+  /* ── Timeline ─────────────────────────────────────────────────────── */
+  .timeline { position: relative; padding-left: 28px; margin-top: 12px; }
+  .timeline::before { content: ""; position: absolute; left: 8px; top: 6px; bottom: 6px; width: 2px; background: var(--border); border-radius: 2px; }
+  .tl-step { position: relative; margin-bottom: 20px; }
+  .tl-step::before { content: ""; position: absolute; left: -24px; top: 6px; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--border); background: var(--bg); }
+  .tl-step.active::before { border-color: var(--accent); background: var(--accent); }
+  .tl-step h4 { font-size: 13px; font-weight: 700; margin-bottom: 3px; }
+  .tl-step p  { font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+  /* ── Grid snap diagram ────────────────────────────────────────────── */
+  .snap-vis { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; margin-top: 12px; }
+  .snap-bar { flex: 1; min-width: 200px; }
+  .snap-bar-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  .bar-track { height: 48px; background: #010409; border: 1px solid var(--border); border-radius: 6px; position: relative; overflow: hidden; }
+  .bar-fill { position: absolute; top: 0; bottom: 0; background: rgba(88,166,255,0.2); }
+  .bar-peak { position: absolute; top: 4px; bottom: 4px; width: 4px; border-radius: 2px; background: #58a6ff; }
+  .bar-divider { position: absolute; top: 0; bottom: 0; width: 2px; background: #f8514988; border: none; }
+  .bar-marker { position: absolute; top: 50%; transform: translateY(-50%); width: 2px; background: rgba(63,185,80,0.7); height: 60%; }
+
+  /* ── TOC ──────────────────────────────────────────────────────────── */
+  .toc { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 18px 22px; margin-bottom: 36px; }
+  .toc h3 { font-size: 13px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+  .toc a  { display: block; color: var(--accent); font-size: 13px; margin-bottom: 4px; text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+
+  #timing-results { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-top: 14px; }
+  #timing-results table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  #timing-results th { background: var(--tag-bg); padding: 8px 12px; text-align: left; color: var(--muted); font-weight: 600; font-size: 11px; border-bottom: 1px solid var(--border); }
+  #timing-results td { padding: 7px 12px; border-bottom: 1px solid #21262d; vertical-align: top; }
+  #timing-results tr:last-child td { border-bottom: 0; }
+  .ms { font-family: monospace; color: var(--orange); font-size: 12px; }
+  .tc-name { font-family: monospace; font-size: 11px; color: var(--muted); }
+  .tc-grid { font-weight: 700; color: var(--green); font-size: 13px; }
+  .tc-steps { font-size: 11px; color: var(--muted); line-height: 1.7; }
+  .tc-step-line { display: flex; gap: 6px; align-items: baseline; }
+  .tc-step-name { color: var(--text); min-width: 120px; }
+  .tc-step-ms    { font-family: monospace; color: var(--accent); min-width: 55px; text-align: right; }
+  .bar-mini { display: inline-block; height: 8px; background: var(--accent); border-radius: 2px; opacity: 0.6; vertical-align: middle; margin-left: 4px; }
+  .loading-msg { color: var(--muted); font-size: 13px; padding: 20px; text-align: center; }
+  .run-btn { background: var(--accent); color: #0d1117; border: none; border-radius: 6px; padding: 8px 18px; font-size: 13px; font-weight: 700; cursor: pointer; margin-bottom: 12px; }
+  .run-btn:hover { background: #79bcff; }
+  .hint { font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>auto_count_cards() — Detection Logic</h1>
+  <p>How <code>pipeline_scan.py</code> figures out how many PTCG cards are in a photo without running the AI model</p>
+  <span class="badge">PTCG card ratio: <span>63.5 / 88.9 ≈ 0.714</span> (portrait W/H)</span>
+  <span class="badge">Thumbnail: <span>640×640 px</span> for all CV strategies</span>
+  <span class="badge">Strategies: <span>6 + fallback</span></span>
+</header>
+
+<main>
+
+<div class="toc">
+  <h3>Contents</h3>
+  <a href="#overview">1. Overview &amp; Priority</a>
+  <a href="#gridsnap">2. _grid_snap() — the shared scoring engine</a>
+  <a href="#strategies">3. Six Detection Strategies</a>
+  <a href="#filter">4. Plausibility Filter &amp; Vote Aggregation</a>
+  <a href="#examples">5. Real Image Examples</a>
+  <a href="#timing">6. Per-Image Timing Results</a>
+</div>
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<h2 id="overview">1. Overview &amp; Priority</h2>
+
+<p style="color:var(--muted);font-size:13px;margin-bottom:18px;">
+  The function must decide the grid layout (cols × rows) of an image <em>before</em> sending crops to the costly GPU model.
+  Getting this wrong wastes inference time or misses cards entirely.
+  It runs six independent strategies, each casting weighted <em>votes</em> for col/row counts.
+  At the end, the winning vote (if strong enough) overrides an aspect-ratio fallback.
+</p>
+
+<div class="flow">
+  <div class="flow-step priority">① hint_count</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-step">② SobelX (cols)</div>
+  <div class="flow-arrow">+</div>
+  <div class="flow-step">③ HueDiff (cols)</div>
+  <div class="flow-arrow">+</div>
+  <div class="flow-step">④ SobelY (rows)</div>
+  <div class="flow-arrow">+</div>
+  <div class="flow-step">⑤ AutoCorr (cols)</div>
+  <div class="flow-arrow">+</div>
+  <div class="flow-step">⑥ Contour</div>
+  <div class="flow-arrow">+</div>
+  <div class="flow-step">⑦ YOLO</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-step priority">⑧ Vote aggregation + filter</div>
+</div>
+
+<div class="info-grid">
+  <div class="info-box">
+    <div class="ico">🎯</div>
+    <h4>hint_count (highest priority)</h4>
+    <p>If the user passes <code>--count N</code>, skip all strategies. Find the best cols×rows whose product equals N by minimising cell aspect-ratio error vs the PTCG card ratio.</p>
+  </div>
+  <div class="info-box">
+    <div class="ico">🗳️</div>
+    <h4>Vote-based fusion</h4>
+    <p>Each strategy adds a float weight to <code>col_votes[N]</code> or <code>row_votes[N]</code>. The N with the highest total weight wins, provided its <em>plausibility filter</em> passes.</p>
+  </div>
+  <div class="info-box">
+    <div class="ico">🖼️</div>
+    <h4>640px thumbnail</h4>
+    <p>All CV strategies run on a 640×640 max thumbnail. This makes all operations <em>O(1)</em> regardless of original image size and is fast enough (&lt;50 ms).</p>
+  </div>
+  <div class="info-box">
+    <div class="ico">📐</div>
+    <h4>Aspect-ratio fallback</h4>
+    <p>If all votes are weak (<code>&lt; 1.3</code>), fall back to dividing the image ratio by the PTCG card ratio: <code>cols = round(img_W/H ÷ 0.714)</code>.</p>
+  </div>
+</div>
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<h2 id="gridsnap">2. _grid_snap() — the Shared Scoring Engine</h2>
+
+<p style="color:var(--muted);font-size:13px;margin-bottom:14px;">
+  Used by SobelX, HueDiff, and SobelY strategies. Given a 1-D profile (mean Sobel or Hue-diff across the image),
+  it scores how well N equal-spaced dividers match the peaks in that profile.
+</p>
+
+<div class="filter-box">
+  <h3 style="margin-bottom:12px;">How it works</h3>
+  <div class="timeline">
+    <div class="tl-step active">
+      <h4>Step 1 — Compute baseline</h4>
+      <p>Mean of the entire profile = <code>base</code>. Edges above this baseline are significant.</p>
+    </div>
+    <div class="tl-step active">
+      <h4>Step 2 — Try each N from 2 to 6</h4>
+      <p>For N cells, the expected divider positions are <code>total × k/N</code> for k=1…N−1.</p>
+    </div>
+    <div class="tl-step active">
+      <h4>Step 3 — Sample a ±5% window at each expected position</h4>
+      <p>Take the peak value in that window, subtract the baseline, divide by baseline → normalised peak score per divider.</p>
+    </div>
+    <div class="tl-step active">
+      <h4>Step 4 — Average across all dividers</h4>
+      <p><code>avg_score = mean(per-divider scores)</code>. This penalises N values that require edges at positions with no real signal.</p>
+    </div>
+    <div class="tl-step active">
+      <h4>Step 5 — Keep the best N</h4>
+      <p>The N with the highest avg_score wins, but only if it exceeds the <code>min_score=0.35</code> threshold. Otherwise return (0, 0).</p>
+    </div>
+  </div>
+
+  <div class="filter-formula">
+    <span class="var">score(N)</span> <span class="op">= mean over k=1…N−1 of</span>
+    <span class="op">  max(0,  (peak_near(k/N) − base) / base )</span><br>
+    <span class="var">result</span>  <span class="op">= argmax_N score(N)  if  score(N) ≥ 0.35  else  0</span>
+  </div>
+
+  <p style="font-size:13px;color:var(--muted);margin-top:10px;">
+    <strong style="color:var(--text);">Key insight:</strong>
+    A 3-col image has Sobel peaks at 33% and 66% of width. N=3 scores both; N=4 needs 25%/50%/75% — the 75% position has no peak, so avg is lower. N=3 wins naturally.
+  </p>
+</div>
+
+<div style="margin-top:16px;">
+  <div class="snap-bar-label">Visual example — SobelX profile for a 3-card landscape image</div>
+  <div style="position:relative; height:60px; background:#010409; border:1px solid var(--border); border-radius:8px; overflow:hidden;">
+    <!-- baseline -->
+    <div style="position:absolute;left:0;right:0;top:50%;height:1px;background:#30363d;"></div>
+    <!-- peaks at 33% and 66% -->
+    <div style="position:absolute;left:32%;top:10%;width:3%;height:80%;background:rgba(88,166,255,0.3);border-radius:2px;"></div>
+    <div style="position:absolute;left:65%;top:10%;width:3%;height:80%;background:rgba(88,166,255,0.3);border-radius:2px;"></div>
+    <!-- N=3 expected dividers -->
+    <div style="position:absolute;left:33.3%;top:5%;width:2px;height:90%;background:#f85149bb;border-radius:1px"></div>
+    <div style="position:absolute;left:66.6%;top:5%;width:2px;height:90%;background:#f85149bb;border-radius:1px"></div>
+
+    <div style="position:absolute;left:33%;top:2px;font-size:10px;color:#58a6ff;">peak</div>
+    <div style="position:absolute;left:66%;top:2px;font-size:10px;color:#58a6ff;">peak</div>
+    <div style="position:absolute;left:31%;bottom:3px;font-size:10px;color:#f85149;">N=3 @ 33%</div>
+    <div style="position:absolute;left:64%;bottom:3px;font-size:10px;color:#f85149;">N=3 @ 66%</div>
+  </div>
+  <p style="font-size:11px;color:var(--muted);margin-top:4px;">Red markers = N=3 expected positions. Both land on blue peaks → high avg score → 3 cols voted.</p>
+</div>
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<h2 id="strategies">3. Six Detection Strategies</h2>
+
+<div class="strategies">
+
+  <!-- Strategy 1 -->
+  <div class="strategy s1">
+    <div class="strat-header">
+      <div class="strat-num">1</div>
+      <div>
+        <div class="strat-title">SobelX — vertical edge profile</div>
+        <div class="strat-label">Targets side-by-side card dividers</div>
+      </div>
+    </div>
+    <p>
+      Applies a <strong>horizontal Sobel filter</strong> (dx=1, dy=0) to the grayscale thumbnail.
+      The resulting edge-magnitude image is averaged row-wise to get a 1-D profile across the image width.
+      The profile is smoothed with a box kernel (width ≈ image_width/30) to suppress noise.
+      <em>_grid_snap</em> then finds the best N-divider layout.
+    </p>
+    <p>
+      <strong>Why it works:</strong> Two cards sitting side-by-side create a vertical seam — a bright vertical band in the Sobel image — exactly at the card boundary.
+    </p>
+    <div class="tags">
+      <span class="tag cols">→ col_votes</span>
+      <span class="tag">Sobel dx=1</span>
+      <span class="tag">smoothed profile</span>
+    </div>
+    <div class="weight w-high"><span class="val">×2.0 × score</span> <span>weight</span></div>
+  </div>
+
+  <!-- Strategy 2 -->
+  <div class="strategy s2">
+    <div class="strat-header">
+      <div class="strat-num">2</div>
+      <div>
+        <div class="strat-title">HueDiff — color border transitions</div>
+        <div class="strat-label">Detects colored card frame edges</div>
+      </div>
+    </div>
+    <p>
+      Computes the <strong>absolute hue difference</strong> between adjacent horizontal pixels (wrapping at
+      0°/180° for hue circularity). Averaged row-wise → 1-D hue-diff profile, smoothed, fed into <em>_grid_snap</em>.
+    </p>
+    <p>
+      <strong>Why it works:</strong> PTCG cards have bright-coloured type-specific frames (fire=red, water=blue).
+      Adjacent cards of different types create a sharp hue jump at their boundary, even when the grayscale Sobel shows nothing.
+    </p>
+    <div class="tags">
+      <span class="tag cols">→ col_votes</span>
+      <span class="tag">HSV hue channel</span>
+      <span class="tag">circular diff</span>
+    </div>
+    <div class="weight w-med"><span class="val">×1.5 × score</span> <span>weight</span></div>
+  </div>
+
+  <!-- Strategy 3 -->
+  <div class="strategy s3">
+    <div class="strat-header">
+      <div class="strat-num">3</div>
+      <div>
+        <div class="strat-title">SobelY — horizontal edge profile</div>
+        <div class="strat-label">Targets stacked card rows</div>
+      </div>
+    </div>
+    <p>
+      Same as SobelX but with a <strong>vertical Sobel filter</strong> (dx=0, dy=1), averaged column-wise for a
+      profile across image height. Detects horizontal seams between stacked cards.
+    </p>
+    <p>
+      <strong>Challenge:</strong> Single portrait cards also produce strong horizontal edges from artwork —
+      so a midpoint gate is applied (see below).
+    </p>
+    <div class="tags">
+      <span class="tag rows">→ row_votes</span>
+      <span class="tag gate">+ midpoint gate</span>
+      <span class="tag">Sobel dy=1</span>
+    </div>
+    <div class="weight w-high"><span class="val">×2.0 × score</span> <span>weight</span></div>
+  </div>
+
+  <!-- Strategy 3 gate -->
+  <div class="strategy s3-gate">
+    <div class="strat-header">
+      <div class="strat-num">🔒</div>
+      <div>
+        <div class="strat-title">SobelY Midpoint Gate</div>
+        <div class="strat-label">Suppresses single-card false positives</div>
+      </div>
+    </div>
+    <p>
+      After <em>_grid_snap</em> votes for N rows, a <strong>midpoint check</strong> is run: is there
+      a significant edge at <em>exactly 50% of image height</em>? A real 2-row image always has a card boundary near
+      its midpoint. Artwork edges in a single card almost never produce a peak precisely there.
+    </p>
+    <p>
+      <strong>Rule:</strong> n2_score = (peak at 50% − baseline) / baseline. If n2_score &lt; 0.35 → suppress the SobelY vote entirely.
+    </p>
+    <p style="font-size:11px;">
+      <strong>Why NOT applied to SobelX:</strong> A 3-col image has no vertical edge at exactly 50% (edges at 33% and 66%), so the same gate would incorrectly suppress legitimate 3-col votes.
+    </p>
+    <div class="tags">
+      <span class="tag gate">rows only — not cols</span>
+      <span class="tag">threshold: 0.35</span>
+      <span class="tag">window: ±5% of height</span>
+    </div>
+  </div>
+
+  <!-- Strategy 4 -->
+  <div class="strategy s4">
+    <div class="strat-header">
+      <div class="strat-num">4</div>
+      <div>
+        <div class="strat-title">AutoCorr — column-mean autocorrelation</div>
+        <div class="strat-label">Detects periodic card repetition</div>
+      </div>
+    </div>
+    <p>
+      Takes the <strong>column-mean of grayscale</strong> (a 1-D signal of how bright each vertical
+      strip is). Mean-subtracts it, then computes full <strong>autocorrelation</strong>.
+      Searches for the dominant periodicity lag L between width/7 and width/1.5.
+    </p>
+    <p>
+      <strong>Why it works:</strong> Multiple identical cards create a repeating pattern with period ≈ card width.
+      N = round(image\_width / lag) gives the column count.
+    </p>
+    <p style="font-size:11px;">Minimum autocorrelation threshold: r = 0.25. Weaker periodic signals are ignored.</p>
+    <div class="tags">
+      <span class="tag cols">→ col_votes</span>
+      <span class="tag">min r=0.25</span>
+      <span class="tag">lag range: W/7 … W/1.5</span>
+    </div>
+    <div class="weight w-low"><span class="val">×1.5 × r</span> <span>weight</span></div>
+  </div>
+
+  <!-- Strategy 5 -->
+  <div class="strategy s5">
+    <div class="strat-header">
+      <div class="strat-num">5</div>
+      <div>
+        <div class="strat-title">Contour — card-shaped blob detection</div>
+        <div class="strat-label">Works when background is visible</div>
+      </div>
+    </div>
+    <p>
+      Thresholds the <strong>HSV saturation channel</strong> (sat &gt; 30) to find colourful regions,
+      then applies a large morphological close to merge each card into one blob.
+      Contours are filtered by area (≥ 4% of image) and <strong>bounding-box aspect ratio</strong>
+      (within ±30% of 0.714).
+    </p>
+    <p>
+      Card centre points are clustered into column and row bins using <em>_unique_bins()</em> with a 10% gap threshold.
+    </p>
+    <div class="tags">
+      <span class="tag both">→ col_votes + row_votes</span>
+      <span class="tag">saturation threshold</span>
+      <span class="tag">ratio filter ±30%</span>
+    </div>
+    <div class="weight w-extra"><span class="val">3.0 flat</span> <span>highest confidence</span></div>
+  </div>
+
+  <!-- Strategy 6 -->
+  <div class="strategy s6">
+    <div class="strat-header">
+      <div class="strat-num">6</div>
+      <div>
+        <div class="strat-title">YOLOv8n — object bounding boxes</div>
+        <div class="strat-label">General object detector repurposed for card layout</div>
+      </div>
+    </div>
+    <p>
+      Runs <strong>YOLOv8n</strong> (COCO 80-class, 6.2 MB) on the 640px thumbnail at low confidence
+      (conf=0.08, iou=0.3). Class labels are <em>ignored</em> — only bounding box geometry matters.
+      Boxes ≥ 5% area and with W/H ratio within ±30% of 0.714 are accepted as "card-like".
+    </p>
+    <p>
+      Accepted box centres are clustered with _unique_bins(gap=15%) to vote for cols and rows.
+    </p>
+    <p style="font-size:11px;">The model is cached as a module-level singleton so it loads only once.</p>
+    <div class="tags">
+      <span class="tag both">→ col_votes + row_votes</span>
+      <span class="tag">conf=0.08</span>
+      <span class="tag">area ≥ 5%</span>
+      <span class="tag">ratio ±30%</span>
+    </div>
+    <div class="weight w-low"><span class="val">1.5 flat</span> <span>(below contour=3.0)</span></div>
+  </div>
+
+  <!-- Fallback -->
+  <div class="strategy sfb">
+    <div class="strat-header">
+      <div class="strat-num">FB</div>
+      <div>
+        <div class="strat-title">Aspect-ratio fallback</div>
+        <div class="strat-label">Last resort — no CV evidence needed</div>
+      </div>
+    </div>
+    <p>
+      Divides the image's W/H ratio by the PTCG card ratio (0.714) and rounds.<br>
+      Landscape (W &gt; H·0.85): <code>cols = round(img_W/H ÷ 0.714)</code>, then row = round(H / expected_H).<br>
+      Portrait: <code>rows = round(0.714 / img_W/H)</code>, cols = 1.
+    </p>
+    <p>Used when best vote score &lt; 1.3 threshold.</p>
+    <div class="tags">
+      <span class="tag both">cols + rows</span>
+      <span class="tag">pure geometry</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<h2 id="filter">4. Plausibility Filter &amp; Vote Aggregation</h2>
+
+<p style="color:var(--muted);font-size:13px;margin-bottom:14px;">
+  After all strategies vote, impossible grid configurations are pruned before the winner is picked.
+</p>
+
+<div class="filter-box">
+  <h3 style="margin-bottom:14px;">Column plausibility (col_votes)</h3>
+  <div class="filter-formula">
+    <span class="var">cell_W/H</span> <span class="op">=</span> <span class="var">iw</span> <span class="op">/</span> <span class="var">N</span> <span class="op">/</span> <span class="var">ih</span>
+    <br>
+    <span class="cmt">Accept N if:</span>  <span class="val">0.40</span> <span class="op">≤ cell_W/H ≤</span> <span class="val">1.50</span>
+    <br>
+    <span class="cmt"># Too narrow (< 0.40): more cols than physically fit in image width</span>
+  </div>
+  <p style="font-size:13px;color:var(--muted);">
+    Example: a 1920×1080 landscape photo with N=3 cols gives cell W/H = 640/3/360 ≈ 0.59 — inside range ✓.<br>
+    N=8 would give 0.22 — rejected.
+  </p>
+
+  <h3 style="margin-top:18px;margin-bottom:14px;">Row plausibility (row_votes) — stricter</h3>
+  <div class="filter-formula">
+    <span class="var">cell_H/W</span> <span class="op">=</span> <span class="var">ih</span> <span class="op">/</span> <span class="var">N</span> <span class="op">/</span> <span class="var">iw</span>
+    <br>
+    <span class="cmt">Accept N if:</span>  <span class="val">1.0</span> <span class="op">≤ cell_H/W ≤</span> <span class="val">1.50</span>
+    <br>
+    <span class="cmt"># Minimum 1.0: each row strip must be taller than wide (portrait card)</span>
+    <span class="cmt"># A phone-photo (H/W=1.78) with N=2 rows → cell_H/W = 0.89 → rejected!</span>
+  </div>
+  <p style="font-size:13px;color:var(--muted);">
+    This is the key fix for single portrait cards: a 1080×1920 image (H/W=1.78) with 2 stacked cards would need H/W≈2.80, but the image only has 1.78. N=2 sub-cell H/W = 0.89 &lt; 1.0 → filtered out automatically.
+  </p>
+</div>
+
+<div class="filter-box" style="margin-top:14px;">
+  <h3 style="margin-bottom:10px;">Winner selection</h3>
+  <div class="filter-formula">
+    <span class="var">best_col</span> <span class="op">= argmax(valid_col_votes)</span><br>
+    <span class="var">cols</span>     <span class="op">= best_col  if  valid_col_votes[best_col] ≥ 1.3  else  ratio_fallback_cols</span><br>
+    <span class="cmt"># Same for rows</span><br>
+    <span class="cmt"># Final cap: if cols×rows > 12, fall back to ratio estimate</span>
+  </div>
+</div>
+
+<h3 style="margin-top:24px;margin-bottom:10px;">Strategy weights summary</h3>
+<table class="vote-table">
+  <thead><tr>
+    <th>Strategy</th>
+    <th>Votes for</th>
+    <th>Weight</th>
+    <th>Max typical score</th>
+    <th>Suppressible?</th>
+  </tr></thead>
+  <tbody>
+    <tr>
+      <td>SobelX</td>
+      <td><span class="pill cols">cols</span></td>
+      <td class="score">×2.0 × score</td>
+      <td class="score">≈ 2.0</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td>HueDiff</td>
+      <td><span class="pill cols">cols</span></td>
+      <td class="score">×1.5 × score</td>
+      <td class="score">≈ 1.5</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td>SobelY</td>
+      <td><span class="pill rows">rows</span></td>
+      <td class="score">×2.0 × score</td>
+      <td class="score">≈ 2.0</td>
+      <td>Yes — midpoint gate</td>
+    </tr>
+    <tr>
+      <td>AutoCorr</td>
+      <td><span class="pill cols">cols</span></td>
+      <td class="score">×1.5 × r</td>
+      <td class="score">≈ 1.5</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td>Contour</td>
+      <td><span class="pill cols">cols</span> <span class="pill rows">rows</span></td>
+      <td class="score">3.0 flat</td>
+      <td class="score">3.0</td>
+      <td>No (only fires if ≥2 blobs)</td>
+    </tr>
+    <tr>
+      <td>YOLOv8n</td>
+      <td><span class="pill cols">cols</span> <span class="pill rows">rows</span></td>
+      <td class="score">1.5 flat</td>
+      <td class="score">1.5</td>
+      <td>No (only fires if ≥2 boxes)</td>
+    </tr>
+    <tr>
+      <td>Fallback</td>
+      <td><span class="pill cols">cols</span> <span class="pill rows">rows</span></td>
+      <td>—</td>
+      <td>—</td>
+      <td>Override if best vote &lt; 1.3</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<h2 id="examples">5. Real Image Examples</h2>
+
+<div class="examples">
+  <div class="example">
+    <div class="filename">1772619740614_media.jpg</div>
+    <div class="dims">1920×1080 (landscape, H/W=0.56)</div>
+    <div class="result">3×1</div>
+    <div class="note">SobelX finds peaks at 33%/66% → N=3 cols (score≈0.9). Contour finds 3 blobs. Row sub-cell H/W = 1080/1080 = 1.0 ✓</div>
+  </div>
+  <div class="example">
+    <div class="filename">1772816972248_media.jpg</div>
+    <div class="dims">1068×2048 (portrait, H/W=1.92)</div>
+    <div class="result">1×1</div>
+    <div class="note">SobelY votes N=3 rows (artwork edges), but midpoint gate: n2_score=0.33 &lt; 0.35 → suppressed. Row filter also rejects N=2 (sub-cell 0.96 &lt; 1.0).</div>
+  </div>
+  <div class="example">
+    <div class="filename">1772815817120_media.jpg</div>
+    <div class="dims">1152×2048 (portrait, H/W=1.78)</div>
+    <div class="result">1×1</div>
+    <div class="note">Previously detected as 1×3. Now: N=2 sub-cell H/W = 0.89 &lt; 1.0 → filtered. N=3 sub-cell = 0.59 → filtered. Only N=1 passes → 1×1.</div>
+  </div>
+  <div class="example">
+    <div class="filename">648985389_...jpg</div>
+    <div class="dims">590×443 (landscape, H/W=0.75)</div>
+    <div class="result">3×1</div>
+    <div class="note">Three cards laid flat. SobelX + contour agree on 3 cols. Col sub-cell W/H = 443/590*3 ≈ 0.50 ✓</div>
+  </div>
+  <div class="example">
+    <div class="filename">1772464858989_media.jpg</div>
+    <div class="dims">1080×1920 (portrait, H/W=1.78)</div>
+    <div class="result">1×1</div>
+    <div class="note">Previously detected as 1×4. Row filter: N=2 → 0.89, N=3 → 0.59, N=4 → 0.44 — all &lt; 1.0. Rejected. 1×1 wins.</div>
+  </div>
+  <div class="example">
+    <div class="filename">hk00014014.png</div>
+    <div class="dims">868×1213 (portrait, H/W=1.40)</div>
+    <div class="result">1×1</div>
+    <div class="note">Clean single card scan. YOLO finds 0 card-like boxes. Contour: 1 blob → 1×1 voted. All strategies agree.</div>
+  </div>
+</div>
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<h2 id="timing">6. Per-Image Timing Results</h2>
+
+<p class="hint">Run the timing script <code>run_timed_detection.py</code> in the same directory to populate this section, or see the pre-generated log below.</p>
+
+<div id="timing-results">
+  <div class="loading-msg">Loading timing data from <code>detection_timing_log.json</code>…</div>
+</div>
+
+</main>
+
+<script>
+// Load timing data from detection_timing_log.json (generated by run_timed_detection.py)
+async function loadTimingData() {
+  const container = document.getElementById('timing-results');
+  let data;
+  try {
+    const resp = await fetch('detection_timing_log.json');
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    data = await resp.json();
+  } catch (e) {
+    container.innerHTML = `<div class="loading-msg" style="color:var(--orange);">
+      ⚠️ Could not load <em>detection_timing_log.json</em>.<br>
+      Run: <code style="color:var(--accent)">python run_timed_detection.py</code> in the same folder first.
+    </div>`;
+    return;
+  }
+
+  // Build table
+  const maxMs = Math.max(...data.results.map(r => r.total_ms));
+  let rows = data.results.map(r => {
+    const pct = Math.round(r.total_ms / maxMs * 120);
+    const steps = r.steps.map(s => {
+      const spct = Math.round(s.ms / maxMs * 120);
+      return `<div class="tc-step-line">
+        <span class="tc-step-name">${s.name}</span>
+        <span class="tc-step-ms">${s.ms.toFixed(1)} ms</span>
+        <span class="bar-mini" style="width:${spct}px"></span>
+      </div>`;
+    }).join('');
+    return `<tr>
+      <td class="tc-name">${r.filename}</td>
+      <td>${r.width}×${r.height}</td>
+      <td class="tc-grid">${r.cols}×${r.rows}</td>
+      <td class="ms">${r.total_ms.toFixed(1)} ms <span class="bar-mini" style="width:${pct}px"></span></td>
+      <td class="tc-steps">${steps}</td>
+    </tr>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div style="padding:12px 14px;background:var(--tag-bg);border-bottom:1px solid var(--border);font-size:12px;color:var(--muted);">
+      Generated: <strong style="color:var(--text)">${data.generated_at}</strong> &nbsp;|&nbsp;
+      Total images: <strong style="color:var(--text)">${data.results.length}</strong> &nbsp;|&nbsp;
+      Avg: <strong style="color:var(--orange)">${data.avg_ms.toFixed(1)} ms</strong> &nbsp;|&nbsp;
+      YOLO cached: <strong style="color:var(--text)">${data.yolo_cached ? 'yes (2nd+ images)' : 'no'}</strong>
+    </div>
+    <table>
+      <thead><tr>
+        <th>Filename</th><th>Size</th><th>Grid</th><th>Total time</th><th>Per-strategy breakdown</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+loadTimingData();
+</script>
+
+</body>
+</html>
