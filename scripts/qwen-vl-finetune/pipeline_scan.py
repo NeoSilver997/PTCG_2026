@@ -159,6 +159,221 @@ def lang_hint_from_filename(label: str) -> str:
     if n.startswith("jp"):   return "ja-JP"
     return ""
 
+
+def crop_grid(img: Image.Image, cols: int, rows: int,
+              overlap: float = 5.0) -> list[tuple[list[int], Image.Image]]:
+    """
+    Split image into a cols×rows grid with optional overlap on all sides.
+    overlap = percentage of the cell dimension to add as margin (default 5%).
+    The reported bbox_pct is the *logical* cell boundary (no overlap),
+    but the returned crop includes the extra margin so the model can see
+    type icons / text that would otherwise be cut at the cell edge.
+    Returns [(bbox_pct, crop_img), ...].
+    """
+    w, h = img.size
+    cell_w = w // cols
+    cell_h = h // rows
+    pad_x = int(cell_w * overlap / 100)
+    pad_y = int(cell_h * overlap / 100)
+    results = []
+    for r in range(rows):
+        for c in range(cols):
+            # Logical (bbox) boundaries
+            x0_l = c * cell_w
+            y0_l = r * cell_h
+            x1_l = w if c == cols - 1 else (c + 1) * cell_w
+            y1_l = h if r == rows - 1 else (r + 1) * cell_h
+            # Physical crop boundaries (with padding, clamped to image)
+            x0 = max(0, x0_l - pad_x)
+            y0 = max(0, y0_l - pad_y)
+            x1 = min(w, x1_l + pad_x)
+            y1 = min(h, y1_l + pad_y)
+            bbox_pct = [
+                round(x0_l / w * 100),
+                round(y0_l / h * 100),
+                round(x1_l / w * 100),
+                round(y1_l / h * 100),
+            ]
+            results.append((bbox_pct, img.crop((x0, y0, x1, y1))))
+    return results
+
+def auto_count_cards(img: Image.Image,
+                     hint_count: int = 0) -> tuple[int, int]:
+    """
+    Detect card count and grid layout (cols × rows) from image content.
+
+    Priority:
+      1. hint_count > 0  → user told us exactly how many cards (uses image
+         orientation to determine cols × rows automatically).
+      2. OpenCV contour detection: finds large card-shaped rectangles.
+      3. Projection valleys: counts clear vertical dividers between columns.
+      4. Aspect-ratio fallback.
+
+    PTCG card size: 63.5 × 88.9 mm → W/H ≈ 0.714 (portrait).
+    Returns (cols, rows).
+    """
+    CARD_RATIO   = 63.5 / 88.9   # ≈ 0.714 portrait
+    RATIO_TOL    = 0.30           # ±30% tolerance on card aspect ratio
+    MIN_AREA_PCT = 0.04           # contour must cover ≥ 4% of image area
+
+    iw, ih = img.size
+    img_ratio = iw / ih
+
+    # ── Fallback: pure aspect-ratio estimate ───────────────────────────────
+    def _ratio_fallback() -> tuple[int, int]:
+        if img_ratio >= CARD_RATIO * 0.85:
+            c = max(1, round(img_ratio / CARD_RATIO))
+            expected_h = iw / c / CARD_RATIO
+            r = max(1, round(ih / expected_h))
+        else:
+            r = max(1, round(CARD_RATIO / img_ratio))
+            c = 1
+        return c, r
+
+    # ── 0. User-supplied count ─────────────────────────────────────────────
+    if hint_count > 0:
+        n = hint_count
+        # Lay out as cols × rows matching image orientation
+        if img_ratio >= 1.0:
+            # Landscape: prefer multiple columns in one row
+            # Find the column/row split that best matches image ratio
+            best, best_err = (n, 1), float('inf')
+            for c in range(1, n + 1):
+                if n % c != 0:
+                    continue
+                r = n // c
+                err = abs((c / r) - img_ratio)
+                if err < best_err:
+                    best_err, best = err, (c, r)
+            cols, rows = best
+        else:
+            # Portrait: prefer multiple rows in one column
+            cols, rows = 1, n
+        print(f"  │  (auto-grid) user count={n} + image={iw}×{ih} → {cols}×{rows}")
+        return cols, rows
+
+    # ── 1. OpenCV contour detection (works best when cards have background gap)
+    cv2_cols, cv2_rows = 0, 0
+    try:
+        import cv2
+        import numpy as np
+
+        thumb = img.copy()
+        thumb.thumbnail((640, 640), Image.LANCZOS)
+        tw, th = thumb.size
+        bgr  = cv2.cvtColor(np.array(thumb.convert("RGB")), cv2.COLOR_RGB2BGR)
+        gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+
+        img_area = tw * th
+        min_area = img_area * MIN_AREA_PCT
+        card_centres: list[tuple[float, float]] = []
+
+        # Try multiple binary thresholds + contour detection
+        for thresh_val in [None, 60, 100, 140]:   # None = Otsu
+            if thresh_val is None:
+                _, binary = cv2.threshold(gray, 0, 255,
+                                          cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            else:
+                _, binary = cv2.threshold(gray, thresh_val, 255, cv2.THRESH_BINARY)
+            big_k = cv2.getStructuringElement(
+                cv2.MORPH_RECT, (max(5, tw // 18), max(5, th // 18)))
+            closed = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, big_k, iterations=3)
+            conts, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL,
+                                         cv2.CHAIN_APPROX_SIMPLE)
+            found: list[tuple[float, float]] = []
+            for cnt in conts:
+                if cv2.contourArea(cnt) < min_area:
+                    continue
+                x, y, w, h = cv2.boundingRect(cnt)
+                if h == 0:
+                    continue
+                if abs(w / h - CARD_RATIO) / CARD_RATIO <= RATIO_TOL:
+                    found.append((x + w / 2, y + h / 2))
+            if len(found) > len(card_centres):
+                card_centres = found
+
+        if len(card_centres) >= 2:
+            def _unique_bins(vals: list[float], total: int,
+                             gap_pct: float = 0.10) -> int:
+                s = sorted(vals)
+                bins, gap = [s[0]], total * gap_pct
+                for v in s[1:]:
+                    if v - bins[-1] > gap:
+                        bins.append(v)
+                return len(bins)
+            cv2_cols = min(6, _unique_bins([x for x, _ in card_centres], tw))
+            cv2_rows = min(4, _unique_bins([y for _, y in card_centres], th))
+            print(f"  │  (auto-grid/cv2) {len(card_centres)} card region(s) → {cv2_cols}×{cv2_rows}")
+        elif len(card_centres) == 1:
+            cv2_cols, cv2_rows = 1, 1
+            print(f"  │  (auto-grid/cv2) 1 card region found")
+        else:
+            print(f"  │  (auto-grid/cv2) 0 card regions – trying projection")
+
+    except ImportError:
+        print(f"  │  (auto-grid) cv2 not installed, using projection")
+    except Exception as e:
+        print(f"  │  (auto-grid/cv2) error: {e}")
+
+    # ── 2. Projection-based column detection (works even when cards fill frame)
+    # Count clear vertical dividers by finding valleys in horizontal edge profile
+    proj_cols = 0
+    try:
+        import numpy as np
+
+        thumb2 = img.copy()
+        thumb2.thumbnail((640, 640), Image.LANCZOS)
+        tw2, th2 = thumb2.size
+        gray2 = np.array(thumb2.convert("L"), dtype=np.float32)
+
+        # Horizontal edge strength → column dividers appear as valleys
+        dx = np.abs(np.diff(gray2, axis=1)).mean(axis=0)   # shape (tw2-1,)
+        ks = max(5, tw2 // 20)
+        smooth = np.convolve(dx, np.ones(ks) / ks, mode="same")
+
+        # Find all local minima inside image (ignore 12% margins)
+        margin = int(tw2 * 0.12)
+        med = float(np.median(smooth))
+        min_gap = int(tw2 * 0.15)   # cards must be ≥ 15% of width apart
+        threshold = med * 0.72       # valley must be at least 28% below median
+
+        minima = []
+        for i in range(1, tw2 - 2):
+            if i < margin or i > tw2 - margin:
+                continue
+            if smooth[i] <= smooth[i-1] and smooth[i] <= smooth[i+1]:
+                if smooth[i] < threshold:
+                    minima.append((i, float(smooth[i])))
+
+        # Keep only well-separated minima
+        filtered = []
+        for pos, val in sorted(minima, key=lambda x: x[1]):
+            if not filtered or all(abs(pos - p) > min_gap for p, _ in filtered):
+                filtered.append((pos, val))
+
+        proj_cols = len(filtered) + 1   # N valleys → N+1 columns
+        proj_cols = max(1, min(6, proj_cols))
+        print(f"  │  (auto-grid/proj) {len(filtered)} valley(s) found → {proj_cols} col(s)")
+
+    except Exception as e:
+        print(f"  │  (auto-grid/proj) error: {e}")
+
+    # ── 3. Combine results: prefer cv2 contours, else projection, else ratio
+    ratio_cols, ratio_rows = _ratio_fallback()
+
+    if cv2_cols >= 1 and cv2_rows >= 1:
+        cols, rows = cv2_cols, cv2_rows
+    elif proj_cols >= 2:           # projection found multiple columns
+        cols = proj_cols
+        # rows from ratio (projection rows is unreliable)
+        _, rows = _ratio_fallback()
+        rows = max(1, round(ih / (iw / cols / CARD_RATIO)))
+    else:
+        cols, rows = ratio_cols, ratio_rows
+
+    print(f"  │  (auto-grid) final: {cols}×{rows}")
+    return cols, rows
+
 # ---------------------------------------------------------------------------
 # JSON helpers
 # ---------------------------------------------------------------------------
@@ -321,13 +536,40 @@ def collect_crops(images: list[tuple[str, str]], args) -> list[CardRecord]:
             print(f"  └─ SKIP: cannot load")
             continue
 
-        if args.no_detect:
+        lang_hint = lang_hint_from_filename(label)
+
+        # Determine grid: manual > count > auto > detection
+        _auto = getattr(args, "auto_grid", False)
+        _cols_arg = getattr(args, "cols", 1)
+        _rows_arg = getattr(args, "rows", 1)
+        _count    = getattr(args, "count", 0)
+
+        if _cols_arg > 1 or _rows_arg > 1 or _auto or _count > 0:
+            # Grid-split mode
+            if _cols_arg > 1 or _rows_arg > 1:
+                # Explicit cols/rows override
+                cols = max(1, _cols_arg)
+                rows = max(1, _rows_arg)
+            elif _count > 0 or _auto:
+                # Auto-detect (with optional count hint)
+                cols, rows = auto_count_cards(img, hint_count=_count)
+            overlap = getattr(args, "overlap", 5.0)
+            cells = crop_grid(img, cols, rows, overlap=overlap)
+            print(f"  │  (grid {cols}×{rows}, overlap={overlap}%) → {len(cells)} cell(s)")
+            for idx, (bbox, cell) in enumerate(cells):
+                records.append(CardRecord(
+                    image_label=label, image_path=path,
+                    card_id=idx + 1, bbox_pct=bbox,
+                    hint_name="", hint_code="",
+                    lang_hint=lang_hint, crop=cell, s1_time=0.0,
+                ))
+        elif args.no_detect:
             # Assume single card per image, no detection call
             records.append(CardRecord(
                 image_label=label, image_path=path,
                 card_id=1, bbox_pct=[0, 0, 100, 100],
                 hint_name="", hint_code="",
-                lang_hint=lang_hint_from_filename(label),
+                lang_hint=lang_hint,
                 crop=img, s1_time=0.0,
             ))
             print(f"  │  (detection skipped) → 1 card assumed")
@@ -347,7 +589,6 @@ def collect_crops(images: list[tuple[str, str]], args) -> list[CardRecord]:
                 print(f"  └─ No cards detected.")
                 continue
 
-            lang_hint = lang_hint_from_filename(label)
             for card in cards_info:
                 bbox = card.get("bbox_pct", [0, 0, 100, 100])
                 is_full = (bbox == [0, 0, 100, 100])
@@ -596,6 +837,17 @@ def main():
                         help="Ollama model for card detection")
     parser.add_argument("--no-detect",      action="store_true",
                         help="Skip Stage 1 detection (assume 1 card per image, fastest)")
+    parser.add_argument("--auto-grid",      action="store_true",
+                        help="Auto-detect card count and layout from image analysis (no manual cols/rows needed)")
+    parser.add_argument("--count",          type=int, default=0,
+                        help="Tell the pipeline how many cards are in the photo (e.g. --count 3). "
+                             "Auto-determines cols×rows from image orientation. Implies --auto-grid.")
+    parser.add_argument("--cols",           type=int, default=1,
+                        help="Split each image into N columns (e.g. 2 for 2 side-by-side cards). Overrides detection.")
+    parser.add_argument("--rows",           type=int, default=1,
+                        help="Split each image into N rows (e.g. 2 for 2 stacked cards). Overrides detection.")
+    parser.add_argument("--overlap",        type=float, default=5.0,
+                        help="Extra margin %% of cell size added to each crop edge so type/HP icons aren't cut off (default: 5.0)")
     parser.add_argument("--batch-size",     type=int, default=MAX_BATCH_SIZE,
                         help=f"Extraction batch size (default: {MAX_BATCH_SIZE}, max: 10)")
     parser.add_argument("--language",       default="en-US",
@@ -623,7 +875,17 @@ def main():
     print("=" * 60)
     print("  PTCG SCAN PIPELINE")
     print("=" * 60)
-    print(f"  Mode       : {'no-detect (1 card/image)' if args.no_detect else f'detect [{args.detect_model}]'}")
+    _cols, _rows = getattr(args, "cols", 1), getattr(args, "rows", 1)
+    _auto = getattr(args, "auto_grid", False)
+    if _cols > 1 or _rows > 1:
+        _mode = f"grid {_cols}×{_rows} ({_cols*_rows} cards/image)"
+    elif _auto:
+        _mode = "auto-grid (detect card count from image)"
+    elif args.no_detect:
+        _mode = "no-detect (1 card/image)"
+    else:
+        _mode = f"detect [{args.detect_model}]"
+    print(f"  Mode       : {_mode}")
     print(f"  Service    : {args.service_url}")
     print(f"  Batch size : {args.batch_size}")
     print(f"  Language   : {args.language}")
