@@ -233,23 +233,23 @@ def auto_count_cards(img: Image.Image,
     # ── 0. User-supplied count ─────────────────────────────────────────────
     if hint_count > 0:
         n = hint_count
-        # Lay out as cols × rows matching image orientation
-        if img_ratio >= 1.0:
-            # Landscape: prefer multiple columns in one row
-            # Find the column/row split that best matches image ratio
-            best, best_err = (n, 1), float('inf')
-            for c in range(1, n + 1):
-                if n % c != 0:
+        # Find the (cols, rows) split whose cell aspect ratio is closest to CARD_RATIO.
+        # For PTCG portrait cards (0.714):
+        #   landscape photo → cards side-by-side    → cols=n, rows=1
+        #   portrait  photo → cards stacked         → cols=1, rows=n
+        # For grids (e.g. 2×2) we try all exact divisor pairs.
+        best, best_err = (1, 1), float('inf')
+        for c in range(1, n + 1):
+            for r in range(1, n + 1):
+                if c * r != n:
                     continue
-                r = n // c
-                err = abs((c / r) - img_ratio)
+                cell_ratio = (iw / c) / (ih / r)   # W/H of each cell
+                err = abs(cell_ratio - CARD_RATIO)
                 if err < best_err:
                     best_err, best = err, (c, r)
-            cols, rows = best
-        else:
-            # Portrait: prefer multiple rows in one column
-            cols, rows = 1, n
-        print(f"  │  (auto-grid) user count={n} + image={iw}×{ih} → {cols}×{rows}")
+        cols, rows = best
+        print(f"  │  (auto-grid) user count={n} + image={iw}×{ih} → {cols}×{rows} "
+              f"(cell ratio={iw/cols:.0f}×{ih/rows:.0f}={iw/cols/(ih/rows):.2f})")
         return cols, rows
 
     # ── 1. OpenCV contour detection (works best when cards have background gap)
