@@ -200,21 +200,24 @@ def crop_grid(img: Image.Image, cols: int, rows: int,
 def auto_count_cards(img: Image.Image,
                      hint_count: int = 0) -> tuple[int, int]:
     """
-    Detect card count and grid layout (cols × rows) from image content.
+    Detect card count and grid layout (cols × rows) using OpenCV.
 
     Priority:
-      1. hint_count > 0  → user told us exactly how many cards (uses image
-         orientation to determine cols × rows automatically).
-      2. OpenCV contour detection: finds large card-shaped rectangles.
-      3. Projection valleys: counts clear vertical dividers between columns.
-      4. Aspect-ratio fallback.
+      1. hint_count > 0  → user-supplied card count (picks best cols×rows).
+      2. Contour detection — finds card-shaped blobs when background is visible.
+      3. Regularly-spaced Sobel X peaks — vertical dividers between side-by-side cards.
+         Key insight: random artwork edges are IRREGULAR; genuine card dividers
+         are EQUALLY SPACED. The regularity filter (CV < 0.25) eliminates false peaks.
+      4. Hue-diff peaks with same regularity filter (detects colored card borders).
+      5. Column-mean autocorrelation — detects periodic pattern of repeating cards.
+      6. Aspect-ratio fallback.
 
-    PTCG card size: 63.5 × 88.9 mm → W/H ≈ 0.714 (portrait).
+    PTCG card: 63.5 × 88.9 mm → portrait W/H ≈ 0.714.
     Returns (cols, rows).
     """
     CARD_RATIO   = 63.5 / 88.9   # ≈ 0.714 portrait
-    RATIO_TOL    = 0.30           # ±30% tolerance on card aspect ratio
-    MIN_AREA_PCT = 0.04           # contour must cover ≥ 4% of image area
+    RATIO_TOL    = 0.30
+    MIN_AREA_PCT = 0.04
 
     iw, ih = img.size
     img_ratio = iw / ih
@@ -233,27 +236,26 @@ def auto_count_cards(img: Image.Image,
     # ── 0. User-supplied count ─────────────────────────────────────────────
     if hint_count > 0:
         n = hint_count
-        # Find the (cols, rows) split whose cell aspect ratio is closest to CARD_RATIO.
-        # For PTCG portrait cards (0.714):
-        #   landscape photo → cards side-by-side    → cols=n, rows=1
-        #   portrait  photo → cards stacked         → cols=1, rows=n
-        # For grids (e.g. 2×2) we try all exact divisor pairs.
         best, best_err = (1, 1), float('inf')
         for c in range(1, n + 1):
             for r in range(1, n + 1):
                 if c * r != n:
                     continue
-                cell_ratio = (iw / c) / (ih / r)   # W/H of each cell
+                cell_ratio = (iw / c) / (ih / r)
                 err = abs(cell_ratio - CARD_RATIO)
                 if err < best_err:
                     best_err, best = err, (c, r)
         cols, rows = best
         print(f"  │  (auto-grid) user count={n} + image={iw}×{ih} → {cols}×{rows} "
-              f"(cell ratio={iw/cols:.0f}×{ih/rows:.0f}={iw/cols/(ih/rows):.2f})")
+              f"(cell {iw/cols:.0f}×{ih/rows:.0f}={iw/cols/(ih/rows):.2f})")
         return cols, rows
 
-    # ── 1. OpenCV contour detection (works best when cards have background gap)
-    cv2_cols, cv2_rows = 0, 0
+    # ── OpenCV detection ───────────────────────────────────────────────────
+    # votes[col_count] += weight  — at end pick col count with highest vote
+    import collections
+    col_votes: dict[int, float] = collections.defaultdict(float)
+    row_votes: dict[int, float] = collections.defaultdict(float)
+
     try:
         import cv2
         import numpy as np
@@ -263,112 +265,186 @@ def auto_count_cards(img: Image.Image,
         tw, th = thumb.size
         bgr  = cv2.cvtColor(np.array(thumb.convert("RGB")), cv2.COLOR_RGB2BGR)
         gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+        hsv  = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
 
-        img_area = tw * th
-        min_area = img_area * MIN_AREA_PCT
-        card_centres: list[tuple[float, float]] = []
+        # ── Helper: grid-snap scoring ──────────────────────────────────────
+        # For each candidate N (cells), probe the profile exactly at the
+        # expected divider positions (1/N, 2/N, …, (N-1)/N).
+        # Returns (n_dividers, score); (0, 0) if no candidate beats min_score.
+        #
+        # Key advantage over regularity-based approach: we don't care whether
+        # found peaks are regular — we directly test whether specific expected
+        # positions are high in the profile. e.g. for 1×2 (1 divider at 50%),
+        # n_cells=2 scores high because profile peaks near 50%.  n_cells=4
+        # (expected 25%, 50%, 75%) scores lower because nothing is near 75%.
+        def _grid_snap(prof: np.ndarray, total: int,
+                       margin_frac: float = 0.10,
+                       win_frac: float = 0.05,
+                       min_score: float = 0.35,
+                       max_cells: int = 6) -> tuple[int, float]:
+            margin = int(total * margin_frac)
+            win    = max(2, int(total * win_frac))
+            base   = float(prof.mean())
+            if base < 1e-9:
+                return 0, 0.0
+            best_divs, best_score = 0, 0.0
+            for n_cells in range(2, max_cells + 1):
+                dividers = [int(total * k / n_cells) for k in range(1, n_cells)]
+                per_div = []
+                for pos in dividers:
+                    lo = max(margin, pos - win)
+                    hi = min(total - margin - 1, pos + win)
+                    if lo >= hi:
+                        per_div.append(0.0)
+                        continue
+                    peak = float(prof[lo : hi + 1].max())
+                    per_div.append(max(0.0, (peak - base) / base))
+                avg = sum(per_div) / len(per_div)
+                if avg > best_score:
+                    best_score, best_divs = avg, n_cells - 1
+            return (best_divs, best_score) if best_score >= min_score else (0, 0.0)
 
-        # Try multiple binary thresholds + contour detection
-        for thresh_val in [None, 60, 100, 140]:   # None = Otsu
-            if thresh_val is None:
-                _, binary = cv2.threshold(gray, 0, 255,
-                                          cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        # ── Strategy 1: Sobel X → vertical card dividers (cols) ────────────
+        sx = np.abs(cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3))
+        sx_k = max(3, tw // 30)
+        sx_prof = np.convolve(sx.mean(axis=0), np.ones(sx_k) / sx_k, mode="same")
+        n_sx, s_sx = _grid_snap(sx_prof, tw)
+        if n_sx > 0:
+            col_votes[n_sx + 1] += 2.0 * s_sx
+            print(f"  │  (auto-grid/SobelX) {n_sx} divider(s) → {n_sx+1} col(s)  (score={s_sx:.2f})")
+        else:
+            print(f"  │  (auto-grid/SobelX) no dividers found")
+
+        # ── Strategy 2: Hue-diff → colored border transitions (cols) ────────
+        hue = hsv[:, :, 0].astype(np.float64)
+        hue_dx = np.minimum(np.abs(np.diff(hue, axis=1)),
+                            180.0 - np.abs(np.diff(hue, axis=1)))
+        hue_k = max(3, tw // 30)
+        hue_prof = np.convolve(hue_dx.mean(axis=0),
+                               np.ones(hue_k) / hue_k, mode="same")
+        n_hue, s_hue = _grid_snap(hue_prof, tw - 1)
+        if n_hue > 0:
+            col_votes[n_hue + 1] += 1.5 * s_hue
+            print(f"  │  (auto-grid/HueDiff) {n_hue} divider(s) → {n_hue+1} col(s)  (score={s_hue:.2f})")
+        else:
+            print(f"  │  (auto-grid/HueDiff) no dividers found")
+
+        # ── Strategy 3: Sobel Y → horizontal card dividers (rows) ──────────
+        sy = np.abs(cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3))
+        sy_k = max(3, th // 30)
+        sy_prof = np.convolve(sy.mean(axis=1), np.ones(sy_k) / sy_k, mode="same")
+        n_sy, s_sy = _grid_snap(sy_prof, th)
+        if n_sy > 0:
+            row_votes[n_sy + 1] += 2.0 * s_sy
+            print(f"  │  (auto-grid/SobelY) {n_sy} divider(s) → {n_sy+1} row(s)  (score={s_sy:.2f})")
+        else:
+            print(f"  │  (auto-grid/SobelY) no dividers found")
+
+        # ── Strategy 4: Column-mean autocorrelation → repeating card period ─
+        # A periodic signal at lag L → cards repeat every L px → N = tw/L cols
+        col_mean = gray.mean(axis=0).astype(np.float64)
+        col_mean -= col_mean.mean()
+        if np.abs(col_mean).max() > 1e-6:
+            ac_full = np.correlate(col_mean, col_mean, mode="full")
+            ac = ac_full[tw - 1:]            # positive lags
+            ac /= ac[0] + 1e-9              # normalise
+            # Look for the first significant peak in lag range [tw/7 … tw/1.5]
+            lag_min = max(1, tw // 7)
+            lag_max = int(tw // 1.5)
+            best_lag, best_ac = -1, 0.25    # minimum autocorrelation threshold
+            for lag in range(lag_min, min(lag_max, len(ac) - 1)):
+                if ac[lag] > ac[lag - 1] and ac[lag] > ac[lag + 1]:
+                    if ac[lag] > best_ac:
+                        best_ac, best_lag = ac[lag], lag
+            if best_lag > 0:
+                n_ac = max(1, min(6, round(tw / best_lag)))
+                col_votes[n_ac] += best_ac * 1.5   # weight by correlation strength
+                print(f"  │  (auto-grid/AutoCorr) lag={best_lag}px "
+                      f"(r={best_ac:.2f}) → {n_ac} col(s)")
             else:
-                _, binary = cv2.threshold(gray, thresh_val, 255, cv2.THRESH_BINARY)
-            big_k = cv2.getStructuringElement(
-                cv2.MORPH_RECT, (max(5, tw // 18), max(5, th // 18)))
-            closed = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, big_k, iterations=3)
-            conts, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL,
-                                         cv2.CHAIN_APPROX_SIMPLE)
-            found: list[tuple[float, float]] = []
-            for cnt in conts:
-                if cv2.contourArea(cnt) < min_area:
-                    continue
-                x, y, w, h = cv2.boundingRect(cnt)
-                if h == 0:
-                    continue
-                if abs(w / h - CARD_RATIO) / CARD_RATIO <= RATIO_TOL:
-                    found.append((x + w / 2, y + h / 2))
-            if len(found) > len(card_centres):
-                card_centres = found
+                print(f"  │  (auto-grid/AutoCorr) no periodic pattern found")
+
+        # ── Strategy 5: Contour detection (cards on visible background) ─────
+        sat = hsv[:, :, 1]
+        _, sat_thresh = cv2.threshold(sat, 30, 255, cv2.THRESH_BINARY)
+        big_k = cv2.getStructuringElement(
+            cv2.MORPH_RECT, (max(5, tw // 16), max(5, th // 16)))
+        sat_closed = cv2.morphologyEx(sat_thresh, cv2.MORPH_CLOSE, big_k, iterations=3)
+        conts, _ = cv2.findContours(sat_closed, cv2.RETR_EXTERNAL,
+                                     cv2.CHAIN_APPROX_SIMPLE)
+        img_area = tw * th
+        card_centres: list[tuple[float, float]] = []
+        for cnt in conts:
+            if cv2.contourArea(cnt) < img_area * MIN_AREA_PCT:
+                continue
+            x, y, w, h = cv2.boundingRect(cnt)
+            if h == 0:
+                continue
+            if abs(w / h - CARD_RATIO) / CARD_RATIO <= RATIO_TOL:
+                card_centres.append((x + w / 2, y + h / 2))
 
         if len(card_centres) >= 2:
             def _unique_bins(vals: list[float], total: int,
                              gap_pct: float = 0.10) -> int:
                 s = sorted(vals)
-                bins, gap = [s[0]], total * gap_pct
+                bins: list[float] = [s[0]]
+                gap = total * gap_pct
                 for v in s[1:]:
                     if v - bins[-1] > gap:
                         bins.append(v)
                 return len(bins)
-            cv2_cols = min(6, _unique_bins([x for x, _ in card_centres], tw))
-            cv2_rows = min(4, _unique_bins([y for _, y in card_centres], th))
-            print(f"  │  (auto-grid/cv2) {len(card_centres)} card region(s) → {cv2_cols}×{cv2_rows}")
+            c_c = min(6, _unique_bins([cx for cx, _ in card_centres], tw))
+            c_r = min(4, _unique_bins([cy for _, cy in card_centres], th))
+            col_votes[c_c] += 3.0   # contour-based result is highest confidence
+            row_votes[c_r] += 3.0
+            print(f"  │  (auto-grid/contour) {len(card_centres)} region(s) "
+                  f"→ {c_c}×{c_r}")
         elif len(card_centres) == 1:
-            cv2_cols, cv2_rows = 1, 1
-            print(f"  │  (auto-grid/cv2) 1 card region found")
-        else:
-            print(f"  │  (auto-grid/cv2) 0 card regions – trying projection")
+            col_votes[1] += 3.0
+            row_votes[1] += 3.0
 
     except ImportError:
-        print(f"  │  (auto-grid) cv2 not installed, using projection")
-    except Exception as e:
-        print(f"  │  (auto-grid/cv2) error: {e}")
+        print("  │  (auto-grid) cv2 not available")
+    except Exception as exc:
+        print(f"  │  (auto-grid) cv2 error: {exc}")
 
-    # ── 2. Projection-based column detection (works even when cards fill frame)
-    # Count clear vertical dividers by finding valleys in horizontal edge profile
-    proj_cols = 0
-    try:
-        import numpy as np
-
-        thumb2 = img.copy()
-        thumb2.thumbnail((640, 640), Image.LANCZOS)
-        tw2, th2 = thumb2.size
-        gray2 = np.array(thumb2.convert("L"), dtype=np.float32)
-
-        # Horizontal edge strength → column dividers appear as valleys
-        dx = np.abs(np.diff(gray2, axis=1)).mean(axis=0)   # shape (tw2-1,)
-        ks = max(5, tw2 // 20)
-        smooth = np.convolve(dx, np.ones(ks) / ks, mode="same")
-
-        # Find all local minima inside image (ignore 12% margins)
-        margin = int(tw2 * 0.12)
-        med = float(np.median(smooth))
-        min_gap = int(tw2 * 0.15)   # cards must be ≥ 15% of width apart
-        threshold = med * 0.72       # valley must be at least 28% below median
-
-        minima = []
-        for i in range(1, tw2 - 2):
-            if i < margin or i > tw2 - margin:
-                continue
-            if smooth[i] <= smooth[i-1] and smooth[i] <= smooth[i+1]:
-                if smooth[i] < threshold:
-                    minima.append((i, float(smooth[i])))
-
-        # Keep only well-separated minima
-        filtered = []
-        for pos, val in sorted(minima, key=lambda x: x[1]):
-            if not filtered or all(abs(pos - p) > min_gap for p, _ in filtered):
-                filtered.append((pos, val))
-
-        proj_cols = len(filtered) + 1   # N valleys → N+1 columns
-        proj_cols = max(1, min(6, proj_cols))
-        print(f"  │  (auto-grid/proj) {len(filtered)} valley(s) found → {proj_cols} col(s)")
-
-    except Exception as e:
-        print(f"  │  (auto-grid/proj) error: {e}")
-
-    # ── 3. Combine results: prefer cv2 contours, else projection, else ratio
+    # ── Combine votes → final grid ─────────────────────────────────────────
     ratio_cols, ratio_rows = _ratio_fallback()
 
-    if cv2_cols >= 1 and cv2_rows >= 1:
-        cols, rows = cv2_cols, cv2_rows
-    elif proj_cols >= 2:           # projection found multiple columns
-        cols = proj_cols
-        # rows from ratio (projection rows is unreliable)
-        _, rows = _ratio_fallback()
-        rows = max(1, round(ih / (iw / cols / CARD_RATIO)))
+    # Plausibility filter: each column strip must be plausibly card-shaped.
+    # cell W/H = iw/N / ih  (for N cols, 1 row).  Must be in [0.40, 1.50].
+    # Too narrow (< 0.40) means more cols/rows were found than physically possible.
+    CELL_MIN, CELL_MAX = 0.40, 1.50
+    valid_col_votes = {
+        n: w for n, w in col_votes.items()
+        if n >= 1 and CELL_MIN <= (iw / n / ih) <= CELL_MAX
+    }
+    valid_row_votes = {
+        n: w for n, w in row_votes.items()
+        if n >= 1 and CELL_MIN <= (ih / n / iw) <= CELL_MAX
+    }
+
+    if valid_col_votes:
+        best_col = max(valid_col_votes, key=lambda k: valid_col_votes[k])
+        cols = best_col if valid_col_votes[best_col] >= 1.3 else ratio_cols
+        if valid_col_votes[best_col] >= 1.3:
+            print(f"  │  (auto-grid) cv2 voted cols={cols} "
+                  f"(score={valid_col_votes[best_col]:.1f})")
     else:
+        cols = ratio_cols
+        print(f"  │  (auto-grid) all col votes filtered out → ratio cols={cols}")
+
+    if valid_row_votes:
+        best_row = max(valid_row_votes, key=lambda k: valid_row_votes[k])
+        rows = best_row if valid_row_votes[best_row] >= 1.3 else ratio_rows
+        if valid_row_votes[best_row] >= 1.3:
+            print(f"  │  (auto-grid) cv2 voted rows={rows} "
+                  f"(score={valid_row_votes[best_row]:.1f})")
+    else:
+        rows = ratio_rows
+
+    # Final plausibility cap
+    if cols * rows > 12:
         cols, rows = ratio_cols, ratio_rows
 
     print(f"  │  (auto-grid) final: {cols}×{rows}")
