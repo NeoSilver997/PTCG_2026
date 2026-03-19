@@ -37,11 +37,40 @@ export class BattleLogParser {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       
-      // Detect turn changes
+      // Detect turn changes and emit TURN_START actions
       if (line.includes("'s Turn")) {
         currentTurn++;
-        const playerName = line.replace("'s Turn", '').trim();
+        // Extract the player name robustly. Some lines include "Turn # 1 - Name's Turn"
+        const turnMatch = line.match(/(?:Turn\s*#\s*\d+\s*-\s*)?(.+?)'s\s+Turn/);
+        const playerName = turnMatch ? turnMatch[1].trim() : line.replace("'s Turn", '').trim();
         currentPlayer = playerName === metadata.player1Name ? 'player1' : 'player2';
+
+        // Create a TURN_START action for this turn
+        const turnStartAction: BattleAction = {
+          id: `action-${actionCounter++}-turnstart`,
+          turnNumber: currentTurn,
+          timestamp,
+          player: currentPlayer,
+          actionType: 'TURN_START',
+          cardName: 'Turn Start',
+          details: line,
+          metadata: {}
+        };
+
+        // Check if this player already has an Active Pokémon from previous actions
+        const hasActive = actions.some(a =>
+          a.player === currentPlayer && (
+            (a.actionType === 'PLAY_POKEMON' && a.metadata?.position === 'active') ||
+            (a.actionType === 'ACTIVE_CHANGE' && a.metadata?.setActive)
+          )
+        );
+
+        if (!hasActive) {
+          turnStartAction.metadata = { missingActive: true };
+        }
+
+        actions.push(turnStartAction);
+        timestamp += 100;
         continue;
       }
       
@@ -66,6 +95,21 @@ export class BattleLogParser {
       
       if (action) {
         actions.push(action);
+        // If a knockout occurred, immediately add a DISCARD action for the knocked out Pokémon
+        if (action.actionType === 'KNOCKOUT') {
+          const discardAction: BattleAction = {
+            id: `action-${actionCounter++}-discard`,
+            turnNumber: action.turnNumber,
+            timestamp: timestamp + 50,
+            player: action.player,
+            actionType: 'DISCARD',
+            cardName: action.cardName,
+            details: `${action.cardName} moved to discard pile after KO`,
+            metadata: { from: 'KNOCKOUT' }
+          };
+          actions.push(discardAction);
+          timestamp += 50;
+        }
         timestamp += 200; // 200ms between actions for replay
       }
     }
@@ -216,6 +260,11 @@ export class BattleLogParser {
     
     // Determine the actual player from the action line
     const actualPlayer = this.getPlayerFromActionLine(line, metadata, player);
+// Mulligan
+    if (line.includes('took a mulligan')) {
+      return this.parseMulliganAction(line, turnNumber, actualPlayer, timestamp, actionId, metadata, lines, currentIndex);
+    }
+
     // Drew cards
     if (line.includes('drew') && line.includes('card')) {
       return this.parseDrawAction(line, turnNumber, actualPlayer, timestamp, actionId, metadata, lines, currentIndex);
@@ -231,6 +280,11 @@ export class BattleLogParser {
       return this.playPokemonAction(line, turnNumber, actualPlayer, timestamp, actionId, metadata);
     }
     
+    // Active change (e.g. "X's Y is now in the Active Spot")
+    if (line.includes('is now in the Active Spot')) {
+      return this.parseActiveChangeAction(line, turnNumber, actualPlayer, timestamp, actionId, metadata);
+    }
+
     // Attached energy
     if (line.includes('attached') && line.includes('Energy')) {
       return this.parseAttachEnergyAction(line, turnNumber, actualPlayer, timestamp, actionId, metadata);
@@ -238,7 +292,7 @@ export class BattleLogParser {
     
     // Used attack
     if (line.includes('used') && line.includes('on') && line.includes('damage')) {
-      return this.parseAttackAction(line, turnNumber, actualPlayer, timestamp, actionId, metadata);
+      return this.parseAttackAction(line, turnNumber, actualPlayer, timestamp, actionId, metadata, lines, currentIndex);
     }
     
     // Evolved
@@ -268,7 +322,7 @@ export class BattleLogParser {
     
     // Discarded
     if (line.includes('discarded')) {
-      return this.parseDiscardAction(line, turnNumber, actualPlayer, timestamp, actionId, metadata);
+      return this.parseDiscardAction(line, turnNumber, actualPlayer, timestamp, actionId, metadata, lines, currentIndex);
     }
     
     return null;
@@ -291,11 +345,14 @@ export class BattleLogParser {
     
     let cardNames: string[] = [];
     
+    // Determine the actual player from the action line, not the turn
+    const actualPlayer = this.getPlayerFromActionLine(line, metadata, player);
+    
     // Check if specific card name is mentioned in draw line
     if (specificCardMatch && !line.includes('drew a card') && !line.includes('drew card')) {
       cardNames = [specificCardMatch[1].trim()];
     } else {
-      // Look ahead for bullet point list of cards
+      // Look ahead for bullet point list of cards or continuation lines like '- X drew ... and played them to the Bench.'
       for (let i = currentIndex + 1; i < Math.min(currentIndex + 10, lines.length); i++) {
         const nextLine = lines[i];
         if (nextLine.startsWith('•')) {
@@ -304,15 +361,46 @@ export class BattleLogParser {
           cardNames = cardsLine.split(',').map(c => c.trim());
           break;
         }
+
+        // Check for continuation draw lines (e.g., '- Neo drew 2 cards and played them to the Bench.')
+        const contMatch = nextLine.match(/drew\s+(?:\d+\s+cards?|[A-Z][^,\.]+?)\s*(?:and played(?: them| it) to the (Bench|Active Spot|Active))/i);
+        if (contMatch) {
+          const playedTo = contMatch[1] ? (contMatch[1].toLowerCase().includes('bench') ? 'bench' : 'active') : undefined;
+          // Try to capture inline card names if present
+          const inlineCardMatch = nextLine.match(/drew\s+([A-Z][^,\.]+?)\s+and\s+played/i);
+          if (inlineCardMatch) {
+            cardNames = [inlineCardMatch[1].trim()];
+          } else {
+            // Also look for following bullet list for names
+            for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
+              if (lines[j].startsWith('•')) {
+                cardNames = lines[j].replace('•', '').trim().split(',').map(c => c.trim());
+                break;
+              }
+              if (!lines[j].startsWith('-') && !lines[j].startsWith('•')) break;
+            }
+          }
+
+          // Set metadata to indicate played to bench/active
+          if (!cardNames) cardNames = [];
+          return {
+            id: `action-${actionId}`,
+            turnNumber,
+            timestamp,
+            player: actualPlayer,
+            actionType: 'DRAW',
+            cardName: cardNames.length > 0 ? cardNames[0] : `${count} card${count > 1 ? 's' : ''}`,
+            details: line + ' / ' + nextLine,
+            metadata: { count, cardNames: cardNames.length > 0 ? cardNames : undefined, playedTo: playedTo }
+          } as BattleAction;
+        }
+
         // Stop looking if we hit another action or turn
         if (!nextLine.startsWith('-') && !nextLine.includes('drawn cards')) {
           break;
         }
       }
     }
-    
-    // Determine the actual player from the action line, not the turn
-    const actualPlayer = this.getPlayerFromActionLine(line, metadata, player);
     
     return {
       id: `action-${actionId}`,
@@ -369,6 +457,42 @@ export class BattleLogParser {
     };
   }
 
+  private parseMulliganAction(
+    line: string,
+    turnNumber: number,
+    player: 'player1' | 'player2',
+    timestamp: number,
+    actionId: number,
+    metadata: ParsedMetadata,
+    lines: string[],
+    currentIndex: number
+  ): BattleAction | null {
+    // Collect revealed cards after "Cards revealed from Mulligan"
+    let cardNames: string[] = [];
+    for (let i = currentIndex + 1; i < Math.min(currentIndex + 6, lines.length); i++) {
+      const nextLine = lines[i];
+      if (nextLine.startsWith('•')) {
+        const cardsLine = nextLine.replace('•', '').trim();
+        cardNames = cardsLine.split(',').map(c => c.trim());
+        break;
+      }
+      if (nextLine.includes("'s Turn") || nextLine.includes('drew')) break;
+    }
+
+    const actualPlayer = this.getPlayerFromActionLine(line, metadata, player);
+
+    return {
+      id: `action-${actionId}`,
+      turnNumber,
+      timestamp,
+      player: actualPlayer,
+      actionType: 'MULLIGAN',
+      cardName: 'Mulligan',
+      details: line,
+      metadata: { cardNames: cardNames.length > 0 ? cardNames : undefined }
+    };
+  }
+
   private playPokemonAction(
     line: string,
     turnNumber: number,
@@ -377,7 +501,7 @@ export class BattleLogParser {
     actionId: number,
     metadata: ParsedMetadata
   ): BattleAction | null {
-    const match = line.match(/(\w+)\s+played\s+([^t]+?)\s+to the (Active Spot|Bench)/);
+    const match = line.match(/(\w+)\s+played\s+(.+?)\s+to the\s+(Active Spot|Bench)/i);
     if (!match) return null;
     
     const cardName = match[2].trim();
@@ -394,7 +518,7 @@ export class BattleLogParser {
       actionType: 'PLAY_POKEMON',
       cardName,
       details: line,
-      metadata: { position }
+      metadata: { position, setActive: position === 'active' }
     };
   }
   
@@ -423,7 +547,8 @@ export class BattleLogParser {
       actionType: 'ATTACH_ENERGY',
       cardName: energyName,
       targetCardName: targetName,
-      details: line
+      details: line,
+      metadata: { attachedTo: targetName }
     };
   }
   
@@ -433,7 +558,9 @@ export class BattleLogParser {
     player: 'player1' | 'player2',
     timestamp: number,
     actionId: number,
-    metadata: ParsedMetadata
+    metadata: ParsedMetadata,
+    lines?: string[],
+    currentIndex?: number
   ): BattleAction | null {
     const match = line.match(/(.+?)'s\s+(.+?)\s+used\s+(.+?)\s+on\s+(.+?)'s\s+(.+?)\s+for\s+(\d+)\s+damage/);
     if (!match) return null;
@@ -445,6 +572,23 @@ export class BattleLogParser {
     
     // Determine the actual player from the action line (player1Name's Pokemon attacked)
     const actualPlayer = this.getPlayerFromActionLine(line, metadata, player);
+
+    // Look ahead for a damage breakdown block
+    const damageBreakdown: Record<string, number> = {};
+    if (lines && typeof currentIndex === 'number') {
+      for (let i = currentIndex + 1; i < Math.min(currentIndex + 6, lines.length); i++) {
+        const nextLine = lines[i];
+        if (nextLine.startsWith('•') || nextLine.includes('Damage breakdown')) {
+          const bdMatch = nextLine.match(/Base damage:\s*(\d+)/i);
+          if (bdMatch) damageBreakdown.base = parseInt(bdMatch[1]);
+          const exMatch = nextLine.match(/Pokémon ex:\s*(\d+)/i);
+          if (exMatch) damageBreakdown.pokemonEx = parseInt(exMatch[1]);
+          const totalMatch = nextLine.match(/Total damage:\s*(\d+)/i);
+          if (totalMatch) damageBreakdown.total = parseInt(totalMatch[1]);
+        }
+        if (!nextLine.startsWith('-') && !nextLine.startsWith('•')) break;
+      }
+    }
     
     return {
       id: `action-${actionId}`,
@@ -456,7 +600,7 @@ export class BattleLogParser {
       targetCardName: targetName,
       damage,
       details: line,
-      metadata: { attackName }
+      metadata: { attackName, damageBreakdown: Object.keys(damageBreakdown).length ? damageBreakdown : undefined }
     };
   }
   
@@ -485,7 +629,8 @@ export class BattleLogParser {
       actionType: 'EVOLVE',
       cardName: toName,
       targetCardName: fromName,
-      details: line
+      details: line,
+      metadata: { evolvedFrom: fromName }
     };
   }
   
@@ -513,7 +658,8 @@ export class BattleLogParser {
       player: knockedOutPlayer,
       actionType: 'KNOCKOUT',
       cardName,
-      details: line
+      details: line,
+      metadata: { movedToDiscard: true }
     };
   }
   
@@ -574,6 +720,34 @@ export class BattleLogParser {
       details: line
     };
   }
+
+  private parseActiveChangeAction(
+    line: string,
+    turnNumber: number,
+    player: 'player1' | 'player2',
+    timestamp: number,
+    actionId: number,
+    metadata: ParsedMetadata
+  ): BattleAction | null {
+    const match = line.match(/(.+?)'s\s+(.+?)\s+is now in the Active Spot/);
+    if (!match) return null;
+
+    const ownerName = match[1].trim();
+    const cardName = match[2].trim();
+
+    const actualPlayer = ownerName === metadata.player1Name ? 'player1' : 'player2';
+
+    return {
+      id: `action-${actionId}`,
+      turnNumber,
+      timestamp,
+      player: actualPlayer,
+      actionType: 'ACTIVE_CHANGE',
+      cardName,
+      details: line,
+      metadata: { setActive: true }
+    };
+  }
   
   private parseAbilityAction(
     line: string,
@@ -610,13 +784,39 @@ export class BattleLogParser {
     player: 'player1' | 'player2',
     timestamp: number,
     actionId: number,
-    metadata: ParsedMetadata
+    metadata: ParsedMetadata,
+    lines?: string[],
+    currentIndex?: number
   ): BattleAction | null {
-    // Skip generic "X cards were discarded from..." messages
-    if (line.match(/\d+\s+cards?\s+were\s+discarded\s+from/i)) {
-      return null;
+    // Handle "X cards were discarded from <owner>'s <card>." and collect bullet list
+    let multiMatch = line.match(/(\d+)\s+cards?\s+were\s+discarded\s+from\s+(.+?)\./i);
+    if (multiMatch) {
+      const owner = multiMatch[2].trim();
+      const cardNames: string[] = [];
+      if (lines && typeof currentIndex === 'number') {
+        for (let i = currentIndex + 1; i < Math.min(currentIndex + 6, lines.length); i++) {
+          const nl = lines[i];
+          if (nl.startsWith('•')) {
+            const list = nl.replace('•', '').trim().split(',').map(s => s.trim());
+            cardNames.push(...list);
+            break;
+          }
+          if (!nl.startsWith('-') && !nl.startsWith('•')) break;
+        }
+      }
+      const actualPlayer = owner.includes(metadata.player1Name) ? 'player1' : 'player2';
+      return {
+        id: `action-${actionId}`,
+        turnNumber,
+        timestamp,
+        player: actualPlayer,
+        actionType: 'DISCARD',
+        cardName: `${multiMatch[1]} cards discarded from ${owner}`,
+        details: line,
+        metadata: { cardNames: cardNames.length ? cardNames : undefined }
+      };
     }
-    
+
     // Skip "from xxx's yyy" patterns (these are descriptions, not card names)
     if (line.match(/discarded\s+from\s+/i)) {
       return null;
@@ -647,18 +847,50 @@ export class BattleLogParser {
   async enrichWithCardData(actions: BattleAction[]): Promise<void> {
     for (const action of actions) {
       if (action.cardName && !action.cardWebId) {
-        const webCardId = await this.resolveCardName(action.cardName);
-        if (webCardId) {
-          action.cardWebId = webCardId;
+        const details = await this.resolveCardDetails(action.cardName);
+        if (details?.webCardId) {
+          action.cardWebId = details.webCardId;
+          if (!action.metadata) action.metadata = {};
+          if (details.hp) action.metadata.maxHp = details.hp;
+          // if this is a play to active, set current hp
+          if (action.actionType === 'PLAY_POKEMON' && action.metadata?.position === 'active') {
+            action.metadata.hp = details.hp;
+            action.metadata.maxHp = details.hp;
+          }
         }
       }
       
       if (action.targetCardName && !action.targetWebId) {
-        const webCardId = await this.resolveCardName(action.targetCardName);
-        if (webCardId) {
-          action.targetWebId = webCardId;
+        const details = await this.resolveCardDetails(action.targetCardName);
+        if (details?.webCardId) {
+          action.targetWebId = details.webCardId;
+          if (!action.metadata) action.metadata = {};
+          if (details.hp) action.metadata.targetMaxHp = details.hp;
         }
       }
+    }
+  }
+
+  async resolveCardDetails(cardName: string): Promise<{ webCardId?: string; hp?: number } | null> {
+    // Check cache first
+    if (this.cardNameCache.has(`${cardName}::webId`)) {
+      const cached = this.cardNameCache.get(`${cardName}::webId`)!;
+      return { webCardId: cached };
+    }
+    try {
+      const card = await this.prisma.card.findFirst({
+        where: { name: { contains: cardName, mode: 'insensitive' } },
+        orderBy: [{ language: 'asc' }, { createdAt: 'desc' }],
+        select: { webCardId: true, hp: true }
+      });
+      const webCardId = card?.webCardId ?? undefined;
+      if (webCardId) {
+        this.cardNameCache.set(`${cardName}::webId`, webCardId);
+      }
+      return { webCardId, hp: card?.hp ?? undefined };
+    } catch (error) {
+      this.logger.warn(`Failed to resolve card details: ${cardName}`, error);
+      return null;
     }
   }
   

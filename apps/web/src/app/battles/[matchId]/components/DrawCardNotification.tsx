@@ -46,26 +46,32 @@ export function DrawCardNotification({ action }: DrawCardNotificationProps) {
       setVisible(true);
 
       // Stagger card visibility with 300ms delay between each
+      const visibilityTimers: number[] = [];
       if (cards.length > 0) {
         cards.forEach((_, index) => {
-          setTimeout(() => {
+          const t = window.setTimeout(() => {
             setDrawInfo(prev => {
-              if (!prev) return prev;
-              const updated = { ...prev };
-              updated.cards[index].visible = true;
-              return updated;
+              if (!prev || !prev.cards || !prev.cards[index]) return prev;
+              // Create a new cards array with updated visibility for immutability
+              const newCards = prev.cards.map((c, i) => i === index ? { ...c, visible: true } : c);
+              return { ...prev, cards: newCards };
             });
           }, index * 300);
+          visibilityTimers.push(t as unknown as number);
         });
       }
 
       // Auto-hide after duration: 300ms per card + 2000ms base
       const duration = cards.length > 0 ? (cards.length * 300) + 2000 : 1500;
-      const timeout = setTimeout(() => {
+      const timeout = window.setTimeout(() => {
         setVisible(false);
       }, duration);
 
-      return () => clearTimeout(timeout);
+      // Cleanup all timers if effect re-runs or component unmounts
+      return () => {
+        visibilityTimers.forEach(t => clearTimeout(t as unknown as number));
+        clearTimeout(timeout as unknown as number);
+      };
     }
   }, [action]);
 

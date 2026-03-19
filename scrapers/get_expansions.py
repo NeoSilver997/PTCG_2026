@@ -6,7 +6,7 @@ import json
 
 urls = [
     "https://asia.pokemon-card.com/hk/card-search/",
-    "https://asia.pokemon-card.com/sg/card-search/"
+    "https://asia.pokemon-card.com/hk-en/card-search/"
 ]
 
 headers = {

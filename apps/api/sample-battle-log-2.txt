@@ -1,0 +1,23 @@
+Bob won the coin toss
+Alice chose heads
+Setup
+Bob played Charizard ex to the Active Spot.
+Alice played Moltres to the Active Spot.
+Bob took a mulligan.
+• Charmander, Charmeleon
+Bob drew 2 cards.
+- Bob drew Dunsparce and played it to the Bench.
+Bob's Turn
+Bob drew 1 card.
+Bob attached Fire Energy to Charizard ex in the Active Spot.
+Alice's Turn
+Alice drew 2 cards.
+Alice attached Fire Energy to Moltres in the Active Spot.
+Bob's Turn
+Bob drew 1 card.
+Bob's Charizard ex used Inferno Overdrive on Alice's Moltres for 120 damage.
+• Base damage: 120
+• Total damage: 120
+Alice's Moltres was Knocked Out.
+Bob took 2 Prize cards.
+Bob wins.

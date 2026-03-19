@@ -20,6 +20,7 @@ log = logging.getLogger(__name__)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
 
+# Defaults (overridden by CLI args in __main__)
 ADAPTER_PATH = os.path.join(_script_dir, "outputs", "qlora_v1", "final")
 MERGED_PATH  = os.path.join(_script_dir, "outputs", "qlora_v1", "merged")
 GGUF_DIR     = os.path.join(_script_dir, "outputs", "qlora_v1", "gguf")
@@ -186,18 +187,33 @@ def convert_to_gguf(merged_path, llama_dir, quantize="Q4_K_M"):
     return gguf_f16, gguf_q4
 
 
-def create_modelfile(gguf_path):
+def create_modelfile(gguf_path, mmproj_path=None, model_name="ptcg-card-reader"):
     """Generate Ollama Modelfile for the PTCG card reader."""
     log.info("=" * 60)
     log.info("Step 4: Create Ollama Modelfile")
     log.info("=" * 60)
 
     modelfile_path = os.path.join(GGUF_DIR, "Modelfile")
-    modelfile_content = f"""FROM {gguf_path}
+
+    from_lines = f"FROM {gguf_path}\n"
+    if mmproj_path and os.path.exists(mmproj_path):
+        from_lines += f"FROM {mmproj_path}\n"
+        log.info(f"Reusing mmproj: {mmproj_path}")
+
+    modelfile_content = f"""{from_lines}
+TEMPLATE \"\"\"<|im_start|>system
+{{{{ .System }}}}<|im_end|>
+<|im_start|>user
+{{{{ .Prompt }}}}<|im_end|>
+<|im_start|>assistant
+\"\"\"
 
 PARAMETER temperature 0
 PARAMETER num_predict 512
+PARAMETER repeat_penalty 1.15
 PARAMETER stop "<|endoftext|>"
+PARAMETER stop "<|im_end|>"
+PARAMETER stop "<|im_start|>"
 
 SYSTEM \"\"\"You are a Pokemon Trading Card Game card reader. When given a card image, extract ALL visible information and return ONLY a JSON object with these fields: name, hp, types, supertype, rarity, attacks, abilities, retreat_cost, expansion, card_number. No markdown, no explanation.\"\"\"
 """
@@ -207,8 +223,8 @@ SYSTEM \"\"\"You are a Pokemon Trading Card Game card reader. When given a card 
     log.info(f"Modelfile saved: {modelfile_path}")
     log.info("")
     log.info("To deploy to Ollama:")
-    log.info(f"  ollama create ptcg-card-reader -f {modelfile_path}")
-    log.info("  ollama run ptcg-card-reader")
+    log.info(f"  ollama create {model_name} -f {modelfile_path}")
+    log.info(f"  ollama run {model_name}")
     return modelfile_path
 
 
@@ -218,7 +234,19 @@ if __name__ == "__main__":
     parser.add_argument("--skip-merge", action="store_true", help="Skip merge if already done")
     parser.add_argument("--skip-gguf", action="store_true", help="Skip GGUF conversion")
     parser.add_argument("--quantize", default="Q4_K_M", help="GGUF quantization type")
+    parser.add_argument("--adapter-path", default=None, help="Path to LoRA adapter (overrides default)")
+    parser.add_argument("--output-base", default=None, help="Base output directory (merged/ and gguf/ created inside)")
+    parser.add_argument("--model-name", default="ptcg-card-reader", help="Name for Ollama model")
+    parser.add_argument("--reuse-mmproj", default=None, help="Path to existing mmproj GGUF to reuse (skips visual encoder conversion)")
     args = parser.parse_args()
+
+    # Override paths if provided
+    if args.adapter_path:
+        ADAPTER_PATH = os.path.abspath(args.adapter_path)
+    if args.output_base:
+        base = os.path.abspath(args.output_base)
+        MERGED_PATH = os.path.join(base, "merged")
+        GGUF_DIR    = os.path.join(base, "gguf")
 
     if args.skip_merge and os.path.exists(MERGED_PATH):
         log.info(f"Skipping merge — using existing {MERGED_PATH}")
@@ -231,7 +259,13 @@ if __name__ == "__main__":
             llama_dir = setup_llama_cpp()
             f16_gguf, q4_gguf = convert_to_gguf(merged, llama_dir, args.quantize)
             gguf_for_modelfile = q4_gguf if os.path.exists(q4_gguf) else f16_gguf
-            create_modelfile(gguf_for_modelfile)
+            mmproj = args.reuse_mmproj
+            if not mmproj:
+                # try auto-detect in same gguf dir
+                auto = os.path.join(GGUF_DIR, "mmproj-ptcg-f16.gguf")
+                if os.path.exists(auto):
+                    mmproj = auto
+            create_modelfile(gguf_for_modelfile, mmproj_path=mmproj, model_name=args.model_name)
         except Exception as e:
             log.error(f"GGUF conversion failed: {e}")
             log.info("Merged model is still usable at: " + merged)

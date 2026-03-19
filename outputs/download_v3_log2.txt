@@ -1,0 +1,1 @@
+C:\Users\HKC-USER\AppData\Local\Programs\Python\Python312\python.exe: can't open file 'C:\\AI_Server\\Coding\\PTCG_2026\\download_training_images.py': [Errno 2] No such file or directory

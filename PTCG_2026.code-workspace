@@ -9,9 +9,112 @@
 		},
 		{
 			"path": "../PTCG_CardDB"
+		},
+		{
+			"path": "../PTCG_CardDB_Tc"
 		}
 	],
 	"settings": {
-		"powershell.cwd": "PTCG_2026"
+		"powershell.cwd": "PTCG_2026",
+		"terminal.integrated.env.windows": {
+        "OPENAI_API_BASE": "http://localhost:11434",
+        "OPENAI_API_KEY": "ollama",
+        "OPENAI_DEFAULT_MODEL": "deepseek-coder-v2:16b"
+    }
+	},
+	"tasks": {
+		"version": "2.0.0",
+		"tasks": [
+			{
+				"label": "Copilot Agent: Analyze Current File",
+				"type": "shell",
+				"command": "node",
+				"args": [
+					"${workspaceFolder:PTCG_2026}/scripts/copilot-agent.js",
+					"${file}",
+					"comprehensive"
+				],
+				"group": "build",
+				"presentation": {
+					"echo": true,
+					"reveal": "always",
+					"focus": false,
+					"panel": "shared"
+				},
+				"problemMatcher": []
+			},
+			{
+				"label": "Copilot Agent: Code Review",
+				"type": "shell",
+				"command": "node",
+				"args": [
+					"${workspaceFolder:PTCG_2026}/scripts/copilot-agent.js",
+					"${file}",
+					"code-review"
+				],
+				"group": "build",
+				"presentation": {
+					"echo": true,
+					"reveal": "always",
+					"focus": false,
+					"panel": "shared"
+				},
+				"problemMatcher": []
+			},
+			{
+				"label": "Copilot Agent: Architecture Analysis",
+				"type": "shell",
+				"command": "node",
+				"args": [
+					"${workspaceFolder:PTCG_2026}/scripts/copilot-agent.js",
+					"${file}",
+					"architecture"
+				],
+				"group": "build",
+				"presentation": {
+					"echo": true,
+					"reveal": "always",
+					"focus": false,
+					"panel": "shared"
+				},
+				"problemMatcher": []
+			},
+			{
+				"label": "Copilot Agent: Bug Hunt",
+				"type": "shell",
+				"command": "node",
+				"args": [
+					"${workspaceFolder:PTCG_2026}/scripts/copilot-agent.js",
+					"${file}",
+					"bug-hunt"
+				],
+				"group": "build",
+				"presentation": {
+					"echo": true,
+					"reveal": "always",
+					"focus": false,
+					"panel": "shared"
+				},
+				"problemMatcher": []
+			},
+			{
+				"label": "Copilot Agent: Migration Analysis",
+				"type": "shell",
+				"command": "node",
+				"args": [
+					"${workspaceFolder:PTCG_2026}/scripts/copilot-agent.js",
+					"${file}",
+					"migration"
+				],
+				"group": "build",
+				"presentation": {
+					"echo": true,
+					"reveal": "always",
+					"focus": false,
+					"panel": "shared"
+				},
+				"problemMatcher": []
+			}
+		]
 	}
 }

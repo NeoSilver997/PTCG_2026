@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Noto_Sans_TC } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
+import { NavBar } from "@/components/nav-bar";
 
 const notoSansTC = Noto_Sans_TC({
   variable: "--font-noto-sans",
@@ -24,7 +25,10 @@ export default function RootLayout({
       <body
         className={`${notoSansTC.variable} antialiased bg-gray-50`}
       >
-        <Providers>{children}</Providers>
+        <Providers>
+          <NavBar />
+          <main>{children}</main>
+        </Providers>
       </body>
     </html>
   );

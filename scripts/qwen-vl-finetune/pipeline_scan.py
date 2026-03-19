@@ -354,8 +354,15 @@ def auto_count_cards(img: Image.Image,
                 _n2_score = (float(sy_prof[_lo50:_hi50+1].max()) - _sy_base) / _sy_base
                 _n2_ok = _n2_score >= 0.35
             if _n2_ok:
-                row_votes[n_sy + 1] += 2.0 * s_sy
-                print(f"  │  (auto-grid/SobelY) {n_sy} divider(s) → {n_sy+1} row(s)  (score={s_sy:.2f})")
+                # Base weight: 2.0 × grid-snap score.
+                # Midpoint bonus: strong midpoint evidence (score >> 0.35) adds
+                # up to +3.0 extra so it can beat contour's 1-row vote (3.0)
+                # when a real card boundary is visible at 50% of image height.
+                _midpoint_bonus = min(3.0, max(0.0, (_n2_score - 0.35) / 0.20))
+                _sy_weight = 2.0 * s_sy + _midpoint_bonus
+                row_votes[n_sy + 1] += _sy_weight
+                print(f"  │  (auto-grid/SobelY) {n_sy} divider(s) → {n_sy+1} row(s)  "
+                      f"(score={s_sy:.2f} midpoint={_n2_score:.2f} weight={_sy_weight:.1f})")
             else:
                 print(f"  │  (auto-grid/SobelY) {n_sy} divider(s) suppressed "
                       f"(no midpoint edge, n2={_n2_score:.2f})")
@@ -445,22 +452,28 @@ def auto_count_cards(img: Image.Image,
                     continue
                 _area_pct = _bw * _bh / img_area * 100
                 _ratio    = _bw / _bh
-                # Accept portrait-ish boxes with enough area
-                if (_area_pct >= 5.0 and
-                        CARD_RATIO * (1 - RATIO_TOL) <= _ratio <= CARD_RATIO * (1 + RATIO_TOL)):
+                # Accept portrait-ish boxes with enough area.
+                # Ratio tolerance 0.80: upper bound = 0.714*1.80 = 1.285.
+                # Needed because in a 1×2 vertical stack in a portrait phone photo,
+                # each card slot is (full_width × half_height) → W/H ≈ 1.12-1.25.
+                # Area floor 2.5%: in a dense 8×3 grid each card is ~4.1% of image;
+                # YOLO finds artwork sub-regions at 3-4%, so 5% was too strict.
+                _YOLO_RATIO_TOL = 0.80
+                if (_area_pct >= 2.5 and
+                        CARD_RATIO * (1 - _YOLO_RATIO_TOL) <= _ratio <= CARD_RATIO * (1 + _YOLO_RATIO_TOL)):
                     good_boxes.append((_x1, _y1, _x2, _y2))
             if len(good_boxes) >= 2:
                 _cx = [(_x1+_x2)/2 for _x1,_y1,_x2,_y2 in good_boxes]
                 _cy = [(_y1+_y2)/2 for _x1,_y1,_x2,_y2 in good_boxes]
                 n_yc = min(6, _unique_bins(_cx, tw, 0.15))
                 n_yr = min(4, _unique_bins(_cy, th, 0.15))
-                col_votes[n_yc] += 1.5
-                row_votes[n_yr] += 1.5
-                print(f"  │  (auto-grid/YOLO) {len(good_boxes)} det → {n_yc}×{n_yr}")
+                col_votes[n_yc] += 3.0  # Raised: YOLO now equal to contour
+                row_votes[n_yr] += 3.0
+                print(f"  │  (auto-grid/YOLO) {len(good_boxes)} det → {n_yc}×{n_yr}  (weight=3.0)")
             elif len(good_boxes) == 1:
-                col_votes[1] += 1.5
-                row_votes[1] += 1.5
-                print(f"  │  (auto-grid/YOLO) 1 detection → 1×1")
+                col_votes[1] += 2.0  # Raised from 1.5
+                row_votes[1] += 2.0
+                print(f"  │  (auto-grid/YOLO) 1 detection → 1×1  (weight=2.0)")
             else:
                 print(f"  │  (auto-grid/YOLO) no card-like detections "
                       f"({len(yolo_boxes)} total boxes)")
@@ -479,17 +492,22 @@ def auto_count_cards(img: Image.Image,
 
     # Plausibility filter: each strip must be plausibly card-shaped.
     # col cell W/H = (iw/N)/ih — portrait card ~0.714, allow [0.40, 1.50]
-    # row cell H/W = (ih/N)/iw — portrait card ~1.40, require ≥1.0
-    #   An image with H/W≈1.78 cannot hold 2+ stacked portrait cards
-    #   (that would need H/W≈2.80). Sub-cell H/W for n=2 on H/W=1.78 → 0.89 < 1.0 → rejected.
+    # row cell H/W = (ih/N)/iw — portrait card ~1.40.
+    #   Minimum is 0.70 (not 1.0) so that real 1×2 stacked portrait images
+    #   (H/W≈1.78 → per-row H/W=0.89) are still allowed.
+    #   Portrait single-card false positives are blocked by the SobelY
+    #   midpoint gate (requires edge at 50%) AND by the Contour strategy
+    #   (which correctly finds only 1 region in single-card photos).
+    #   For very small n: ih/3/iw = 0.59 on a portrait phone photo < 0.70 → rejected.
     CELL_MIN, CELL_MAX = 0.40, 1.50
+    ROW_MIN = 0.70   # lowered from 1.0 to allow genuine 1×2 portrait grids
     valid_col_votes = {
         n: w for n, w in col_votes.items()
         if n >= 1 and CELL_MIN <= (iw / n / ih) <= CELL_MAX
     }
     valid_row_votes = {
         n: w for n, w in row_votes.items()
-        if n >= 1 and 1.0 <= (ih / n / iw) <= CELL_MAX
+        if n >= 1 and ROW_MIN <= (ih / n / iw) <= CELL_MAX
     }
 
     if valid_col_votes:

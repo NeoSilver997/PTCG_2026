@@ -1,0 +1,109 @@
+[
+  {
+    "name": "莉佳的 口呆花",
+    "hp": 90,
+    "types": [
+      "GRASS"
+    ],
+    "supertype": "POKEMON",
+    "subtype": null,
+    "rarity": "COMMON",
+    "attacks": [
+      {
+        "cost": [
+          "草"
+        ],
+        "name": "溶解",
+        "damage": "30",
+        "effect": ""
+      },
+      {
+        "cost": [
+          "草",
+          "無"
+        ],
+        "name": "葉子旋風",
+        "damage": "70",
+        "effect": "在下個自己的回合，這隻寶可夢無法使用招式。"
+      }
+    ],
+    "abilities": [],
+    "evolutionStage": "STAGE_1",
+    "evolvesTo": "莉佳的喇叭芽, 莉佳的 口呆花, 莉佳的 椰蛋樹, 莉佳的 阿羅拉 椰蛋樹, 莉佳的 阿羅拉 椰蛋樹GX",
+    "flavorText": "身高1.0m/體重6.4kg 會先吐出有毒的 粉末，讓對手停止行動後，再用溶解液\n解決對手。",
+    "regulationMark": "UN",
+    "language": "zh-HK",
+    "primaryCardId": "cmlb70n9h27s1b1448889997o",
+    "webCardId": "hk742",
+    "_source_file": "hk00017760.png"
+  },
+  {
+    "name": "莉佳的大食花",
+    "hp": 150,
+    "types": [
+      "GRASS"
+    ],
+    "supertype": "POKEMON",
+    "subtype": null,
+    "rarity": "COMMON",
+    "attacks": [
+      {
+        "cost": [
+          "草",
+          "無"
+        ],
+        "name": "花園輪舞",
+        "damage": "40×",
+        "effect": "造成自己的場上「莉佳的寶可夢」的數量×40點傷害。"
+      },
+      {
+        "cost": [
+          "草",
+          "草",
+          "無"
+        ],
+        "name": "日光束",
+        "damage": "130",
+        "effect": ""
+      }
+    ],
+    "abilities": [],
+    "evolutionStage": "STAGE_2",
+    "evolvesTo": "莉佳的口呆花, 莉佳的大食花",
+    "flavorText": "身高1.7m/體重15.5kg 被牠吞進體內的東西不管\n有多硬，都會被溶解液\n不留痕迹地融化掉。",
+    "regulationMark": "UN",
+    "language": "zh-HK",
+    "primaryCardId": "cmlb70n9h27s1b1448889997o",
+    "webCardId": "hk742",
+    "_source_file": "hk00017761.png"
+  },
+  {
+    "name": "蛋蛋",
+    "hp": 30,
+    "types": [
+      "GRASS"
+    ],
+    "supertype": "POKEMON",
+    "subtype": null,
+    "rarity": "COMMON",
+    "attacks": [
+      {
+        "cost": [
+          "無"
+        ],
+        "name": "早熟進化",
+        "damage": "",
+        "effect": "這個招式可在先攻玩家的最初回合使用。從自己的牌庫選擇1張從這隻寶可夢進化而來的卡，放置於這隻寶可夢身上完成進化。並且重洗牌庫。"
+      }
+    ],
+    "abilities": [],
+    "evolutionStage": "BASIC",
+    "evolvesTo": "蛋蛋, 椰蛋樹, 阿羅拉 椰蛋樹, 阿羅拉 椰蛋樹GX, 阿羅拉 椰蛋樹ex",
+    "flavorText": "身高0.4m/體重2.5kg 會發出只有蛋蛋才能收到的\n心靈感應，因此不論何時\n都能６隻聚集在一起。",
+    "regulationMark": "H",
+    "language": "zh-HK",
+    "primaryCardId": "cmlb70n9h27s1b1448889997o",
+    "webCardId": "hk742",
+    "_source_file": "hk00017762.png"
+  }
+]

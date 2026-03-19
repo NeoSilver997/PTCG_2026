@@ -965,7 +965,8 @@ pnpm run test:watch            # Run tests in watch mode
 
 ```bash
 npx prisma generate            # Generate Prisma client
-npx prisma migrate dev         # Create and apply migration
+npx prisma migrate deploy      # Apply existing migrations (non-interactive)
+npx prisma migrate dev --name migration_name  # Create new migration (interactive)
 npx prisma migrate deploy      # Apply migrations (prod)
 npx prisma studio              # Open database GUI
 npx prisma db seed             # Seed database

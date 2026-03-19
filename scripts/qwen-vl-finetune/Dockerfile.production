@@ -1,0 +1,62 @@
+# ============================================================================
+# PTCG Card Reader — Production Docker Image
+# Base: CUDA 12.4 + Python 3.11 (Ubuntu 22.04)
+#
+# Build:
+#   docker build -f Dockerfile.production -t ptcg-card-reader:latest .
+#
+# Run (adapter mounted from host):
+#   docker run --gpus all -p 8000:8000 \
+#     -v "C:\AI_Server\Coding\PTCG_2026\scripts\qwen-vl-finetune\outputs\qlora_v4\final":/adapter:ro \
+#     -e ADAPTER_PATH=/adapter \
+#     ptcg-card-reader:latest
+#
+# Run (adapter baked in):
+#   docker build --build-arg BAKE_ADAPTER=1 -f Dockerfile.production -t ptcg-card-reader:baked .
+# ============================================================================
+
+FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
+
+# ── System packages ──────────────────────────────────────────────────────────
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y \
+    python3.11 python3.11-dev python3-pip \
+    git curl wget libglib2.0-0 libsm6 libxext6 libxrender-dev \
+    libgl1-mesa-glx libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 \
+ && update-alternatives --install /usr/bin/python  python  /usr/bin/python3.11 1 \
+ && python3 -m pip install --upgrade pip setuptools wheel
+
+# ── Python dependencies ──────────────────────────────────────────────────────
+WORKDIR /app
+
+COPY requirements_production.txt ./
+RUN pip install --no-cache-dir -r requirements_production.txt
+
+# ── Try flash-attn (requires CUDA devel; silently skip if it fails) ──────────
+RUN pip install flash-attn --no-build-isolation 2>/dev/null || \
+    echo "[INFO] flash-attn not installed – using sdpa (still fast)"
+
+# ── Application code ─────────────────────────────────────────────────────────
+COPY inference_service.py ./
+
+# ── Adapter (optional bake-in) ───────────────────────────────────────────────
+ARG BAKE_ADAPTER=0
+COPY outputs/qlora_v4/final /baked_adapter/
+ENV ADAPTER_PATH=/adapter
+
+# ── Runtime defaults ─────────────────────────────────────────────────────────
+ENV PORT=8000
+ENV HOST=0.0.0.0
+ENV TORCH_COMPILE=1
+# Set to 0 to skip compile on startup (saves ~30s first-request warmup):
+# ENV TORCH_COMPILE=0
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+  CMD curl -f http://localhost:8000/health || exit 1
+
+CMD ["python3", "inference_service.py"]
