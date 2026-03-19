@@ -14,9 +14,7 @@ import { Throttle } from '@nestjs/throttler';
 import { CollectionsService } from './collections.service';
 import { UpsertCollectionItemDto } from './dto/upsert-collection-item.dto';
 
-// Placeholder until auth is complete — all requests use 'default' user
-const DEFAULT_USER_ID = 'default';
-
+// Placeholder until auth is complete — all requests use a seeded default user
 @ApiTags('inventory')
 @Controller('inventory')
 export class CollectionsController {
@@ -27,12 +25,13 @@ export class CollectionsController {
   @ApiOperation({ summary: 'Get current user inventory' })
   @ApiQuery({ name: 'skip', required: false, type: Number })
   @ApiQuery({ name: 'take', required: false, type: Number })
-  getItems(
+  async getItems(
     @Query('skip') skip?: string,
     @Query('take') take?: string,
   ) {
+    const userId = await this.collectionsService.getOrCreateDefaultUser();
     return this.collectionsService.getItems(
-      DEFAULT_USER_ID,
+      userId,
       skip ? parseInt(skip, 10) : 0,
       take ? parseInt(take, 10) : 50,
     );
@@ -42,15 +41,17 @@ export class CollectionsController {
   @Throttle({ medium: { limit: 20, ttl: 10000 } })
   @ApiOperation({ summary: 'Add or update a card in inventory (quantity 0 = remove)' })
   @HttpCode(HttpStatus.OK)
-  upsert(@Body() dto: UpsertCollectionItemDto) {
-    return this.collectionsService.upsertItem(DEFAULT_USER_ID, dto);
+  async upsert(@Body() dto: UpsertCollectionItemDto) {
+    const userId = await this.collectionsService.getOrCreateDefaultUser();
+    return this.collectionsService.upsertItem(userId, dto);
   }
 
   @Delete(':cardId')
   @Throttle({ medium: { limit: 20, ttl: 10000 } })
   @ApiOperation({ summary: 'Remove a card from inventory' })
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@Param('cardId') cardId: string) {
-    return this.collectionsService.removeItem(DEFAULT_USER_ID, cardId);
+  async remove(@Param('cardId') cardId: string) {
+    const userId = await this.collectionsService.getOrCreateDefaultUser();
+    return this.collectionsService.removeItem(userId, cardId);
   }
 }

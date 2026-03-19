@@ -75,6 +75,20 @@ export class DecksService {
       await this.validateCardCounts(dto.cards);
     }
 
+    // Resolve webCardIds → actual Card.id
+    const resolvedCards = dto.cards
+      ? await Promise.all(
+          dto.cards.map(async (c) => {
+            const card = await this.prisma.card.findUnique({
+              where: { webCardId: c.cardId },
+              select: { id: true },
+            });
+            if (!card) throw new NotFoundException(`Card ${c.cardId} not found`);
+            return { cardId: card.id, quantity: c.quantity };
+          }),
+        )
+      : undefined;
+
     const deck = await this.prisma.deck.create({
       data: {
         name: dto.name,
@@ -82,9 +96,9 @@ export class DecksService {
         archetype: dto.archetype as any,
         format: dto.format,
         isPublic: dto.isPublic ?? false,
-        cards: dto.cards
+        cards: resolvedCards
           ? {
-              create: dto.cards.map((c) => ({
+              create: resolvedCards.map((c) => ({
                 cardId: c.cardId,
                 quantity: c.quantity,
               })),
@@ -106,10 +120,16 @@ export class DecksService {
 
     await this.validateCardCounts(cards);
 
-    for (const { cardId, quantity } of cards) {
+    for (const { cardId: webCardId, quantity } of cards) {
+      const card = await this.prisma.card.findUnique({
+        where: { webCardId },
+        select: { id: true },
+      });
+      if (!card) throw new NotFoundException(`Card ${webCardId} not found`);
+
       await this.prisma.deckCard.upsert({
-        where: { deckId_cardId: { deckId, cardId } },
-        create: { deckId, cardId, quantity },
+        where: { deckId_cardId: { deckId, cardId: card.id } },
+        create: { deckId, cardId: card.id, quantity },
         update: { quantity },
       });
     }
@@ -117,12 +137,18 @@ export class DecksService {
     return this.findOne(deckId);
   }
 
-  async removeCard(deckId: string, cardId: string) {
+  async removeCard(deckId: string, webCardId: string) {
     const deck = await this.prisma.deck.findUnique({ where: { id: deckId } });
     if (!deck) throw new NotFoundException(`Deck ${deckId} not found`);
 
+    const card = await this.prisma.card.findUnique({
+      where: { webCardId },
+      select: { id: true },
+    });
+    if (!card) throw new NotFoundException(`Card ${webCardId} not found`);
+
     await this.prisma.deckCard.delete({
-      where: { deckId_cardId: { deckId, cardId } },
+      where: { deckId_cardId: { deckId, cardId: card.id } },
     });
 
     return this.findOne(deckId);

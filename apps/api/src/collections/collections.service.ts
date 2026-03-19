@@ -3,12 +3,24 @@ import { PrismaService } from '../common/prisma.service';
 import { UpsertCollectionItemDto } from './dto/upsert-collection-item.dto';
 
 const DEFAULT_COLLECTION_NAME = 'My Collection';
+const DEFAULT_USER_EMAIL = 'default@ptcg.local';
 
 @Injectable()
 export class CollectionsService {
   private readonly logger = new Logger(CollectionsService.name);
 
   constructor(private prisma: PrismaService) {}
+
+  /** Upserts the default guest user and returns their real DB id */
+  async getOrCreateDefaultUser(): Promise<string> {
+    const user = await this.prisma.user.upsert({
+      where: { email: DEFAULT_USER_EMAIL },
+      create: { email: DEFAULT_USER_EMAIL, name: 'Default User' },
+      update: {},
+      select: { id: true },
+    });
+    return user.id;
+  }
 
   private async getOrCreateCollection(userId: string) {
     let collection = await this.prisma.collection.findUnique({

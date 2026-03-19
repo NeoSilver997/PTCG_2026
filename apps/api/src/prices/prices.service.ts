@@ -11,7 +11,7 @@ export class PricesService {
   async findByCard(webCardId: string) {
     const card = await this.prisma.card.findUnique({
       where: { webCardId },
-      select: { id: true, name: true, webCardId: true },
+      select: { id: true, name: true, webCardId: true, imageUrl: true },
     });
 
     if (!card) throw new NotFoundException(`Card ${webCardId} not found`);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, Suspense } from 'react';
+import { useState, useCallback, useEffect, Suspense } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -53,22 +53,24 @@ function DeckBuilderInner() {
   const cardTake = 20;
 
   // Load existing deck if deckId provided
-  useQuery({
+  const { data: deckData } = useQuery({
     queryKey: ['deck', deckId],
     queryFn: () => apiClient.get(`/decks/${deckId}`),
     enabled: !!deckId,
-    onSuccess: (res: any) => {
-      const deck: Deck = res.data;
-      setDeckName(deck.name);
-      setDeckArchetype(deck.archetype ?? '');
-      const map = new Map<string, DeckCard>();
-      for (const dc of deck.cards) {
-        map.set(dc.card.webCardId, dc);
-      }
-      setDeckCards(map);
-      setSavedDeckId(deck.id);
-    },
-  } as any);
+  });
+
+  useEffect(() => {
+    const deck: Deck | undefined = deckData?.data;
+    if (!deck) return;
+    setDeckName(deck.name);
+    setDeckArchetype(deck.archetype ?? '');
+    const map = new Map<string, DeckCard>();
+    for (const dc of deck.cards) {
+      map.set(dc.card.webCardId, dc);
+    }
+    setDeckCards(map);
+    setSavedDeckId(deck.id);
+  }, [deckData]);
 
   // Card search
   const { data: cardsData, isLoading: cardsLoading } = useQuery({
