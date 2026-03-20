@@ -37,7 +37,18 @@ export class DecksService {
       this.prisma.deck.count({ where }),
     ]);
 
-    return { data, meta: { total, skip: query.skip ?? 0, take: query.take ?? 50 } };
+    const deckIds = data.map((d) => d.id);
+    const qtys = deckIds.length > 0
+      ? await this.prisma.deckCard.groupBy({
+          by: ['deckId'],
+          where: { deckId: { in: deckIds } },
+          _sum: { quantity: true },
+        })
+      : [];
+    const qtyMap = new Map(qtys.map((q) => [q.deckId, q._sum.quantity ?? 0]));
+    const enriched = data.map((d) => ({ ...d, totalCards: qtyMap.get(d.id) ?? 0 }));
+
+    return { data: enriched, meta: { total, skip: query.skip ?? 0, take: query.take ?? 50 } };
   }
 
   async findOne(id: string) {
@@ -55,6 +66,9 @@ export class DecksService {
                 subtypes: true,
                 types: true,
                 rarity: true,
+                hp: true,
+                attacks: true,
+                evolutionStage: true,
               },
             },
           },

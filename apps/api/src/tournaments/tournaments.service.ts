@@ -381,7 +381,19 @@ export class TournamentsService {
       key_item_image: string | null;
     }>>(
       `
-      WITH deck_key_pokemon AS (
+      WITH pre_evolutions AS (
+        SELECT DISTINCT dc."deckId", c_base.name as pre_evo_name
+        FROM deck_cards dc
+        JOIN cards c_evolved ON c_evolved.id = dc."cardId"
+          AND c_evolved.supertype = 'POKEMON'
+          AND c_evolved."evolvesFrom" IS NOT NULL
+        JOIN cards c_base ON c_base.name = c_evolved."evolvesFrom" AND c_base.supertype = 'POKEMON'
+        JOIN deck_cards dc_base ON dc_base."deckId" = dc."deckId" AND dc_base."cardId" = c_base.id
+        JOIN tournament_results tr ON tr."deckId" = dc."deckId"
+        JOIN tournaments t ON t.id = tr."tournamentId"
+        WHERE 1=1 ${regionSql} ${sinceDateSql}
+      ),
+      deck_key_pokemon AS (
         SELECT
           d.id as deck_id,
           tr.placement,
@@ -406,6 +418,9 @@ export class TournamentsService {
         JOIN deck_cards dc ON dc."deckId" = d.id
         JOIN cards c ON c.id = dc."cardId"
         WHERE c.supertype = 'POKEMON' AND dc.quantity >= 2 ${regionSql} ${sinceDateSql}
+          AND NOT EXISTS (
+            SELECT 1 FROM pre_evolutions pe WHERE pe."deckId" = d.id AND pe.pre_evo_name = c.name
+          )
       ),
       deck_archetype_names AS (
         SELECT
@@ -513,6 +528,7 @@ export class TournamentsService {
 
     const decks = await this.prisma.$queryRawUnsafe<Array<{
       deck_id: string;
+      deck_code: string | null;
       placement: number;
       player_name: string;
       tournament_name: string;
@@ -522,9 +538,25 @@ export class TournamentsService {
       key1_image: string | null;
       key2_image: string | null;
       top_cards: string; // JSON
+      pokemon_count: number;
+      trainer_count: number;
+      item_count: number;
+      energy_count: number;
     }>>(
       `
-      WITH deck_key_pokemon AS (
+      WITH pre_evolutions AS (
+        SELECT DISTINCT dc."deckId", c_base.name as pre_evo_name
+        FROM deck_cards dc
+        JOIN cards c_evolved ON c_evolved.id = dc."cardId"
+          AND c_evolved.supertype = 'POKEMON'
+          AND c_evolved."evolvesFrom" IS NOT NULL
+        JOIN cards c_base ON c_base.name = c_evolved."evolvesFrom" AND c_base.supertype = 'POKEMON'
+        JOIN deck_cards dc_base ON dc_base."deckId" = dc."deckId" AND dc_base."cardId" = c_base.id
+        JOIN tournament_results tr ON tr."deckId" = dc."deckId"
+        JOIN tournaments t ON t.id = tr."tournamentId"
+        WHERE 1=1 ${regionSql} ${sinceDateSql}
+      ),
+      deck_key_pokemon AS (
         SELECT
           d.id as deck_id,
           tr.placement,
@@ -553,6 +585,9 @@ export class TournamentsService {
         JOIN deck_cards dc ON dc."deckId" = d.id
         JOIN cards c ON c.id = dc."cardId"
         WHERE c.supertype = 'POKEMON' AND dc.quantity >= 2 ${regionSql} ${sinceDateSql}
+          AND NOT EXISTS (
+            SELECT 1 FROM pre_evolutions pe WHERE pe."deckId" = d.id AND pe.pre_evo_name = c.name
+          )
       ),
       deck_archetype_names AS (
         SELECT
@@ -597,11 +632,24 @@ export class TournamentsService {
             ORDER BY card_rn
           ) as top_cards
         FROM deck_card_ranked
-        WHERE card_rn <= 6
+        WHERE card_rn <= 12
         GROUP BY "deckId"
+      ),
+      deck_counts AS (
+        SELECT
+          dc."deckId",
+          SUM(CASE WHEN c.supertype = 'POKEMON' THEN dc.quantity ELSE 0 END)::int as pokemon_count,
+          SUM(CASE WHEN c.supertype = 'TRAINER' THEN dc.quantity ELSE 0 END)::int as trainer_count,
+          SUM(CASE WHEN c.supertype = 'TRAINER' AND 'ITEM' = ANY(c.subtypes) THEN dc.quantity ELSE 0 END)::int as item_count,
+          SUM(CASE WHEN c.supertype = 'ENERGY' THEN dc.quantity ELSE 0 END)::int as energy_count
+        FROM filtered f
+        JOIN deck_cards dc ON dc."deckId" = f.deck_id
+        JOIN cards c ON c.id = dc."cardId"
+        GROUP BY dc."deckId"
       )
       SELECT
         f.deck_id,
+        deck_tbl."deckCode" as deck_code,
         f.placement,
         f.player_name,
         f.tournament_name,
@@ -610,9 +658,15 @@ export class TournamentsService {
         f.archetype_name,
         f.key1_image,
         f.key2_image,
-        COALESCE(dtc.top_cards::text, '[]') as top_cards
+        COALESCE(dtc.top_cards::text, '[]') as top_cards,
+        COALESCE(dct.pokemon_count, 0) as pokemon_count,
+        COALESCE(dct.trainer_count, 0) as trainer_count,
+        COALESCE(dct.item_count, 0) as item_count,
+        COALESCE(dct.energy_count, 0) as energy_count
       FROM filtered f
+      LEFT JOIN decks deck_tbl ON deck_tbl.id = f.deck_id
       LEFT JOIN deck_top_cards dtc ON dtc."deckId" = f.deck_id
+      LEFT JOIN deck_counts dct ON dct."deckId" = f.deck_id
       ORDER BY f.placement ASC, f.tournament_date DESC
       LIMIT ${take} OFFSET ${skip}
       `,
@@ -620,7 +674,19 @@ export class TournamentsService {
 
     const countResult = await this.prisma.$queryRawUnsafe<[{ total: number }]>(
       `
-      WITH deck_key_pokemon AS (
+      WITH pre_evolutions AS (
+        SELECT DISTINCT dc."deckId", c_base.name as pre_evo_name
+        FROM deck_cards dc
+        JOIN cards c_evolved ON c_evolved.id = dc."cardId"
+          AND c_evolved.supertype = 'POKEMON'
+          AND c_evolved."evolvesFrom" IS NOT NULL
+        JOIN cards c_base ON c_base.name = c_evolved."evolvesFrom" AND c_base.supertype = 'POKEMON'
+        JOIN deck_cards dc_base ON dc_base."deckId" = dc."deckId" AND dc_base."cardId" = c_base.id
+        JOIN tournament_results tr ON tr."deckId" = dc."deckId"
+        JOIN tournaments t ON t.id = tr."tournamentId"
+        WHERE 1=1 ${regionSql} ${sinceDateSql}
+      ),
+      deck_key_pokemon AS (
         SELECT
           d.id as deck_id,
           tr.placement,
@@ -645,6 +711,9 @@ export class TournamentsService {
         JOIN deck_cards dc ON dc."deckId" = d.id
         JOIN cards c ON c.id = dc."cardId"
         WHERE c.supertype = 'POKEMON' AND dc.quantity >= 2 ${regionSql} ${sinceDateSql}
+          AND NOT EXISTS (
+            SELECT 1 FROM pre_evolutions pe WHERE pe."deckId" = d.id AND pe.pre_evo_name = c.name
+          )
       ),
       deck_archetype_names AS (
         SELECT deck_id,
@@ -669,6 +738,7 @@ export class TournamentsService {
       take,
       decks: decks.map((d) => ({
         deckId: d.deck_id,
+        deckCode: d.deck_code,
         placement: d.placement,
         playerName: d.player_name,
         tournamentName: d.tournament_name,
@@ -677,6 +747,10 @@ export class TournamentsService {
         key1Image: d.key1_image,
         key2Image: d.key2_image,
         topCards: (() => { try { return JSON.parse(d.top_cards); } catch { return []; } })(),
+        pokemonCount: Number(d.pokemon_count) || 0,
+        trainerCount: Number(d.trainer_count) || 0,
+        itemCount: Number(d.item_count) || 0,
+        energyCount: Number(d.energy_count) || 0,
       })),
     };
   }

@@ -24,6 +24,7 @@ interface Deck {
   createdAt: string;
   updatedAt: string;
   _count: { cards: number };
+  totalCards?: number;
 }
 
 export default function DeckStudioPage() {
@@ -50,7 +51,7 @@ export default function DeckStudioPage() {
 
   const decks: Deck[] = data?.data?.data ?? [];
   const total: number = data?.data?.meta?.total ?? 0;
-  const validDecks = decks.filter((d) => d._count.cards === 60).length;
+  const validDecks = decks.filter((d) => (d.totalCards ?? 0) === 60).length;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -133,8 +134,8 @@ export default function DeckStudioPage() {
                   <p className="text-xs text-gray-500 mt-1 line-clamp-2">{deck.description}</p>
                 )}
                 <div className="flex items-center gap-3 mt-3 text-xs text-gray-500">
-                  <span className={`font-semibold ${deck._count.cards === 60 ? 'text-green-600' : 'text-orange-500'}`}>
-                    {deck._count.cards}/60 cards
+                  <span className={`font-semibold ${(deck.totalCards ?? 0) === 60 ? 'text-green-600' : 'text-orange-500'}`}>
+                    {deck.totalCards ?? deck._count.cards}/60 cards
                   </span>
                   {deck.format && <span>· {deck.format}</span>}
                   {deck.isPublic && <span className="text-blue-500">· Public</span>}
@@ -144,6 +145,13 @@ export default function DeckStudioPage() {
                 </p>
               </div>
               <div className="flex border-t">
+                <Link
+                  href={`/deck-builder?deckId=${deck.id}&mode=view`}
+                  className="flex-1 text-center py-2 text-xs text-purple-500 hover:bg-purple-50 transition-colors font-medium"
+                >
+                  View
+                </Link>
+                <div className="w-px bg-gray-100" />
                 <Link
                   href={`/deck-builder?deckId=${deck.id}`}
                   className="flex-1 text-center py-2 text-xs text-indigo-600 hover:bg-indigo-50 transition-colors font-medium"

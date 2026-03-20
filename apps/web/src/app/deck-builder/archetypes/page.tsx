@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -16,6 +16,7 @@ interface TopCardMini {
 
 interface ArchetypeDeck {
   deckId: string;
+  deckCode: string | null;
   placement: number;
   playerName: string;
   tournamentName: string;
@@ -24,6 +25,10 @@ interface ArchetypeDeck {
   key1Image: string | null;
   key2Image: string | null;
   topCards: TopCardMini[];
+  pokemonCount: number;
+  trainerCount: number;
+  itemCount: number;
+  energyCount: number;
 }
 
 interface ArchetypeDecksResponse {
@@ -85,47 +90,187 @@ function placementClass(placement: number) {
   return 'bg-slate-600 text-white';
 }
 
-/* ---- Deck Row ---- */
-function DeckRow({ deck }: { deck: ArchetypeDeck }) {
-  const date = deck.tournamentDate ? deck.tournamentDate.slice(0, 10) : '';
+/* ---- Card Detail Modal ---- */
+function CardDetailModal({ card, onClose }: { card: TopCardMini; onClose: () => void }) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  const supertypeColor =
+    card.supertype === 'POKEMON' ? 'bg-emerald-600' :
+    card.supertype === 'TRAINER' ? 'bg-blue-600' : 'bg-orange-600';
+
   return (
-    <div className="bg-slate-700 rounded-lg p-3 flex items-start gap-3 hover:bg-slate-600 transition">
-      {/* Placement badge */}
-      <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${placementClass(deck.placement)}`}>
-        #{deck.placement}
-      </div>
-
-      {/* Key pokemon images */}
-      <div className="flex items-end gap-1 flex-shrink-0">
-        {deck.key1Image && (
-          <Image src={deck.key1Image} alt="" width={46} height={64} className="rounded border border-slate-500" />
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/75 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="bg-slate-800 rounded-2xl p-5 max-w-xs w-full mx-4 shadow-2xl border border-slate-600"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between mb-4">
+          <h3 className="text-white font-bold text-base leading-tight flex-1 pr-2">{card.name}</h3>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-white text-xl leading-none flex-shrink-0"
+          >
+            ✕
+          </button>
+        </div>
+        {card.imageUrl && (
+          <div className="flex justify-center mb-4">
+            <Image
+              src={card.imageUrl}
+              alt={card.name}
+              width={220}
+              height={308}
+              className="rounded-xl shadow-lg"
+              unoptimized
+            />
+          </div>
         )}
-        {deck.key2Image && (
-          <Image src={deck.key2Image} alt="" width={40} height={56} className="rounded border border-slate-600 opacity-85 -ml-2" />
-        )}
+        <div className="flex gap-2 flex-wrap">
+          <span className={`px-2.5 py-1 rounded-full text-xs font-bold text-white ${supertypeColor}`}>
+            {card.supertype}
+          </span>
+          <span className="bg-slate-700 text-slate-200 px-2.5 py-1 rounded-full text-xs font-semibold">
+            ×{card.quantity} copies
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---- Card Thumbnail with hover zoom ---- */
+function CardThumb({ card, onCardClick }: { card: TopCardMini; onCardClick: (c: TopCardMini) => void }) {
+  const [hovered, setHovered] = useState(false);
+
+  if (!card.imageUrl) return null;
+
+  return (
+    <div
+      className="relative flex-shrink-0"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onClick={e => { e.preventDefault(); e.stopPropagation(); onCardClick(card); }}
+    >
+      {/* Thumbnail */}
+      <div className="relative cursor-pointer">
+        <Image
+          src={card.imageUrl}
+          alt={card.name}
+          width={36}
+          height={50}
+          className="rounded border border-slate-600 hover:border-white transition-colors"
+          unoptimized
+        />
+        {/* Quantity badge */}
+        <span className="absolute -top-1 -right-1 bg-slate-900 border border-slate-600 text-white text-[8px] font-bold w-3.5 h-3.5 rounded-full flex items-center justify-center leading-none">
+          {card.quantity}
+        </span>
       </div>
 
-      {/* Info */}
-      <div className="flex-1 min-w-0">
-        <p className="text-white font-bold text-sm truncate">{deck.playerName}</p>
-        <p className="text-slate-400 text-xs truncate">{deck.tournamentName}</p>
-        <p className="text-slate-500 text-xs">{date}</p>
+      {/* Hover tooltip: bigger card */}
+      {hovered && (
+        <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-1.5 pointer-events-none">
+          <div className="bg-slate-900 rounded-xl p-1.5 shadow-2xl border border-slate-500">
+            <Image
+              src={card.imageUrl}
+              alt={card.name}
+              width={130}
+              height={182}
+              className="rounded-lg"
+              unoptimized
+            />
+            <p className="text-white text-[10px] font-semibold text-center mt-1 max-w-[130px] leading-tight">
+              {card.name}
+            </p>
+          </div>
+          {/* Arrow */}
+          <div className="flex justify-center">
+            <div className="w-2 h-2 bg-slate-900 border-r border-b border-slate-500 rotate-45 -mt-1" />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---- Deck Row ---- */
+function DeckRow({ deck, onCardClick }: { deck: ArchetypeDeck; onCardClick: (c: TopCardMini) => void }) {
+  const router = useRouter();
+  const date = deck.tournamentDate ? deck.tournamentDate.slice(0, 10) : '';
+  const href = deck.deckCode
+    ? `/deck-builder/event/${deck.deckCode}`
+    : `/deck-builder?deckId=${deck.deckId}&mode=view`;
+  const cardsWithImages = deck.topCards.filter(c => c.imageUrl);
+
+  return (
+    <div className="bg-slate-700/80 rounded-lg overflow-hidden border border-slate-600/50 hover:border-slate-500 transition-colors">
+      {/* Info row — click to navigate */}
+      <div
+        className="flex items-center gap-2.5 p-2.5 cursor-pointer hover:bg-slate-600/40 transition-colors"
+        onClick={() => router.push(href)}
+      >
+        {/* Placement badge */}
+        <div className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm ${placementClass(deck.placement)}`}>
+          #{deck.placement}
+        </div>
+
+        {/* Key pokemon images */}
+        <div className="flex items-end gap-0.5 flex-shrink-0">
+          {deck.key1Image && (
+            <Image src={deck.key1Image} alt="" width={40} height={56} className="rounded border border-slate-500" />
+          )}
+          {deck.key2Image && (
+            <Image src={deck.key2Image} alt="" width={34} height={48} className="rounded border border-slate-600 opacity-85 -ml-2" />
+          )}
+        </div>
+
+        {/* Player + tournament info */}
+        <div className="flex-1 min-w-0">
+          <p className="text-white font-bold text-sm truncate">{deck.playerName}</p>
+          <p className="text-slate-400 text-xs truncate">{deck.tournamentName}</p>
+          <p className="text-slate-500 text-[10px]">{date}</p>
+        </div>
+
+        {/* Count chips */}
+        <div className="flex items-center gap-1 flex-shrink-0 flex-wrap justify-end max-w-[80px]">
+          {deck.pokemonCount > 0 && (
+            <span className="bg-emerald-800/80 text-emerald-200 text-[9px] font-bold px-1.5 py-0.5 rounded" title="Pokémon">
+              P·{deck.pokemonCount}
+            </span>
+          )}
+          {deck.trainerCount > 0 && (
+            <span className="bg-blue-800/80 text-blue-200 text-[9px] font-bold px-1.5 py-0.5 rounded" title="Trainer">
+              T·{deck.trainerCount}
+            </span>
+          )}
+          {deck.itemCount > 0 && (
+            <span className="bg-slate-500/80 text-slate-200 text-[9px] font-bold px-1.5 py-0.5 rounded" title="Item">
+              I·{deck.itemCount}
+            </span>
+          )}
+          {deck.energyCount > 0 && (
+            <span className="bg-orange-800/80 text-orange-200 text-[9px] font-bold px-1.5 py-0.5 rounded" title="Energy">
+              E·{deck.energyCount}
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Top card images */}
-      <div className="flex items-center gap-0.5 flex-shrink-0">
-        {deck.topCards.slice(0, 6).filter(c => c.imageUrl).map((card, i) => (
-          <Image
-            key={i}
-            src={card.imageUrl!}
-            alt={card.name}
-            width={36}
-            height={50}
-            className="rounded border border-slate-600 hover:scale-110 transition-transform"
-            title={card.name}
-          />
-        ))}
-      </div>
+      {/* Card thumbnails — click opens popup, does NOT navigate */}
+      {cardsWithImages.length > 0 && (
+        <div className="flex items-center gap-0.5 px-2.5 pb-2.5 overflow-x-auto scrollbar-hide">
+          {cardsWithImages.slice(0, 12).map((card, i) => (
+            <CardThumb key={i} card={card} onCardClick={onCardClick} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -178,6 +323,7 @@ function ArchetypesPageInner() {
   const [region, setRegion] = useState(initialRegion);
   const [sinceDate, setSinceDate] = useState(initialSinceDate);
   const [skip, setSkip] = useState(0);
+  const [modalCard, setModalCard] = useState<TopCardMini | null>(null);
   const TAKE = 30;
 
   /* Reset pagination when filters change */
@@ -192,6 +338,8 @@ function ArchetypesPageInner() {
     const search = params.toString();
     router.replace(`/deck-builder/archetypes${search ? `?${search}` : ''}`, { scroll: false });
   }, [selectedName, region, sinceDate, router]);
+
+  const handleCardClick = useCallback((card: TopCardMini) => setModalCard(card), []);
 
   /* Fetch archetype list (always shown as sidebar / picker) */
   const { data: summaryData } = useQuery({
@@ -233,6 +381,11 @@ function ArchetypesPageInner() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-6">
+      {/* Card detail modal */}
+      {modalCard && (
+        <CardDetailModal card={modalCard} onClose={() => setModalCard(null)} />
+      )}
+
       <div className="mx-auto max-w-7xl">
         {/* Header bar */}
         <div className="mb-6 flex flex-wrap items-center gap-3">
@@ -332,7 +485,7 @@ function ArchetypesPageInner() {
                   <>
                     <div className="space-y-2 mb-4">
                       {deckData.decks.map(deck => (
-                        <DeckRow key={deck.deckId} deck={deck} />
+                        <DeckRow key={deck.deckId} deck={deck} onCardClick={handleCardClick} />
                       ))}
                       {deckData.decks.length === 0 && (
                         <p className="text-slate-400 text-center py-8">No decks found for this filter combination.</p>

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import Image from 'next/image';
 import Link from 'next/link';
 import apiClient from '@/lib/api-client';
 
@@ -24,20 +25,10 @@ interface Tournament {
   _count: { results: number };
 }
 
-interface TrendRow {
-  periodStart: string;
-  periodEnd: string;
-  totalCards: number;
-  pokemon: number;
-  trainer: number;
-  item: number;
-  stadium: number;
-  tools: number;
-}
-
 interface TopCard {
   name: string;
   usage: number;
+  imageUrl?: string | null;
 }
 
 interface TopCardsByCategory {
@@ -46,6 +37,13 @@ interface TopCardsByCategory {
   item: TopCard[];
   stadium: TopCard[];
   tools: TopCard[];
+}
+
+interface TopCardsPeriod {
+  current: TopCardsByCategory;
+  previous: TopCardsByCategory;
+  periodStart: string;
+  periodEnd: string;
 }
 
 interface TournamentDetailForTrend {
@@ -65,6 +63,7 @@ interface DeckDetailForTrend {
       name?: string;
       supertype?: string;
       subtypes?: string[];
+      imageUrl?: string;
     };
   }>;
 }
@@ -107,30 +106,12 @@ export default function TournamentsPage() {
     }),
   });
 
-  const { data: trendData, isLoading: trendLoading } = useQuery({
-    queryKey: ['tournaments-card-usage-trend', region],
-    queryFn: async () => {
-      try {
-        return await apiClient.get('/tournaments/trends/card-usage', {
-          params: {
-            periods: 10,
-            ...(region && { region }),
-          },
-        });
-      } catch {
-        const fallbackRows = await buildTrendFallback(region || undefined);
-        return { data: { data: fallbackRows } };
-      }
-    },
-  });
-
   const { data: topCardsData, isLoading: topCardsLoading } = useQuery({
     queryKey: ['tournaments-top-cards-by-category', region],
     queryFn: () => buildTopCardsByCategory(region || undefined),
   });
 
   const tournaments: Tournament[] = data?.data?.data ?? [];
-  const trendRows: TrendRow[] = trendData?.data?.data ?? [];
   const total: number = data?.data?.meta?.total ?? 0;
   const totalPages = Math.ceil(total / take);
   const hasFilters = region || type || search || dateFrom || dateTo;
@@ -152,10 +133,8 @@ export default function TournamentsPage() {
 
       <div className="max-w-7xl mx-auto px-4 py-4">
         <CardUsageTrendSection
-          rows={trendRows}
-          loading={trendLoading}
-          topCards={topCardsData}
-          topCardsLoading={topCardsLoading}
+          data={topCardsData}
+          loading={topCardsLoading}
         />
 
         {/* Filter panel */}
@@ -367,210 +346,194 @@ async function fetchDeckMapByIds(deckIds: string[]): Promise<Map<string, DeckDet
   return deckMap;
 }
 
-async function buildTrendFallback(region?: string): Promise<TrendRow[]> {
-  const tournamentDeckRefs = await fetchTournamentDeckRefs(region);
-
-  const deckMap = await fetchDeckMapByIds(tournamentDeckRefs.map((r) => r.deckId));
-
-  const bucketMap = new Map<number, TrendRow>();
-  const bucketMs = 14 * 24 * 60 * 60 * 1000;
-
-  for (const ref of tournamentDeckRefs) {
-    const dateMs = new Date(ref.date).getTime();
-    const bucketStartMs = Math.floor(dateMs / bucketMs) * bucketMs;
-    const bucketEndMs = bucketStartMs + (13 * 24 * 60 * 60 * 1000);
-
-    if (!bucketMap.has(bucketStartMs)) {
-      bucketMap.set(bucketStartMs, {
-        periodStart: new Date(bucketStartMs).toISOString(),
-        periodEnd: new Date(bucketEndMs).toISOString(),
-        totalCards: 0,
-        pokemon: 0,
-        trainer: 0,
-        item: 0,
-        stadium: 0,
-        tools: 0,
-      });
-    }
-
-    const bucket = bucketMap.get(bucketStartMs)!;
-    const deck = deckMap.get(ref.deckId);
-    if (!deck) continue;
-
-    for (const deckCard of deck.cards ?? []) {
-      const qty = deckCard.quantity ?? 0;
-      const supertype = deckCard.card?.supertype ?? '';
-      const subtypes = deckCard.card?.subtypes ?? [];
-
-      bucket.totalCards += qty;
-      if (supertype === 'POKEMON') bucket.pokemon += qty;
-      if (supertype === 'TRAINER') bucket.trainer += qty;
-      if (supertype === 'TRAINER' && subtypes.includes('ITEM')) bucket.item += qty;
-      if (supertype === 'TRAINER' && subtypes.includes('STADIUM')) bucket.stadium += qty;
-      if (supertype === 'TRAINER' && subtypes.includes('TOOL')) bucket.tools += qty;
-    }
-  }
-
-  return Array.from(bucketMap.values())
-    .sort((a, b) => new Date(a.periodStart).getTime() - new Date(b.periodStart).getTime())
-    .slice(-10);
-}
-
-async function buildTopCardsByCategory(region?: string): Promise<TopCardsByCategory> {
+async function buildTopCardsByCategory(region?: string): Promise<TopCardsPeriod> {
   const refs = await fetchTournamentDeckRefs(region);
   const bucketMs = 14 * 24 * 60 * 60 * 1000;
   const now = Date.now();
   const latestBucketStart = Math.floor(now / bucketMs) * bucketMs;
   const previousBucketStart = latestBucketStart - bucketMs;
-  const allowedBuckets = new Set([latestBucketStart, previousBucketStart]);
 
-  const recentRefs = refs.filter((r) => {
-    const start = Math.floor(new Date(r.date).getTime() / bucketMs) * bucketMs;
-    return allowedBuckets.has(start);
+  const currentRefs = refs.filter((r) => {
+    const s = Math.floor(new Date(r.date).getTime() / bucketMs) * bucketMs;
+    return s === latestBucketStart;
+  });
+  const previousRefs = refs.filter((r) => {
+    const s = Math.floor(new Date(r.date).getTime() / bucketMs) * bucketMs;
+    return s === previousBucketStart;
   });
 
-  const deckMap = await fetchDeckMapByIds(recentRefs.map((r) => r.deckId));
+  const allRefs = [...currentRefs, ...previousRefs];
+  const deckMap = await fetchDeckMapByIds(allRefs.map((r) => r.deckId));
 
-  const groups: Record<string, Record<string, number>> = {
-    pokemon: {},
-    trainer: {},
-    item: {},
-    stadium: {},
-    tools: {},
-  };
-
-  for (const ref of recentRefs) {
-    const deck = deckMap.get(ref.deckId);
-    if (!deck) continue;
+  // Build card image lookup from all deck data
+  const imageMap = new Map<string, string>();
+  for (const deck of deckMap.values()) {
     for (const dc of deck.cards ?? []) {
-      const q = dc.quantity ?? 0;
-      const name = dc.card?.name || 'Unknown';
-      const supertype = dc.card?.supertype ?? '';
-      const subtypes = dc.card?.subtypes ?? [];
-
-      if (supertype === 'POKEMON') {
-        groups.pokemon[name] = (groups.pokemon[name] ?? 0) + q;
-      }
-      if (supertype === 'TRAINER') {
-        groups.trainer[name] = (groups.trainer[name] ?? 0) + q;
-      }
-      if (supertype === 'TRAINER' && subtypes.includes('ITEM')) {
-        groups.item[name] = (groups.item[name] ?? 0) + q;
-      }
-      if (supertype === 'TRAINER' && subtypes.includes('STADIUM')) {
-        groups.stadium[name] = (groups.stadium[name] ?? 0) + q;
-      }
-      if (supertype === 'TRAINER' && subtypes.includes('TOOL')) {
-        groups.tools[name] = (groups.tools[name] ?? 0) + q;
+      if (dc.card?.name && dc.card?.imageUrl && !imageMap.has(dc.card.name)) {
+        imageMap.set(dc.card.name, dc.card.imageUrl);
       }
     }
   }
 
-  const top5 = (obj: Record<string, number>): TopCard[] =>
-    Object.entries(obj)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([name, usage]) => ({ name, usage }));
+  function buildGroups(bucketRefs: TournamentDeckRef[]): TopCardsByCategory {
+    const groups: Record<string, Record<string, number>> = {
+      pokemon: {}, trainer: {}, item: {}, stadium: {}, tools: {},
+    };
+    for (const ref of bucketRefs) {
+      const deck = deckMap.get(ref.deckId);
+      if (!deck) continue;
+      for (const dc of deck.cards ?? []) {
+        const q = dc.quantity ?? 0;
+        const name = dc.card?.name || 'Unknown';
+        const supertype = dc.card?.supertype ?? '';
+        const subtypes = dc.card?.subtypes ?? [];
+        if (supertype === 'POKEMON') groups.pokemon[name] = (groups.pokemon[name] ?? 0) + q;
+        if (supertype === 'TRAINER') groups.trainer[name] = (groups.trainer[name] ?? 0) + q;
+        if (supertype === 'TRAINER' && subtypes.includes('ITEM')) groups.item[name] = (groups.item[name] ?? 0) + q;
+        if (supertype === 'TRAINER' && subtypes.includes('STADIUM')) groups.stadium[name] = (groups.stadium[name] ?? 0) + q;
+        if (supertype === 'TRAINER' && subtypes.includes('TOOL')) groups.tools[name] = (groups.tools[name] ?? 0) + q;
+      }
+    }
+    const top5 = (obj: Record<string, number>): TopCard[] =>
+      Object.entries(obj)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([name, usage]) => ({ name, usage, imageUrl: imageMap.get(name) ?? null }));
+    return {
+      pokemon: top5(groups.pokemon),
+      trainer: top5(groups.trainer),
+      item: top5(groups.item),
+      stadium: top5(groups.stadium),
+      tools: top5(groups.tools),
+    };
+  }
+
+  const periodStart = new Date(latestBucketStart).toISOString();
+  const periodEnd = new Date(latestBucketStart + (13 * 24 * 60 * 60 * 1000)).toISOString();
 
   return {
-    pokemon: top5(groups.pokemon),
-    trainer: top5(groups.trainer),
-    item: top5(groups.item),
-    stadium: top5(groups.stadium),
-    tools: top5(groups.tools),
+    current: buildGroups(currentRefs),
+    previous: buildGroups(previousRefs),
+    periodStart,
+    periodEnd,
   };
 }
 
 function CardUsageTrendSection({
-  rows,
+  data,
   loading,
-  topCards,
-  topCardsLoading,
 }: {
-  rows: TrendRow[];
+  data?: TopCardsPeriod;
   loading: boolean;
-  topCards?: TopCardsByCategory;
-  topCardsLoading: boolean;
 }) {
   if (loading) {
     return (
-      <div className="mb-4 bg-white rounded-xl shadow-sm p-4">
-        <p className="text-sm text-gray-500">Loading 2-week card usage trend...</p>
+      <div className="mb-4 bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-gray-500">Loading meta snapshot...</p>
+        </div>
       </div>
     );
   }
 
-  if (!rows || rows.length === 0) {
+  if (!data) {
     return (
-      <div className="mb-4 bg-white rounded-xl shadow-sm p-4">
+      <div className="mb-4 bg-white rounded-xl shadow-sm border border-gray-100 p-4">
         <p className="text-sm text-gray-500">No trend data available yet.</p>
       </div>
     );
   }
 
-  const last = rows[rows.length - 1];
-  const prev = rows.length > 1 ? rows[rows.length - 2] : null;
-
-  const categories: Array<{ key: keyof TopCardsByCategory; label: string }> = [
-    { key: 'pokemon', label: 'Pokemon' },
-    { key: 'trainer', label: 'Trainer' },
-    { key: 'item', label: 'Item' },
-    { key: 'stadium', label: 'Stadium' },
-    { key: 'tools', label: 'Tools' },
+  const categories: Array<{
+    key: keyof TopCardsByCategory;
+    label: string;
+    chipClass: string;
+  }> = [
+    { key: 'pokemon', label: 'Pokémon', chipClass: 'bg-emerald-100 text-emerald-700' },
+    { key: 'trainer', label: 'Trainer', chipClass: 'bg-blue-100 text-blue-700' },
+    { key: 'item',    label: 'Item',    chipClass: 'bg-indigo-100 text-indigo-700' },
+    { key: 'stadium', label: 'Stadium', chipClass: 'bg-amber-100 text-amber-700' },
+    { key: 'tools',   label: 'Tool',    chipClass: 'bg-rose-100 text-rose-700' },
   ];
 
-  const maxTotal = Math.max(...rows.map((r) => r.totalCards), 1);
+  function getRankInfo(name: string, currentIdx: number, prevCards: TopCard[]): number | 'new' {
+    const prevIdx = prevCards.findIndex((c) => c.name === name);
+    if (prevIdx === -1) return 'new';
+    return prevIdx - currentIdx; // positive = rank improved
+  }
+
+  const period = data.periodStart
+    ? `${new Date(data.periodStart).toLocaleDateString()} – ${new Date(data.periodEnd).toLocaleDateString()}`
+    : null;
 
   return (
-    <div className="mb-4 bg-white rounded-xl shadow-sm p-4 border border-gray-100">
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-        <h2 className="text-base font-semibold text-gray-900">Card Usage Trend (Every 2 Weeks)</h2>
-        <span className="text-xs text-gray-500">
-          Latest window: {new Date(last.periodStart).toLocaleDateString()} - {new Date(last.periodEnd).toLocaleDateString()}
-        </span>
+    <div className="mb-4 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+        <h2 className="text-sm font-semibold text-gray-800">⚡ Meta Snapshot · Top Cards</h2>
+        {period && <span className="text-xs text-gray-400">{period}</span>}
       </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
-        {categories.map((cat) => {
-          const items = topCards?.[cat.key] ?? [];
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 divide-y sm:divide-y-0 sm:divide-x divide-gray-100">
+        {categories.map(({ key, label, chipClass }) => {
+          const current = data.current[key] ?? [];
+          const previous = data.previous[key] ?? [];
           return (
-            <div key={cat.key} className="rounded-lg border border-gray-100 p-3">
-              <p className="text-xs text-gray-500 mb-2">Top 5 {cat.label}</p>
-              {topCardsLoading ? (
-                <p className="text-xs text-gray-400">Loading...</p>
-              ) : items.length === 0 ? (
-                <p className="text-xs text-gray-400">No data</p>
-              ) : (
-                <div className="space-y-1">
-                  {items.map((it, idx) => (
-                    <div key={`${it.name}-${idx}`} className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-gray-700 truncate">{idx + 1}. {it.name}</span>
-                      <span className="text-gray-500 shrink-0">{it.usage.toLocaleString()}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
+            <div key={key} className="p-3">
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-block mb-2 ${chipClass}`}>
+                Top {label}
+              </span>
+              <div className="space-y-2">
+                {current.length === 0 ? (
+                  <p className="text-xs text-gray-400 py-2 text-center">No data</p>
+                ) : (
+                  current.map((card, idx) => {
+                    const rankInfo = getRankInfo(card.name, idx, previous);
+                    return (
+                      <div key={`${card.name}-${idx}`} className="flex items-center gap-1.5">
+                        {/* Rank number */}
+                        <span className="text-[10px] text-gray-400 w-3 shrink-0 text-right font-mono">{idx + 1}</span>
+                        {/* Card image */}
+                        {card.imageUrl ? (
+                          <div className="relative w-9 h-[50px] rounded overflow-hidden bg-gray-200 shrink-0 border border-gray-200">
+                            <Image
+                              src={card.imageUrl}
+                              alt={card.name}
+                              fill
+                              sizes="36px"
+                              className="object-cover"
+                              unoptimized
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-9 h-[50px] rounded bg-gray-100 shrink-0 flex items-center justify-center border border-gray-200">
+                            <span className="text-gray-400 text-[9px]">?</span>
+                          </div>
+                        )}
+                        {/* Name + usage */}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[10px] font-semibold text-gray-800 truncate leading-tight">{card.name}</p>
+                          <p className="text-[9px] text-gray-400 mt-0.5">{card.usage.toLocaleString()} uses</p>
+                        </div>
+                        {/* Rank delta vs last period */}
+                        <div className="shrink-0 w-7 text-right">
+                          {rankInfo === 'new' ? (
+                            <span className="text-[8px] bg-green-100 text-green-700 px-1 py-0.5 rounded-sm font-bold">NEW</span>
+                          ) : rankInfo > 0 ? (
+                            <span className="text-[9px] text-emerald-600 font-bold">▲{rankInfo}</span>
+                          ) : rankInfo < 0 ? (
+                            <span className="text-[9px] text-red-400 font-bold">▼{Math.abs(rankInfo)}</span>
+                          ) : (
+                            <span className="text-[9px] text-gray-300">—</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
           );
         })}
-      </div>
-
-      <div>
-        <p className="text-xs text-gray-500 mb-2">Total card usage per 2-week bucket</p>
-        <div className="flex items-end gap-1 h-24">
-          {rows.map((r) => {
-            const height = Math.max(8, Math.round((r.totalCards / maxTotal) * 96));
-            return (
-              <div key={r.periodStart} className="flex-1 flex flex-col items-center justify-end">
-                <div
-                  className="w-full max-w-[24px] bg-gradient-to-t from-indigo-500 to-violet-400 rounded-t"
-                  style={{ height }}
-                  title={`${new Date(r.periodStart).toLocaleDateString()} - ${new Date(r.periodEnd).toLocaleDateString()}: ${r.totalCards.toLocaleString()}`}
-                />
-              </div>
-            );
-          })}
-        </div>
       </div>
     </div>
   );
