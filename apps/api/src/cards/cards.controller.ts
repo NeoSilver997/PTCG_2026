@@ -94,6 +94,14 @@ export class CardsController {
     return await this.cardsService.getCardById(id);
   }
 
+  @Get('web/:webCardId/related-decks')
+  @ApiOperation({ summary: 'Get related tournament decks for a card (weekly trend + top 10)' })
+  @ApiResponse({ status: 200, description: 'Related decks data' })
+  @ApiResponse({ status: 404, description: 'Card not found' })
+  async getRelatedDecks(@Param('webCardId') webCardId: string) {
+    return await this.cardsService.getRelatedDecks(webCardId);
+  }
+
   @Get('web/:webCardId')
   @ApiOperation({ summary: 'Get card by webCardId (e.g., jp47009)' })
   @ApiResponse({ status: 200, description: 'Returns card details' })

@@ -44,8 +44,6 @@ const PLACEMENT_LABEL: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉
 
 export default function TournamentDetailPage({ params }: { params: Promise<{ tournamentId: string }> }) {
   const { tournamentId } = use(params);
-  const [expandedDeck, setExpandedDeck] = useState<string | null>(null);
-  const [selectedDeck, setSelectedDeck] = useState<DeckResult | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['tournament', tournamentId],
@@ -95,63 +93,45 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ tou
           <DeckSummaryStats results={tournament.results} />
         )}
 
-        {/* Results */}
-        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          <div className="p-4 border-b flex items-center justify-between">
+        {/* Results — 2-column grid, deck always visible */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-semibold text-gray-800">Results ({tournament.results?.length ?? 0})</h2>
             <span className="text-xs text-gray-400">{tournament.results?.filter((r: TournamentResult) => r.deck).length ?? 0} decks available</span>
           </div>
           {tournament.results?.length === 0 && (
             <p className="text-gray-400 text-center py-8">No results recorded.</p>
           )}
-          <div className="divide-y">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {tournament.results?.map((result: TournamentResult) => (
-              <div key={result.id}>
-                <div
-                  className={`flex items-center gap-4 p-4 ${result.deck ? 'cursor-pointer hover:bg-gray-50' : ''}`}
-                  onClick={() => result.deck && setExpandedDeck(expandedDeck === result.id ? null : result.id)}
-                >
+              <div key={result.id} className="bg-white rounded-lg shadow-sm overflow-hidden border border-gray-100">
+                <div className="flex items-center gap-3 p-3">
                   <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${PLACEMENT_BADGE[result.placement] ?? 'bg-gray-100 text-gray-600'}`}>
                     {PLACEMENT_LABEL[result.placement] ?? result.placement}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900">{result.playerName}</p>
-                    {result.deckName && <p className="text-sm text-gray-500">{result.deckName}</p>}
+                    <p className="font-medium text-gray-900 truncate">{result.playerName}</p>
+                    {result.deckName && <p className="text-xs text-gray-500 truncate">{result.deckName}</p>}
                   </div>
                   {result.deckArchetype && (
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${ARCHETYPE_COLORS[result.deckArchetype] ?? 'bg-gray-100 text-gray-600'}`}>
                       {result.deckArchetype}
                     </span>
                   )}
-                  {result.deck && (
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          type="button"
-                          className="text-xs px-2 py-1 rounded border border-blue-200 text-blue-700 hover:bg-blue-50"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedDeck(result.deck ?? null);
-                          }}
-                        >
-                          View Detail
-                        </button>
-                        <span className="text-xs text-gray-400">
-                          {expandedDeck === result.id ? '▲ Hide' : '▼ Deck'}
-                        </span>
-                      </div>
+                  {result.deck?.deckCode && (
+                    <Link
+                      href={`/deck-builder/event/${result.deck.deckCode}`}
+                      className="text-xs text-blue-600 hover:text-blue-800 shrink-0 px-2 py-1 bg-blue-50 rounded transition-colors"
+                    >
+                      View →
+                    </Link>
                   )}
                 </div>
-                {expandedDeck === result.id && result.deck && (
-                  <DeckPanel deck={result.deck} />
-                )}
+                {result.deck && <DeckPanel deck={result.deck} />}
               </div>
             ))}
           </div>
         </div>
-
-          {selectedDeck && (
-            <DeckDetailView deck={selectedDeck} onClose={() => setSelectedDeck(null)} />
-          )}
       </div>
     </div>
   );
@@ -265,25 +245,43 @@ function DeckPanel({ deck }: { deck: DeckResult }) {
   const cards = getDeckCards(deck);
   const sorted = [...cards].sort((a, b) => b.quantity - a.quantity);
   const total = cards.reduce((s, c) => s + c.quantity, 0);
+  const deckCards = deck.cards ?? [];
+  const pokemonCount = deckCards.filter(c => c.card.supertype === 'POKEMON').reduce((s, c) => s + c.quantity, 0);
+  const trainerCount = deckCards.filter(c => c.card.supertype === 'TRAINER').reduce((s, c) => s + c.quantity, 0);
+  const energyCount = deckCards.filter(c => c.card.supertype === 'ENERGY').reduce((s, c) => s + c.quantity, 0);
+  const viewHref = deck.deckCode ? `/deck-builder/event/${deck.deckCode}` : null;
 
   return (
-    <div className="bg-gray-50 border-t px-4 py-4">
-      {/* Deck header */}
-      <div className="flex items-center gap-3 mb-3">
-        <p className="text-sm font-semibold text-gray-700">Deck List <span className="text-gray-400 font-normal">({total} cards, {cards.length} unique)</span></p>
+    <div className="bg-slate-800/95 border-t border-slate-600 px-3 py-3">
+      <div className="flex items-center gap-1.5 flex-wrap mb-2">
+        <span className="text-slate-400 text-[10px]">{total} cards · {cards.length} types</span>
         {deck.deckCode && (
-          <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded font-mono">{deck.deckCode}</span>
+          <a
+            href={`https://www.pokemon-card.com/deck/confirm.html/deckID/${deck.deckCode}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-mono text-[10px] bg-slate-700 text-blue-400 hover:text-blue-300 px-1.5 py-0.5 rounded transition-colors"
+          >
+            {deck.deckCode} ↗
+          </a>
+        )}
+        {pokemonCount > 0 && <span className="bg-emerald-800/80 text-emerald-200 text-[9px] font-bold px-1.5 py-0.5 rounded">P·{pokemonCount}</span>}
+        {trainerCount > 0 && <span className="bg-blue-800/80 text-blue-200 text-[9px] font-bold px-1.5 py-0.5 rounded">T·{trainerCount}</span>}
+        {energyCount > 0 && <span className="bg-orange-800/80 text-orange-200 text-[9px] font-bold px-1.5 py-0.5 rounded">E·{energyCount}</span>}
+        {viewHref && (
+          <Link href={viewHref} className="ml-auto text-[10px] text-blue-400 hover:text-blue-300 transition-colors">
+            View →
+          </Link>
         )}
       </div>
-      {/* Card grid */}
       {sorted.length > 0 ? (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex items-center gap-0.5 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
           {sorted.map((c, i) => (
             <CardThumbnail key={`${c.cardId}-${i}`} card={c} />
           ))}
         </div>
       ) : (
-        <p className="text-sm text-gray-400 italic">No card data available.</p>
+        <p className="text-xs text-slate-500 italic">No card data available.</p>
       )}
     </div>
   );
@@ -291,31 +289,49 @@ function DeckPanel({ deck }: { deck: DeckResult }) {
 
 function CardThumbnail({ card }: { card: DeckCardData }) {
   const [imgError, setImgError] = useState(false);
+  const [hovered, setHovered] = useState(false);
   return (
-    <div className="relative group shrink-0" style={{ width: 72 }}>
-      <div className="relative w-[72px] h-[100px] rounded overflow-hidden bg-gray-200">
+    <div
+      className="relative flex-shrink-0 cursor-pointer"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <div className="relative w-9 h-[50px] rounded border border-slate-600 bg-slate-700 overflow-hidden">
         {card.imageUrl && !imgError ? (
           <Image
             src={card.imageUrl}
             alt={card.cardName}
             fill
-            sizes="72px"
+            sizes="36px"
             className="object-cover"
             onError={() => setImgError(true)}
             unoptimized
           />
         ) : (
-          <div className="flex items-center justify-center h-full text-xs text-gray-400 text-center p-1">{card.cardCode || card.cardId}</div>
+          <div className="flex items-center justify-center h-full text-[7px] text-slate-400 text-center px-0.5 leading-tight">{card.cardName}</div>
         )}
         {card.quantity > 1 && (
-          <span className="absolute top-1 right-1 bg-black/70 text-white text-xs px-1 rounded font-bold">x{card.quantity}</span>
+          <span className="absolute -top-1 -right-1 bg-slate-900 border border-slate-600 text-white text-[8px] font-bold w-3.5 h-3.5 rounded-full flex items-center justify-center leading-none">
+            {card.quantity}
+          </span>
         )}
       </div>
-      <p className="text-[10px] text-gray-600 mt-1 text-center truncate leading-tight">{card.cardName}</p>
-      {/* Tooltip on hover */}
-      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-10 bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity">
-        {card.cardName} · {card.cardCode} · x{card.quantity}
-      </div>
+      {hovered && (
+        <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-1.5 pointer-events-none">
+          <div className="bg-slate-900 rounded-xl p-1.5 shadow-2xl border border-slate-500">
+            {card.imageUrl && !imgError ? (
+              <Image src={card.imageUrl} alt={card.cardName} width={100} height={140} className="rounded-lg" unoptimized />
+            ) : (
+              <div className="w-[100px] h-[140px] rounded-lg bg-slate-700 flex items-center justify-center">
+                <span className="text-slate-300 text-xs text-center px-2">{card.cardName}</span>
+              </div>
+            )}
+            <p className="text-white text-[10px] font-semibold text-center mt-1 max-w-[100px] leading-tight">{card.cardName}</p>
+            <p className="text-slate-400 text-[9px] text-center">{card.cardCode} ×{card.quantity}</p>
+          </div>
+          <div className="flex justify-center"><div className="w-2 h-2 bg-slate-900 border-r border-b border-slate-500 rotate-45 -mt-1" /></div>
+        </div>
+      )}
     </div>
   );
 }
@@ -363,11 +379,26 @@ function ArchetypeChart({ results }: { results: TournamentResult[] }) {
   for (const r of results) { const k = r.deckArchetype ?? 'UNKNOWN'; counts[k] = (counts[k] ?? 0) + 1; }
   const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
   const total = results.length;
+  const BAR_COLORS: Record<string, string> = {
+    AGGRO: 'bg-red-400', CONTROL: 'bg-blue-400', COMBO: 'bg-purple-400',
+    MIDRANGE: 'bg-yellow-400', TOOLBOX: 'bg-green-400', OTHER: 'bg-gray-400', UNKNOWN: 'bg-slate-300',
+  };
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="bg-white rounded-lg shadow-sm p-4 space-y-2">
       {sorted.map(([arch, count]) => (
-        <div key={arch} className={`px-3 py-1.5 rounded-full text-sm font-medium ${ARCHETYPE_COLORS[arch] ?? 'bg-gray-100 text-gray-600'}`}>
-          {arch} · {count} ({Math.round((count / total) * 100)}%)
+        <div key={arch} className="flex items-center gap-3">
+          <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 w-24 text-center ${ARCHETYPE_COLORS[arch] ?? 'bg-gray-100 text-gray-600'}`}>
+            {arch}
+          </span>
+          <div className="flex-1 bg-gray-100 rounded-full h-3.5 overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${BAR_COLORS[arch] ?? 'bg-gray-400'}`}
+              style={{ width: `${Math.max(2, (count / total) * 100)}%` }}
+            />
+          </div>
+          <span className="text-xs text-gray-600 shrink-0 w-20 text-right">
+            {count} ({Math.round((count / total) * 100)}%)
+          </span>
         </div>
       ))}
     </div>

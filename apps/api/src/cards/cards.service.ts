@@ -534,7 +534,7 @@ export class CardsService {
     let actualSortBy = sortBy;
     let actualSortOrder = sortOrder;
     const orderBy: any = {};
-    const validSortFields = ['id', 'webCardId', 'name', 'hp', 'createdAt', 'updatedAt', 'rarity', 'supertype', 'expansionReleaseDate'];
+    const validSortFields = ['id', 'webCardId', 'name', 'hp', 'createdAt', 'updatedAt', 'rarity', 'supertype', 'expansionReleaseDate', 'expansionCode'];
     if (actualSortBy && validSortFields.includes(actualSortBy)) {
       if (actualSortBy === 'expansionReleaseDate') {
         // Sort by primary expansion release date
@@ -543,6 +543,9 @@ export class CardsService {
             releaseDate: actualSortOrder || 'desc'
           }
         };
+      } else if (actualSortBy === 'expansionCode') {
+        // Sort by regional expansion code (always goes through raw SQL path)
+        orderBy.regionalExpansion = { code: actualSortOrder || 'asc' };
       } else {
         orderBy[actualSortBy] = actualSortOrder || 'desc';
       }
@@ -578,7 +581,7 @@ export class CardsService {
     // hasAbilities, hasAttackText, and attackName require raw SQL due to Prisma JSON field limitations
     // evolvesTo requires raw SQL for exact CSV value matching
     // expansionReleaseDate requires raw SQL because Prisma does not support two-level nested orderBy
-    if (hasAbilities !== undefined || hasAttackText !== undefined || evolvesTo || attackName || actualSortBy === 'expansionReleaseDate') {
+    if (hasAbilities !== undefined || hasAttackText !== undefined || evolvesTo || attackName || actualSortBy === 'expansionReleaseDate' || actualSortBy === 'expansionCode') {
       const jsonFieldConditions: string[] = [];
       
       // For JSON fields: null (JSON null) is different from NULL (SQL null)
@@ -672,6 +675,8 @@ export class CardsService {
         orderByClause = 'c."rarity"';
       } else if (actualSortBy === 'supertype') {
         orderByClause = 'c."supertype"';
+      } else if (actualSortBy === 'expansionCode') {
+        orderByClause = 're.code';
       }
 
       const [cards, totalResult] = await Promise.all([
@@ -692,7 +697,7 @@ export class CardsService {
           LEFT JOIN regional_expansions re ON c."regionalExpansionId" = re.id
           LEFT JOIN primary_expansions pe ON re."primaryExpansionId" = pe.id
           ${whereClause}
-          ORDER BY ${orderByClause} ${actualSortOrder === 'asc' ? 'ASC' : 'DESC'} NULLS LAST
+          ORDER BY ${orderByClause} ${actualSortOrder === 'asc' ? 'ASC' : 'DESC'} NULLS LAST${actualSortBy === 'expansionCode' ? ', c."id" ASC' : ''}
           LIMIT ${Math.min(take, 100)} OFFSET ${skip}
         `),
         this.prisma.$queryRawUnsafe<[{ count: bigint }]>(`
@@ -905,6 +910,68 @@ export class CardsService {
       where: { webCardId },
       data: updateData,
     });
+  }
+
+  async getRelatedDecks(webCardId: string): Promise<any> {
+    const found = await this.prisma.card.findUnique({
+      where: { webCardId },
+      select: { id: true },
+    });
+    if (!found) throw new NotFoundException(`Card ${webCardId} not found`);
+    const cardId = found.id;
+
+    const [weeklyRows, topDecks] = await Promise.all([
+      this.prisma.$queryRaw<Array<{ week_start: Date; deck_count: bigint }>>`
+        SELECT
+          date_trunc('week', t.date)::date AS week_start,
+          COUNT(DISTINCT d.id)::bigint AS deck_count
+        FROM deck_cards dc
+        JOIN decks d ON d.id = dc."deckId"
+        JOIN tournament_results tr ON tr."deckId" = d.id
+        JOIN tournaments t ON t.id = tr."tournamentId"
+        WHERE dc."cardId" = ${cardId}
+          AND t.date >= now() - interval '12 weeks'
+        GROUP BY 1
+        ORDER BY 1 ASC
+      `,
+      this.prisma.$queryRaw<Array<any>>`
+        SELECT
+          d.id AS "deckId",
+          d."deckCode",
+          tr."playerName",
+          tr.placement,
+          t.name AS "tournamentName",
+          t.date AS "tournamentDate",
+          t.id AS "eventId",
+          t.region,
+          dc.quantity
+        FROM deck_cards dc
+        JOIN decks d ON d.id = dc."deckId"
+        JOIN tournament_results tr ON tr."deckId" = d.id
+        JOIN tournaments t ON t.id = tr."tournamentId"
+        WHERE dc."cardId" = ${cardId}
+        ORDER BY t.date DESC, tr.placement ASC
+        LIMIT 10
+      `,
+    ]);
+
+    return {
+      weeklyTrend: weeklyRows.map((r) => ({
+        weekStart: r.week_start,
+        deckCount: Number(r.deck_count),
+      })),
+      topDecks: topDecks.map((r) => ({
+        deckId: r.deckId,
+        deckCode: r.deckCode,
+        playerName: r.playerName,
+        placement: Number(r.placement),
+        tournamentName: r.tournamentName,
+        tournamentDate: r.tournamentDate,
+        eventId: r.eventId,
+        region: r.region,
+        quantity: Number(r.quantity),
+      })),
+    };
   }
 
   /**

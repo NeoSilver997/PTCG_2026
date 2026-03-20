@@ -140,6 +140,15 @@ function CardDetailModal({ card, onClose }: { card: TopCardMini; onClose: () => 
             ×{card.quantity} copies
           </span>
         </div>
+        <div className="mt-3">
+          <Link
+            href={`/cards?name=${encodeURIComponent(card.name)}&supertype=${card.supertype === 'POKEMON' ? 'POKEMON' : ''}`}
+            className="w-full block text-center px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg transition-colors"
+            onClick={onClose}
+          >
+            在卡牌庫搜尋 →
+          </Link>
+        </div>
       </div>
     </div>
   );
@@ -148,8 +157,6 @@ function CardDetailModal({ card, onClose }: { card: TopCardMini; onClose: () => 
 /* ---- Card Thumbnail with hover zoom ---- */
 function CardThumb({ card, onCardClick }: { card: TopCardMini; onCardClick: (c: TopCardMini) => void }) {
   const [hovered, setHovered] = useState(false);
-
-  if (!card.imageUrl) return null;
 
   return (
     <div
@@ -160,14 +167,20 @@ function CardThumb({ card, onCardClick }: { card: TopCardMini; onCardClick: (c: 
     >
       {/* Thumbnail */}
       <div className="relative cursor-pointer">
-        <Image
-          src={card.imageUrl}
-          alt={card.name}
-          width={36}
-          height={50}
-          className="rounded border border-slate-600 hover:border-white transition-colors"
-          unoptimized
-        />
+        {card.imageUrl ? (
+          <Image
+            src={card.imageUrl}
+            alt={card.name}
+            width={36}
+            height={50}
+            className="rounded border border-slate-600 hover:border-white transition-colors"
+            unoptimized
+          />
+        ) : (
+          <div className="w-9 h-[50px] rounded border border-slate-600 hover:border-white transition-colors bg-slate-700 flex items-center justify-center">
+            <span className="text-slate-400 text-[7px] text-center leading-tight px-0.5 break-all">{card.name}</span>
+          </div>
+        )}
         {/* Quantity badge */}
         <span className="absolute -top-1 -right-1 bg-slate-900 border border-slate-600 text-white text-[8px] font-bold w-3.5 h-3.5 rounded-full flex items-center justify-center leading-none">
           {card.quantity}
@@ -178,14 +191,20 @@ function CardThumb({ card, onCardClick }: { card: TopCardMini; onCardClick: (c: 
       {hovered && (
         <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-1.5 pointer-events-none">
           <div className="bg-slate-900 rounded-xl p-1.5 shadow-2xl border border-slate-500">
-            <Image
-              src={card.imageUrl}
-              alt={card.name}
-              width={130}
-              height={182}
-              className="rounded-lg"
-              unoptimized
-            />
+            {card.imageUrl ? (
+              <Image
+                src={card.imageUrl}
+                alt={card.name}
+                width={130}
+                height={182}
+                className="rounded-lg"
+                unoptimized
+              />
+            ) : (
+              <div className="w-[130px] h-[182px] rounded-lg bg-slate-700 flex items-center justify-center">
+                <span className="text-slate-300 text-xs text-center px-2 leading-snug">{card.name}</span>
+              </div>
+            )}
             <p className="text-white text-[10px] font-semibold text-center mt-1 max-w-[130px] leading-tight">
               {card.name}
             </p>
@@ -207,7 +226,7 @@ function DeckRow({ deck, onCardClick }: { deck: ArchetypeDeck; onCardClick: (c: 
   const href = deck.deckCode
     ? `/deck-builder/event/${deck.deckCode}`
     : `/deck-builder?deckId=${deck.deckId}&mode=view`;
-  const cardsWithImages = deck.topCards.filter(c => c.imageUrl);
+  const cardsToShow = deck.topCards;
 
   return (
     <div className="bg-slate-700/80 rounded-lg overflow-hidden border border-slate-600/50 hover:border-slate-500 transition-colors">
@@ -264,9 +283,9 @@ function DeckRow({ deck, onCardClick }: { deck: ArchetypeDeck; onCardClick: (c: 
       </div>
 
       {/* Card thumbnails — click opens popup, does NOT navigate */}
-      {cardsWithImages.length > 0 && (
+      {cardsToShow.length > 0 && (
         <div className="flex items-center gap-0.5 px-2.5 pb-2.5 overflow-x-auto scrollbar-hide">
-          {cardsWithImages.slice(0, 12).map((card, i) => (
+          {cardsToShow.slice(0, 12).map((card, i) => (
             <CardThumb key={i} card={card} onCardClick={onCardClick} />
           ))}
         </div>

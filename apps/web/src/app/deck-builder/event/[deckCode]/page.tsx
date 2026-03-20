@@ -141,6 +141,55 @@ function CardTile({ entry, section }: { entry: DeckCardEntry; section: SectionKe
   );
 }
 
+/* ---- Paired section (two sub-sections side by side) ---- */
+function PairedSection({ sectionA, sectionB, entriesA, entriesB }: {
+  sectionA: SectionKey; sectionB: SectionKey;
+  entriesA: DeckCardEntry[]; entriesB: DeckCardEntry[];
+}) {
+  if (!entriesA.length && !entriesB.length) return null;
+  return (
+    <div className="mb-6 flex gap-4">
+      {entriesA.length > 0 && (
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-3">
+            <span className={`px-2.5 py-0.5 rounded text-xs font-bold text-white ${SECTION_COLORS[sectionA] ?? 'bg-slate-600'}`}>
+              {SECTION_LABELS[sectionA]}
+            </span>
+            <span className="text-slate-400 text-xs">
+              {entriesA.length} types · {entriesA.reduce((s, e) => s + e.quantity, 0)} cards
+            </span>
+          </div>
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 gap-2">
+            {sortSection(entriesA, sectionA).map((entry) => (
+              <CardTile key={entry.card.webCardId} entry={entry} section={sectionA} />
+            ))}
+          </div>
+        </div>
+      )}
+      {entriesA.length > 0 && entriesB.length > 0 && (
+        <div className="w-px bg-slate-700 self-stretch" />
+      )}
+      {entriesB.length > 0 && (
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-3">
+            <span className={`px-2.5 py-0.5 rounded text-xs font-bold text-white ${SECTION_COLORS[sectionB] ?? 'bg-slate-600'}`}>
+              {SECTION_LABELS[sectionB]}
+            </span>
+            <span className="text-slate-400 text-xs">
+              {entriesB.length} types · {entriesB.reduce((s, e) => s + e.quantity, 0)} cards
+            </span>
+          </div>
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 gap-2">
+            {sortSection(entriesB, sectionB).map((entry) => (
+              <CardTile key={entry.card.webCardId} entry={entry} section={sectionB} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ---- Section block ---- */
 function DeckSection({ section, entries }: { section: SectionKey; entries: DeckCardEntry[] }) {
   if (entries.length === 0) return null;
@@ -242,9 +291,20 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
           </div>
         </div>
 
-        {SECTION_ORDER.map((key) => (
-          <DeckSection key={key} section={key} entries={sections.get(key) ?? []} />
-        ))}
+        <DeckSection key="pokemon" section="pokemon" entries={sections.get('pokemon') ?? []} />
+        <DeckSection key="ace" section="ace" entries={sections.get('ace') ?? []} />
+        <PairedSection
+          sectionA="supporter" sectionB="stadium"
+          entriesA={sections.get('supporter') ?? []} entriesB={sections.get('stadium') ?? []}
+        />
+        <PairedSection
+          sectionA="item" sectionB="tool"
+          entriesA={sections.get('item') ?? []} entriesB={sections.get('tool') ?? []}
+        />
+        <PairedSection
+          sectionA="basic-energy" sectionB="special-energy"
+          entriesA={sections.get('basic-energy') ?? []} entriesB={sections.get('special-energy') ?? []}
+        />
       </div>
     </div>
   );

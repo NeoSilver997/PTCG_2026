@@ -114,6 +114,7 @@ export function FilterPanel({ filters, onFilterChange }: FilterPanelProps) {
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900"
           >
             <option value="expansionReleaseDate" className="text-gray-900">發行日期</option>
+            <option value="expansionCode" className="text-gray-900">擴展包代碼</option>
             <option value="createdAt" className="text-gray-900">匯入日期</option>
             <option value="name" className="text-gray-900">名稱</option>
             <option value="hp" className="text-gray-900">HP</option>

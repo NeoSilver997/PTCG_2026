@@ -471,7 +471,12 @@ function CardUsageTrendSection({
     <div className="mb-4 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
         <h2 className="text-sm font-semibold text-gray-800">⚡ Meta Snapshot · Top Cards</h2>
-        {period && <span className="text-xs text-gray-400">{period}</span>}
+        <div className="flex items-center gap-3">
+          {period && <span className="text-xs text-gray-400">{period}</span>}
+          <Link href="/tournaments/top-cards" className="text-xs text-purple-600 hover:text-purple-800 font-medium hover:underline transition-colors">
+            View full trends →
+          </Link>
+        </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 divide-y sm:divide-y-0 sm:divide-x divide-gray-100">
         {categories.map(({ key, label, chipClass }) => {

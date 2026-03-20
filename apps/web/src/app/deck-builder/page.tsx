@@ -51,6 +51,11 @@ function ViewCardTile({ e, section }: { e: ViewEntry; section: SectionKey }) {
       {(e.card.hp??0)>0 && <div className="absolute top-1 left-1 bg-red-700 text-white text-[8px] font-bold px-1 py-0.5 rounded shadow">{e.card.hp}HP</div>}
       {dmg>0 && <div className="absolute bottom-6 right-1 bg-orange-700 text-white text-[8px] font-bold px-1 py-0.5 rounded shadow">{dmg}</div>}
       <p className="text-slate-300 text-[9px] mt-0.5 text-center line-clamp-1 leading-tight">{e.card.name}</p>
+      <p className="text-slate-600 text-[8px] text-center truncate leading-tight">
+        <Link href={`/cards/${e.card.webCardId}`} onClick={(evt) => evt.stopPropagation()} className="hover:text-slate-400 transition-colors">
+          {e.card.webCardId}
+        </Link>
+      </p>
     </div>
   );
 }
@@ -98,7 +103,17 @@ function DeckViewMode({ deckId, onEdit }: { deckId: string; onEdit: ()=>void }) 
             <span className="text-emerald-400">Pokémon: {pokQty}</span>
             <span className="text-blue-400">Trainer: {trnQty}</span>
             <span className="text-orange-400">Energy: {enrQty}</span>
-            {data.deckCode && <span className="text-slate-500 font-mono text-xs">#{data.deckCode}</span>}
+            {data.deckCode && (
+              <a
+                href={`https://www.pokemon-card.com/deck/confirm.html/deckID/${data.deckCode}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-400 hover:text-blue-300 font-mono text-xs underline underline-offset-2 transition-colors"
+                title="View on pokemon-card.com"
+              >
+                #{data.deckCode} ↗
+              </a>
+            )}
           </div>
         </div>
         {SECTION_ORDER.map(key => <ViewSection key={key} section={key} entries={sections.get(key)??[]} />)}

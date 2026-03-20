@@ -352,6 +352,18 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
     enabled: !!card?.primaryCard?.expansionId,
   });
 
+  // Basic energy cards don't appear in competitive decks — skip related decks section
+  const isBasicEnergy = card?.supertype === 'ENERGY' && Array.isArray(card?.subtypes) && card.subtypes.includes('BASIC_ENERGY');
+
+  const { data: relatedDecks } = useQuery({
+    queryKey: ['relatedDecks', webCardId],
+    queryFn: async () => {
+      const { data } = await apiClient.get(`/cards/web/${webCardId}/related-decks`);
+      return data;
+    },
+    enabled: !!card && !isBasicEnergy,
+  });
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -1078,6 +1090,82 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                     >
                       查看更多相關產品 →
                     </Link>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Related Tournament Decks */}
+            {!isBasicEnergy && relatedDecks && (
+              <div className="bg-white rounded-lg p-6 shadow-sm">
+                <h2 className="text-xl font-semibold mb-4 text-gray-900">相關賽事牌組</h2>
+
+                {/* Weekly trend bar chart */}
+                {relatedDecks.weeklyTrend && relatedDecks.weeklyTrend.length > 0 ? (
+                  <div className="mb-5">
+                    <h3 className="text-sm font-medium text-gray-600 mb-2">每週使用牌組數 (近12週)</h3>
+                    <div className="flex items-end gap-1 h-16">
+                      {(() => {
+                        const maxCount = Math.max(...relatedDecks.weeklyTrend.map((w: any) => w.deckCount), 1);
+                        return relatedDecks.weeklyTrend.map((w: any, i: number) => (
+                          <div key={i} className="flex-1 flex flex-col items-center gap-0.5 group">
+                            <span className="text-[9px] text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">{w.deckCount}</span>
+                            <div
+                              className="w-full bg-blue-400 hover:bg-blue-500 rounded-t transition-colors"
+                              style={{ height: `${Math.max(3, (w.deckCount / maxCount) * 40)}px` }}
+                              title={`${new Date(w.weekStart).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })}: ${w.deckCount} decks`}
+                            />
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-1">
+                      共 {relatedDecks.weeklyTrend.reduce((s: number, w: any) => s + w.deckCount, 0)} 個牌組 (近12週)
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-400 mb-4">近12週無賽事使用記錄</p>
+                )}
+
+                {/* Top 10 decks */}
+                {relatedDecks.topDecks && relatedDecks.topDecks.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-600 mb-2">近期相關牌組 (最多10個)</h3>
+                    <div className="space-y-2">
+                      {relatedDecks.topDecks.map((deck: any, i: number) => (
+                        <div key={deck.deckId} className="flex items-center gap-3 p-2.5 bg-gray-50 rounded-lg border border-gray-100 hover:border-gray-300 transition-colors">
+                          <span className="text-xs font-bold text-gray-400 w-5 shrink-0">{i + 1}</span>
+                          <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 bg-gray-200 text-gray-600">
+                            #{deck.placement}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">{deck.playerName}</p>
+                            <p className="text-xs text-gray-500 truncate">{deck.tournamentName}</p>
+                            <p className="text-xs text-gray-400">{deck.tournamentDate ? new Date(deck.tournamentDate).toLocaleDateString('zh-TW') : ''} · ×{deck.quantity}</p>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {deck.deckCode && (
+                              <>
+                                <a
+                                  href={`https://www.pokemon-card.com/deck/confirm.html/deckID/${deck.deckCode}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="font-mono text-[10px] text-blue-500 hover:text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded transition-colors"
+                                >
+                                  {deck.deckCode} ↗
+                                </a>
+                                <Link
+                                  href={`/deck-builder/event/${deck.deckCode}`}
+                                  className="text-xs text-blue-600 hover:text-blue-800 px-2 py-1 bg-blue-50 rounded transition-colors"
+                                >
+                                  View
+                                </Link>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
