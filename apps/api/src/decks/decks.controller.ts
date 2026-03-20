@@ -35,6 +35,14 @@ export class DecksController {
     return this.decksService.findOne(id);
   }
 
+  @Get('code/:deckCode')
+  @Throttle({ long: { limit: 100, ttl: 60000 } })
+  @ApiOperation({ summary: 'Get deck by original deck code' })
+  @ApiResponse({ status: 404, description: 'Not found' })
+  findOneByCode(@Param('deckCode') deckCode: string) {
+    return this.decksService.findOneByCode(deckCode);
+  }
+
   @Post()
   @Throttle({ medium: { limit: 20, ttl: 10000 } })
   @ApiOperation({ summary: 'Create a deck' })

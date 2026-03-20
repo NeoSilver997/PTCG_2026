@@ -67,7 +67,31 @@ export class DecksService {
       throw new NotFoundException(`Deck ${id} not found`);
     }
 
+    await this.hydrateDeckExtras(deck);
+
     return deck;
+  }
+
+  async findOneByCode(deckCode: string) {
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM decks WHERE "deckCode" = ${deckCode} LIMIT 1
+    `;
+
+    if (!rows.length) {
+      throw new NotFoundException(`Deck code ${deckCode} not found`);
+    }
+
+    return this.findOne(rows[0].id);
+  }
+
+  private async hydrateDeckExtras(deck: any) {
+    const rows = await this.prisma.$queryRaw<Array<{ id: string; deckCode: string | null; deckData: any }>>`
+      SELECT id, "deckCode", "deckData" FROM decks WHERE id = ${deck.id}
+    `;
+    if (rows.length > 0) {
+      deck.deckCode = rows[0].deckCode;
+      deck.deckData = rows[0].deckData;
+    }
   }
 
   async create(dto: CreateDeckDto) {

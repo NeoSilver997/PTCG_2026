@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, Logger, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { FindAllTournamentsDto } from './dto/find-all-tournaments.dto';
+import { SortBy } from './dto/find-all-tournaments.dto';
 import { CreateTournamentDto } from './dto/create-tournament.dto';
 
 @Injectable()
@@ -31,7 +32,9 @@ export class TournamentsService {
         where,
         skip: query.skip ?? 0,
         take: query.take ?? 50,
-        orderBy: { date: 'desc' },
+        orderBy: query.sortBy === SortBy.PLAYERS
+          ? { playerCount: query.sortOrder ?? 'desc' }
+          : { date: query.sortOrder ?? 'desc' },
         include: {
           _count: { select: { results: true } },
         },
@@ -65,14 +68,62 @@ export class TournamentsService {
       throw new NotFoundException(`Tournament ${id} not found`);
     }
 
+    await this.hydrateDeckExtras(tournament);
+
     return tournament;
   }
 
   async findByEventId(eventId: string) {
-    return this.prisma.tournament.findUnique({
+    const tournament = await this.prisma.tournament.findUnique({
       where: { eventId },
-      include: { results: { orderBy: { placement: 'asc' } } },
+      include: {
+        results: {
+          orderBy: { placement: 'asc' },
+          include: {
+            deck: {
+              include: {
+                cards: {
+                  include: { card: { select: { webCardId: true, name: true, imageUrl: true } } },
+                },
+              },
+            },
+          },
+        },
+      },
     });
+
+    if (!tournament) {
+      throw new NotFoundException(`Tournament with eventId ${eventId} not found`);
+    }
+
+    await this.hydrateDeckExtras(tournament);
+
+    return tournament;
+  }
+
+  private async hydrateDeckExtras(tournament: any) {
+    if (!tournament?.results?.length) return;
+
+    // Augment decks with deckCode + deckData (columns added after Prisma client was generated)
+    const deckIds = (tournament.results as any[])
+      .filter((r) => r.deck)
+      .map((r) => r.deck.id as string);
+
+    if (deckIds.length > 0) {
+      const extras = await this.prisma.$queryRaw<
+        Array<{ id: string; deckCode: string | null; deckData: any }>
+      >`SELECT id, "deckCode", "deckData" FROM decks WHERE id = ANY(${deckIds}::text[])`;
+      const map = new Map(extras.map((e) => [e.id, e]));
+      for (const result of tournament.results as any[]) {
+        if (result.deck) {
+          const extra = map.get(result.deck.id);
+          if (extra) {
+            result.deck.deckCode = extra.deckCode;
+            result.deck.deckData = extra.deckData;
+          }
+        }
+      }
+    }
   }
 
   async create(dto: CreateTournamentDto) {

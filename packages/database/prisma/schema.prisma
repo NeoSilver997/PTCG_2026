@@ -244,6 +244,8 @@ model Deck {
   format             String?
   isPublic           Boolean            @default(false)
   tournamentResultId String?
+  deckCode           String?            // Official deck code (e.g. "pMMyyp-Bj58oH-M2MpyS")
+  deckData           Json?              // Raw card list: [{cardId, cardName, quantity, imageUrl}]
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
   cards              DeckCard[]

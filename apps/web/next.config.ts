@@ -14,6 +14,11 @@ const nextConfig: NextConfig = {
         port: '4000',
         pathname: '/api/v1/storage/cards/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'www.pokemon-card.com',
+        pathname: '/**',
+      },
     ],
   },
   async rewrites() {

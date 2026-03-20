@@ -27,6 +27,15 @@ export class TournamentsController {
     return this.tournamentsService.findAll(query);
   }
 
+  @Get('event/:eventId')
+  @Throttle({ long: { limit: 100, ttl: 60000 } })
+  @ApiOperation({ summary: 'Get tournament by external event ID with results and decks' })
+  @ApiResponse({ status: 200, description: 'Tournament detail' })
+  @ApiResponse({ status: 404, description: 'Not found' })
+  findByEventId(@Param('eventId') eventId: string) {
+    return this.tournamentsService.findByEventId(eventId);
+  }
+
   @Get(':id')
   @Throttle({ long: { limit: 100, ttl: 60000 } })
   @ApiOperation({ summary: 'Get tournament with all results and decks' })

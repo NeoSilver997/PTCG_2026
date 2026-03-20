@@ -12,7 +12,10 @@
     "lint:fix": "turbo run lint:fix",
     "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
     "type-check": "turbo run type-check",
-    "clean": "turbo run clean && rm -rf node_modules"
+    "clean": "turbo run clean && rm -rf node_modules",
+    "events:import:new": "node scripts/tournament-import-pipeline.mjs import-new",
+    "events:import:repair-all": "node scripts/tournament-import-pipeline.mjs repair-all",
+    "events:import:repair-event": "node scripts/tournament-import-pipeline.mjs repair-event"
   },
   "workspaces": [
     "apps/*",

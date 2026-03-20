@@ -1,31 +1,51 @@
-'use client';
+﻿'use client';
 
-import { use } from 'react';
+import { use, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
+import Image from 'next/image';
 import apiClient from '@/lib/api-client';
 
-interface PageProps {
-  params: Promise<{ tournamentId: string }>;
+interface DeckCardData {
+  cardId: string;
+  cardName: string;
+  cardCode: string;
+  quantity: number;
+  imageUrl: string;
+}
+
+interface DeckResult {
+  id: string;
+  deckCode?: string;
+  deckData?: DeckCardData[];
+  cards: { quantity: number; card: { webCardId: string; name: string; imageUrl?: string; supertype?: string } }[];
+}
+
+interface TournamentResult {
+  id: string;
+  placement: number;
+  playerName: string;
+  deckName?: string;
+  deckArchetype?: string;
+  deck?: DeckResult;
 }
 
 const ARCHETYPE_COLORS: Record<string, string> = {
-  AGGRO: 'bg-red-100 text-red-700',
-  CONTROL: 'bg-blue-100 text-blue-700',
-  COMBO: 'bg-purple-100 text-purple-700',
-  MIDRANGE: 'bg-yellow-100 text-yellow-700',
-  TOOLBOX: 'bg-green-100 text-green-700',
-  OTHER: 'bg-gray-100 text-gray-600',
+  AGGRO: 'bg-red-100 text-red-700', CONTROL: 'bg-blue-100 text-blue-700',
+  COMBO: 'bg-purple-100 text-purple-700', MIDRANGE: 'bg-yellow-100 text-yellow-700',
+  TOOLBOX: 'bg-green-100 text-green-700', OTHER: 'bg-gray-100 text-gray-600',
 };
 
 const PLACEMENT_BADGE: Record<number, string> = {
-  1: 'bg-yellow-400 text-yellow-900',
-  2: 'bg-gray-300 text-gray-800',
-  3: 'bg-orange-300 text-orange-900',
+  1: 'bg-yellow-400 text-yellow-900', 2: 'bg-gray-300 text-gray-800', 3: 'bg-orange-300 text-orange-900',
 };
 
-export default function TournamentDetailPage({ params }: PageProps) {
+const PLACEMENT_LABEL: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' };
+
+export default function TournamentDetailPage({ params }: { params: Promise<{ tournamentId: string }> }) {
   const { tournamentId } = use(params);
+  const [expandedDeck, setExpandedDeck] = useState<string | null>(null);
+  const [selectedDeck, setSelectedDeck] = useState<DeckResult | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['tournament', tournamentId],
@@ -34,31 +54,24 @@ export default function TournamentDetailPage({ params }: PageProps) {
 
   const tournament = data?.data;
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-gray-500">
-        Loading tournament...
-      </div>
-    );
-  }
+  if (isLoading) return (
+    <div className="min-h-screen flex items-center justify-center text-gray-500">Loading tournament...</div>
+  );
 
-  if (error || !tournament) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-red-500 mb-4">Tournament not found or failed to load.</p>
-          <Link href="/tournaments" className="text-blue-600 hover:underline">← Back to Tournaments</Link>
-        </div>
+  if (error || !tournament) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-center">
+        <p className="text-red-500 mb-4">Tournament not found or failed to load.</p>
+        <Link href="/tournaments" className="text-blue-600 hover:underline">← Back to Tournaments</Link>
       </div>
-    );
-  }
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Header */}
       <div className="bg-gradient-to-r from-purple-700 to-blue-600 text-white p-6">
-        <Link href="/tournaments" className="text-purple-200 hover:text-white text-sm mb-2 block">
-          ← Tournaments
-        </Link>
+        <Link href="/tournaments" className="text-purple-200 hover:text-white text-sm mb-2 block">← Tournaments</Link>
         <h1 className="text-2xl font-bold">{tournament.name}</h1>
         <div className="flex flex-wrap gap-3 mt-2 text-sm text-purple-200">
           <span>📅 {new Date(tournament.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
@@ -68,69 +81,288 @@ export default function TournamentDetailPage({ params }: PageProps) {
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-4 py-6">
-        {/* Meta summary */}
+      <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+        {/* Archetype summary */}
         {tournament.results?.length > 0 && (
-          <div className="mb-6">
+          <div>
             <h2 className="text-lg font-semibold text-gray-800 mb-3">Archetype Breakdown</h2>
             <ArchetypeChart results={tournament.results} />
           </div>
         )}
 
-        {/* Results table */}
+        {/* Deck stats summary */}
+        {tournament.results?.some((r: TournamentResult) => r.deck && getDeckCards(r.deck).length > 0) && (
+          <DeckSummaryStats results={tournament.results} />
+        )}
+
+        {/* Results */}
         <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          <div className="p-4 border-b">
-            <h2 className="text-lg font-semibold text-gray-800">
-              Results ({tournament.results?.length ?? 0})
-            </h2>
+          <div className="p-4 border-b flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-800">Results ({tournament.results?.length ?? 0})</h2>
+            <span className="text-xs text-gray-400">{tournament.results?.filter((r: TournamentResult) => r.deck).length ?? 0} decks available</span>
           </div>
           {tournament.results?.length === 0 && (
             <p className="text-gray-400 text-center py-8">No results recorded.</p>
           )}
           <div className="divide-y">
-            {tournament.results?.map((result: any) => (
-              <div key={result.id} className="flex items-center gap-4 p-4 hover:bg-gray-50">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${PLACEMENT_BADGE[result.placement] ?? 'bg-gray-100 text-gray-600'}`}>
-                  {result.placement}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-900">{result.playerName}</p>
-                  {result.deckName && (
-                    <p className="text-sm text-gray-500">{result.deckName}</p>
+            {tournament.results?.map((result: TournamentResult) => (
+              <div key={result.id}>
+                <div
+                  className={`flex items-center gap-4 p-4 ${result.deck ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                  onClick={() => result.deck && setExpandedDeck(expandedDeck === result.id ? null : result.id)}
+                >
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${PLACEMENT_BADGE[result.placement] ?? 'bg-gray-100 text-gray-600'}`}>
+                    {PLACEMENT_LABEL[result.placement] ?? result.placement}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-gray-900">{result.playerName}</p>
+                    {result.deckName && <p className="text-sm text-gray-500">{result.deckName}</p>}
+                  </div>
+                  {result.deckArchetype && (
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${ARCHETYPE_COLORS[result.deckArchetype] ?? 'bg-gray-100 text-gray-600'}`}>
+                      {result.deckArchetype}
+                    </span>
+                  )}
+                  {result.deck && (
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          className="text-xs px-2 py-1 rounded border border-blue-200 text-blue-700 hover:bg-blue-50"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedDeck(result.deck ?? null);
+                          }}
+                        >
+                          View Detail
+                        </button>
+                        <span className="text-xs text-gray-400">
+                          {expandedDeck === result.id ? '▲ Hide' : '▼ Deck'}
+                        </span>
+                      </div>
                   )}
                 </div>
-                {result.deckArchetype && (
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ARCHETYPE_COLORS[result.deckArchetype] ?? 'bg-gray-100 text-gray-600'}`}>
-                    {result.deckArchetype}
-                  </span>
-                )}
-                {result.deck && (
-                  <Link
-                    href={`/deck-builder?deckId=${result.deck.id}`}
-                    className="text-xs text-blue-600 hover:underline shrink-0"
-                  >
-                    View Deck →
-                  </Link>
+                {expandedDeck === result.id && result.deck && (
+                  <DeckPanel deck={result.deck} />
                 )}
               </div>
             ))}
           </div>
         </div>
+
+          {selectedDeck && (
+            <DeckDetailView deck={selectedDeck} onClose={() => setSelectedDeck(null)} />
+          )}
       </div>
     </div>
   );
 }
 
-function ArchetypeChart({ results }: { results: any[] }) {
-  const counts: Record<string, number> = {};
-  for (const r of results) {
-    const arch = r.deckArchetype ?? 'UNKNOWN';
-    counts[arch] = (counts[arch] ?? 0) + 1;
+function getDeckCards(deck: DeckResult): DeckCardData[] {
+  if (deck.deckData && deck.deckData.length > 0) {
+    return deck.deckData;
+  }
+  return (deck.cards ?? []).map((c) => ({
+    cardId: c.card.webCardId,
+    cardName: c.card.name,
+    cardCode: c.card.webCardId,
+    quantity: c.quantity,
+    imageUrl: c.card.imageUrl ?? '',
+  }));
+}
+
+  function DeckDetailView({ deck, onClose }: { deck: DeckResult; onClose: () => void }) {
+  const cards = getDeckCards(deck);
+
+    const totalCards = cards.reduce((sum, c) => sum + c.quantity, 0);
+    const totalUnique = cards.length;
+
+    const pokemonCount = (deck.cards ?? [])
+      .filter((c) => c.card.supertype === 'POKEMON')
+      .reduce((sum, c) => sum + c.quantity, 0);
+    const trainerCount = (deck.cards ?? [])
+      .filter((c) => c.card.supertype === 'TRAINER')
+      .reduce((sum, c) => sum + c.quantity, 0);
+    const energyCount = (deck.cards ?? [])
+      .filter((c) => c.card.supertype === 'ENERGY')
+      .reduce((sum, c) => sum + c.quantity, 0);
+
+    return (
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div className="p-4 border-b flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Deck Summary & Card Detail</h3>
+            <p className="text-xs text-gray-500 mt-1">Deck Code: {deck.deckCode ?? '-'}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-xs px-3 py-1.5 rounded border text-gray-600 hover:bg-gray-50"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="p-4 grid grid-cols-2 md:grid-cols-5 gap-3 border-b bg-gray-50">
+          <StatCard label="Total Cards" value={totalCards} />
+          <StatCard label="Unique Cards" value={totalUnique} />
+          <StatCard label="Pokemon" value={pokemonCount} />
+          <StatCard label="Trainer" value={trainerCount} />
+          <StatCard label="Energy" value={energyCount} />
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="bg-gray-100 text-gray-700">
+              <tr>
+                <th className="text-left px-3 py-2">Card</th>
+                <th className="text-left px-3 py-2">Code</th>
+                <th className="text-left px-3 py-2">Qty</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...cards]
+                .sort((a, b) => b.quantity - a.quantity || a.cardName.localeCompare(b.cardName))
+                .map((card, idx) => (
+                  <tr key={`${card.cardId}-${idx}`} className="border-t">
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <div className="relative w-8 h-11 rounded overflow-hidden bg-gray-200 shrink-0">
+                          {card.imageUrl ? (
+                            <Image
+                              src={card.imageUrl}
+                              alt={card.cardName}
+                              fill
+                              sizes="32px"
+                              className="object-cover"
+                              unoptimized
+                            />
+                          ) : null}
+                        </div>
+                        <span className="text-gray-900">{card.cardName}</span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 text-gray-600">{card.cardCode || card.cardId}</td>
+                    <td className="px-3 py-2 font-semibold text-gray-900">x{card.quantity}</td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
   }
 
+  function StatCard({ label, value }: { label: string; value: number }) {
+    return (
+      <div className="bg-white border rounded p-3">
+        <p className="text-xs text-gray-500">{label}</p>
+        <p className="text-lg font-semibold text-gray-900">{value}</p>
+      </div>
+    );
+  }
+
+function DeckPanel({ deck }: { deck: DeckResult }) {
+  const cards = getDeckCards(deck);
+  const sorted = [...cards].sort((a, b) => b.quantity - a.quantity);
+  const total = cards.reduce((s, c) => s + c.quantity, 0);
+
+  return (
+    <div className="bg-gray-50 border-t px-4 py-4">
+      {/* Deck header */}
+      <div className="flex items-center gap-3 mb-3">
+        <p className="text-sm font-semibold text-gray-700">Deck List <span className="text-gray-400 font-normal">({total} cards, {cards.length} unique)</span></p>
+        {deck.deckCode && (
+          <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded font-mono">{deck.deckCode}</span>
+        )}
+      </div>
+      {/* Card grid */}
+      {sorted.length > 0 ? (
+        <div className="flex flex-wrap gap-2">
+          {sorted.map((c, i) => (
+            <CardThumbnail key={`${c.cardId}-${i}`} card={c} />
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-gray-400 italic">No card data available.</p>
+      )}
+    </div>
+  );
+}
+
+function CardThumbnail({ card }: { card: DeckCardData }) {
+  const [imgError, setImgError] = useState(false);
+  return (
+    <div className="relative group shrink-0" style={{ width: 72 }}>
+      <div className="relative w-[72px] h-[100px] rounded overflow-hidden bg-gray-200">
+        {card.imageUrl && !imgError ? (
+          <Image
+            src={card.imageUrl}
+            alt={card.cardName}
+            fill
+            sizes="72px"
+            className="object-cover"
+            onError={() => setImgError(true)}
+            unoptimized
+          />
+        ) : (
+          <div className="flex items-center justify-center h-full text-xs text-gray-400 text-center p-1">{card.cardCode || card.cardId}</div>
+        )}
+        {card.quantity > 1 && (
+          <span className="absolute top-1 right-1 bg-black/70 text-white text-xs px-1 rounded font-bold">x{card.quantity}</span>
+        )}
+      </div>
+      <p className="text-[10px] text-gray-600 mt-1 text-center truncate leading-tight">{card.cardName}</p>
+      {/* Tooltip on hover */}
+      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-10 bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity">
+        {card.cardName} · {card.cardCode} · x{card.quantity}
+      </div>
+    </div>
+  );
+}
+
+function DeckSummaryStats({ results }: { results: TournamentResult[] }) {
+  const decksWithData = results.filter((r) => r.deck && getDeckCards(r.deck).length > 0);
+  const totalDecks = decksWithData.length;
+  if (totalDecks === 0) return null;
+
+  // Count most popular cards across all decks
+  const cardFreq: Record<string, { name: string; count: number; imageUrl: string }> = {};
+  for (const r of decksWithData) {
+    for (const c of getDeckCards(r.deck!)) {
+      if (!cardFreq[c.cardId]) cardFreq[c.cardId] = { name: c.cardName, count: 0, imageUrl: c.imageUrl };
+      cardFreq[c.cardId].count++;
+    }
+  }
+  const top = Object.entries(cardFreq).sort((a, b) => b[1].count - a[1].count).slice(0, 5);
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm p-4">
+      <h2 className="text-lg font-semibold text-gray-800 mb-3">Deck Insights <span className="text-sm font-normal text-gray-400">({totalDecks} decks)</span></h2>
+      <p className="text-sm text-gray-600 mb-3">Most popular cards across all decks:</p>
+      <div className="flex flex-wrap gap-3">
+        {top.map(([id, c]) => (
+          <div key={id} className="flex items-center gap-2 bg-gray-50 rounded px-3 py-2">
+            {c.imageUrl && (
+              <div className="relative w-8 h-11 rounded overflow-hidden bg-gray-200 shrink-0">
+                <Image src={c.imageUrl} alt={c.name} fill sizes="32px" className="object-cover" unoptimized />
+              </div>
+            )}
+            <div>
+              <p className="text-xs font-medium text-gray-800">{c.name}</p>
+              <p className="text-xs text-gray-500">In {c.count}/{totalDecks} decks</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ArchetypeChart({ results }: { results: TournamentResult[] }) {
+  const counts: Record<string, number> = {};
+  for (const r of results) { const k = r.deckArchetype ?? 'UNKNOWN'; counts[k] = (counts[k] ?? 0) + 1; }
   const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
   const total = results.length;
-
   return (
     <div className="flex flex-wrap gap-2">
       {sorted.map(([arch, count]) => (
