@@ -50,6 +50,20 @@ export class TournamentsController {
     return this.tournamentsService.getDeckMetaSummary(region, limit, sinceDate);
   }
 
+  @Get('meta/archetype-decks')
+  @Throttle({ long: { limit: 100, ttl: 60000 } })
+  @ApiOperation({ summary: 'Get all decks for a given archetype' })
+  @ApiResponse({ status: 200, description: 'Paginated deck list for archetype' })
+  getArchetypeDecks(
+    @Query('archetypeName') archetypeName: string,
+    @Query('region') region?: string,
+    @Query('sinceDate') sinceDate?: string,
+    @Query('skip') skip?: string,
+    @Query('take') take?: string,
+  ) {
+    return this.tournamentsService.getArchetypeDecks(archetypeName, region, sinceDate, skip, take);
+  }
+
   @Get('event/:eventId')
   @Throttle({ long: { limit: 100, ttl: 60000 } })
   @ApiOperation({ summary: 'Get tournament by external event ID with results and decks' })
