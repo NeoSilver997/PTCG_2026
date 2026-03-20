@@ -378,43 +378,32 @@ export class TournamentsService {
     }>>(
       `
       WITH primary_types AS (
-        SELECT
+        SELECT DISTINCT
           d.id as deck_id,
           tr.placement,
-          (unnest(c.types))[1]::text as primary_type,
-          c.name
+          c.types[1]::text as primary_type
         FROM decks d
         JOIN tournament_results tr ON tr."deckId" = d.id
         JOIN tournaments t ON t.id = tr."tournamentId"
         JOIN deck_cards dc ON dc."deckId" = d.id
         JOIN cards c ON c.id = dc."cardId"
         WHERE c.supertype = 'POKEMON' AND array_length(c.types, 1) > 0 ${regionSql}
-        GROUP BY d.id, tr.placement, c.types, c.name
       ),
-      type_decks AS (
+      arch_stats AS (
         SELECT
           primary_type,
-          deck_id,
-          placement,
-          ROW_NUMBER() OVER (PARTITION BY deck_id ORDER BY primary_type) as rn
+          COUNT(DISTINCT deck_id)::int as deck_count,
+          ROUND(AVG(placement)::numeric, 2)::float as avg_placement
         FROM primary_types
-      ),
-      main_types AS (
-        SELECT
-          td.primary_type,
-          deck_id,
-          placement
-        FROM type_decks td
-        WHERE rn = 1
+        GROUP BY primary_type
       )
       SELECT
         primary_type,
         primary_type as archetype_name,
-        COUNT(DISTINCT deck_id)::int as deck_count,
-        ROUND(AVG(placement)::numeric, 2)::float as avg_placement,
+        deck_count,
+        avg_placement,
         '' as top_pokemon
-      FROM main_types
-      GROUP BY primary_type
+      FROM arch_stats
       ORDER BY deck_count DESC
       LIMIT 10
       `,
