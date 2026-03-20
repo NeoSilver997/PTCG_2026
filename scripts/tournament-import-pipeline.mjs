@@ -20,20 +20,19 @@ if (!existsSync(seedScript)) {
 }
 
 const mode = process.argv[2] || 'import-new';
-const eventIdArg = process.argv.find((a) => a.startsWith('--event-id='));
-const limitArg = process.argv.find((a) => a.startsWith('--limit='));
+const extraArgs = process.argv.slice(3);
+const eventIdArg = extraArgs.find((a) => a.startsWith('--event-id='));
 
 if (mode === 'repair-all') {
-  run('npx', ['tsx', './scrapers/seed-tournaments.ts', '--all', '--refresh-existing']);
+  run('npx', ['tsx', './scrapers/seed-tournaments.ts', '--all', '--refresh-existing', ...extraArgs]);
 } else if (mode === 'repair-event') {
   if (!eventIdArg) {
     console.error('repair-event mode requires --event-id=<id>');
     process.exit(1);
   }
-  run('npx', ['tsx', './scrapers/seed-tournaments.ts', '--all', '--refresh-existing', eventIdArg]);
+  run('npx', ['tsx', './scrapers/seed-tournaments.ts', '--all', '--refresh-existing', ...extraArgs]);
 } else if (mode === 'import-new') {
-  const args = ['tsx', './scrapers/seed-tournaments.ts'];
-  if (limitArg) args.push(limitArg);
+  const args = ['tsx', './scrapers/seed-tournaments.ts', ...extraArgs];
   run('npx', args);
 } else {
   console.error('Unknown mode. Use: import-new | repair-all | repair-event');
