@@ -45,8 +45,9 @@ export class TournamentsController {
   getDeckMetaSummary(
     @Query('region') region?: string,
     @Query('limit') limit?: string,
+    @Query('sinceDate') sinceDate?: string,
   ) {
-    return this.tournamentsService.getDeckMetaSummary(region, limit);
+    return this.tournamentsService.getDeckMetaSummary(region, limit, sinceDate);
   }
 
   @Get('event/:eventId')

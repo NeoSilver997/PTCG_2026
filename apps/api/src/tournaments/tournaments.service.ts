@@ -268,7 +268,7 @@ export class TournamentsService {
     return { created, skipped };
   }
 
-  async getDeckMetaSummary(regionRaw?: string, limitRaw?: string) {
+  async getDeckMetaSummary(regionRaw?: string, limitRaw?: string, sinceDateRaw?: string) {
     const validRegions = new Set(['JP', 'HK', 'EN']);
     const region = regionRaw && validRegions.has(regionRaw.toUpperCase())
       ? regionRaw.toUpperCase()
@@ -276,6 +276,11 @@ export class TournamentsService {
     const limit = Math.min(Math.max(Number(limitRaw || 25) || 25, 5), 100);
 
     const regionSql = region ? `AND t.region = '${region}'` : '';
+    // Validate ISO date (YYYY-MM-DD) before interpolating to prevent injection
+    const sinceDate = sinceDateRaw && /^\d{4}-\d{2}-\d{2}$/.test(sinceDateRaw)
+      ? sinceDateRaw
+      : null;
+    const sinceDateSql = sinceDate ? `AND t.date >= '${sinceDate}'::timestamp` : '';
 
     // Get top cards by frequency
     const topCards = await this.prisma.$queryRawUnsafe<Array<{
@@ -301,7 +306,7 @@ export class TournamentsService {
       JOIN decks d ON d.id = dc."deckId"
       JOIN tournament_results tr ON tr."deckId" = d.id
       JOIN tournaments t ON t.id = tr."tournamentId"
-      WHERE 1=1 ${regionSql}
+      WHERE 1=1 ${regionSql} ${sinceDateSql}
       GROUP BY c.id, c.name, c."imageUrl", c.supertype, c.subtypes
       ORDER BY frequency DESC
       LIMIT ${limit}
@@ -326,7 +331,7 @@ export class TournamentsService {
         JOIN tournaments t ON t.id = tr."tournamentId"
         JOIN deck_cards dc ON dc."deckId" = d.id
         JOIN cards c ON c.id = dc."cardId"
-        WHERE c.supertype = 'POKEMON' ${regionSql}
+        WHERE c.supertype = 'POKEMON' ${regionSql} ${sinceDateSql}
       ),
       type_stats AS (
         SELECT
@@ -364,53 +369,74 @@ export class TournamentsService {
       JOIN tournaments t ON t.id = tr."tournamentId"
       JOIN deck_cards dc ON dc."deckId" = d.id
       JOIN cards c ON c.id = dc."cardId"
-      WHERE 1=1 ${regionSql}
+      WHERE 1=1 ${regionSql} ${sinceDateSql}
       `,
     );
 
-    // Get most common Pokemon archetypes (primary type)
+    // Get deck archetypes by key Pokemon (highest evolution + EX priority, ported from PTCG_CardDB rebuild_deck_cache logic)
     const archetypes = await this.prisma.$queryRawUnsafe<Array<{
-      primary_type: string;
       archetype_name: string;
       deck_count: number;
       avg_placement: number;
-      top_pokemon: string;
+      key_image: string | null;
     }>>(
       `
-      WITH primary_types AS (
-        SELECT DISTINCT
+      WITH deck_key_pokemon AS (
+        SELECT
           d.id as deck_id,
           tr.placement,
-          c.types[1]::text as primary_type
+          c.name,
+          c."imageUrl",
+          dc.quantity,
+          ROW_NUMBER() OVER (
+            PARTITION BY d.id
+            ORDER BY
+              (CASE WHEN c.name ILIKE '%ex' THEN 1000 ELSE 0 END +
+               CASE c."evolutionStage"
+                 WHEN 'STAGE_2' THEN 300
+                 WHEN 'STAGE_1' THEN 200
+                 ELSE 100
+               END) DESC,
+              dc.quantity DESC,
+              c.name ASC
+          ) as rn
         FROM decks d
         JOIN tournament_results tr ON tr."deckId" = d.id
         JOIN tournaments t ON t.id = tr."tournamentId"
         JOIN deck_cards dc ON dc."deckId" = d.id
         JOIN cards c ON c.id = dc."cardId"
-        WHERE c.supertype = 'POKEMON' AND array_length(c.types, 1) > 0 ${regionSql}
+        WHERE c.supertype = 'POKEMON' AND dc.quantity >= 2 ${regionSql} ${sinceDateSql}
       ),
-      arch_stats AS (
+      deck_archetype_names AS (
         SELECT
-          primary_type,
-          COUNT(DISTINCT deck_id)::int as deck_count,
-          ROUND(AVG(placement)::numeric, 2)::float as avg_placement
-        FROM primary_types
-        GROUP BY primary_type
+          deck_id,
+          placement,
+          CASE
+            WHEN COUNT(*) >= 2
+              THEN MIN(CASE WHEN rn = 1 THEN name END) || '/' || MIN(CASE WHEN rn = 2 THEN name END)
+            ELSE MIN(CASE WHEN rn = 1 THEN name END)
+          END as archetype_name,
+          MIN(CASE WHEN rn = 1 THEN "imageUrl" END) as key_image
+        FROM deck_key_pokemon
+        WHERE rn <= 2
+        GROUP BY deck_id, placement
       )
       SELECT
-        primary_type,
-        primary_type as archetype_name,
-        deck_count,
-        avg_placement,
-        '' as top_pokemon
-      FROM arch_stats
+        COALESCE(archetype_name, 'Unknown') as archetype_name,
+        COUNT(DISTINCT deck_id)::int as deck_count,
+        ROUND(AVG(placement)::numeric, 2)::float as avg_placement,
+        MIN(key_image) as key_image
+      FROM deck_archetype_names
+      GROUP BY archetype_name
+      HAVING COUNT(DISTINCT deck_id) >= 2
       ORDER BY deck_count DESC
-      LIMIT 10
+      LIMIT 20
       `,
     );
 
     return {
       region: region || 'ALL',
+      sinceDate: sinceDate || null,
       topCards: topCards.map((card) => ({
         cardId: card.card_id,
         name: card.name,
@@ -434,10 +460,10 @@ export class TournamentsService {
         avgCardsTotal: deckStats[0].avg_cards_total,
       } : null,
       archetypes: archetypes.map((arch) => ({
-        primaryType: arch.primary_type,
         archetypeName: arch.archetype_name,
         deckCount: arch.deck_count,
         avgPlacement: arch.avg_placement,
+        keyImage: arch.key_image,
       })),
     };
   }

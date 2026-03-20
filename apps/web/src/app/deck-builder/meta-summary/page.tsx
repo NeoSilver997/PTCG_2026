@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Image from 'next/image';
 
@@ -30,14 +30,15 @@ interface DeckStats {
 }
 
 interface Archetype {
-  primaryType: string;
   archetypeName: string;
   deckCount: number;
   avgPlacement: number;
+  keyImage: string | null;
 }
 
 interface DeckMetaSummary {
   region: string;
+  sinceDate: string | null;
   topCards: TopCard[];
   typeDistribution: TypeDistribution[];
   deckStats: DeckStats | null;
@@ -51,14 +52,34 @@ const REGIONS = [
   { value: 'EN', label: 'English (EN)' },
 ];
 
+// Approximate JP SV-series expansion launch dates (used in getPresets below)
+
+function getPresets() {
+  const now = new Date();
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  const minus = (days: number) => { const d = new Date(now); d.setDate(d.getDate() - days); return fmt(d); };
+  return [
+    { label: 'All Time', value: '' },
+    { label: 'Last 30 days', value: minus(30) },
+    { label: 'Last 90 days', value: minus(90) },
+    { label: 'SV9A era (~Mar 2025)', value: '2025-03-21' },
+    { label: 'SV9 era (~Jan 2025)', value: '2025-01-17' },
+    { label: 'SV8A era (~Oct 2024)', value: '2024-10-18' },
+    { label: 'SV8 era (~Jul 2024)', value: '2024-07-19' },
+  ];
+}
+
 export default function DeckMetaSummaryPage() {
   const [region, setRegion] = useState('');
+  const [sinceDate, setSinceDate] = useState('');
+  const presets = getPresets();
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['deck-meta-summary', region],
+    queryKey: ['deck-meta-summary', region, sinceDate],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (region) params.append('region', region);
+      if (sinceDate) params.append('sinceDate', sinceDate);
       params.append('limit', '25');
       const res = await fetch(
         `http://localhost:4000/api/v1/tournaments/meta/deck-summary?${params}`,
@@ -79,20 +100,53 @@ export default function DeckMetaSummaryPage() {
           </p>
         </div>
 
-        {/* Region Filter */}
-        <div className="mb-6 flex items-center gap-4">
-          <label className="text-slate-300 font-medium">Region:</label>
-          <select
-            value={region}
-            onChange={(e) => setRegion(e.target.value)}
-            className="px-4 py-2 bg-slate-700 border border-slate-600 rounded text-white hover:bg-slate-600 transition"
-          >
-            {REGIONS.map((r) => (
-              <option key={r.value} value={r.value}>
-                {r.label}
-              </option>
-            ))}
-          </select>
+        {/* Filters */}
+        <div className="mb-6 flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-2">
+            <label className="text-slate-300 font-medium text-sm">Region:</label>
+            <select
+              value={region}
+              onChange={(e) => setRegion(e.target.value)}
+              className="px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white hover:bg-slate-600 transition text-sm"
+            >
+              {REGIONS.map((r) => (
+                <option key={r.value} value={r.value}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-slate-300 font-medium text-sm">Format:</label>
+            <select
+              value={sinceDate}
+              onChange={(e) => setSinceDate(e.target.value)}
+              className="px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white hover:bg-slate-600 transition text-sm"
+            >
+              {presets.map((p) => (
+                <option key={p.label} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-slate-300 font-medium text-sm">Custom since:</label>
+            <input
+              type="date"
+              value={sinceDate}
+              onChange={(e) => setSinceDate(e.target.value)}
+              className="px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white hover:bg-slate-600 transition text-sm"
+            />
+          </div>
+          {sinceDate && (
+            <button
+              onClick={() => setSinceDate('')}
+              className="px-3 py-2 bg-slate-600 hover:bg-slate-500 text-slate-300 rounded text-sm transition"
+            >
+              Clear date
+            </button>
+          )}
         </div>
 
         {isLoading && (
@@ -173,24 +227,40 @@ export default function DeckMetaSummaryPage() {
 
               {/* Archetypes */}
               <div className="bg-slate-700 rounded-lg p-6">
-                <h2 className="text-2xl font-bold text-white mb-4">Main Archetypes</h2>
+                <h2 className="text-2xl font-bold text-white mb-4">Deck Archetypes</h2>
+                <p className="text-slate-400 text-xs mb-4">
+                  Named by key Pokémon: highest evolution + ex priority (≥2 copies)
+                </p>
                 <div className="space-y-3">
                   {data.archetypes.map((arch, idx) => (
                     <div
-                      key={arch.primaryType}
-                      className="bg-slate-600 rounded p-4 hover:bg-slate-500 transition"
+                      key={arch.archetypeName}
+                      className="bg-slate-600 rounded p-3 hover:bg-slate-500 transition"
                     >
-                      <div className="flex justify-between items-center mb-2">
-                        <h3 className="text-white font-bold">
-                          #{idx + 1} {arch.archetypeName}
-                        </h3>
-                        <span className="bg-blue-600 text-white px-3 py-1 rounded-full text-sm">
-                          {arch.deckCount} decks
-                        </span>
+                      <div className="flex items-center gap-3">
+                        {arch.keyImage && (
+                          <Image
+                            src={arch.keyImage}
+                            alt={arch.archetypeName}
+                            width={36}
+                            height={50}
+                            className="rounded border border-slate-500 flex-shrink-0"
+                          />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-between items-start gap-2">
+                            <h3 className="text-white font-bold text-sm truncate">
+                              #{idx + 1} {arch.archetypeName}
+                            </h3>
+                            <span className="bg-blue-600 text-white px-2 py-0.5 rounded-full text-xs flex-shrink-0">
+                              {arch.deckCount} decks
+                            </span>
+                          </div>
+                          <p className="text-slate-300 text-xs mt-0.5">
+                            Avg placement: {arch.avgPlacement.toFixed(1)}
+                          </p>
+                        </div>
                       </div>
-                      <p className="text-slate-300 text-sm">
-                        Avg placement: {arch.avgPlacement.toFixed(1)}
-                      </p>
                     </div>
                   ))}
                 </div>
