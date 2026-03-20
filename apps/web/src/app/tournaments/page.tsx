@@ -24,6 +24,56 @@ interface Tournament {
   _count: { results: number };
 }
 
+interface TrendRow {
+  periodStart: string;
+  periodEnd: string;
+  totalCards: number;
+  pokemon: number;
+  trainer: number;
+  item: number;
+  stadium: number;
+  tools: number;
+}
+
+interface TopCard {
+  name: string;
+  usage: number;
+}
+
+interface TopCardsByCategory {
+  pokemon: TopCard[];
+  trainer: TopCard[];
+  item: TopCard[];
+  stadium: TopCard[];
+  tools: TopCard[];
+}
+
+interface TournamentDetailForTrend {
+  date: string;
+  results?: Array<{
+    deck?: {
+      id: string;
+    };
+  }>;
+}
+
+interface DeckDetailForTrend {
+  id: string;
+  cards?: Array<{
+    quantity: number;
+    card: {
+      name?: string;
+      supertype?: string;
+      subtypes?: string[];
+    };
+  }>;
+}
+
+interface TournamentDeckRef {
+  date: string;
+  deckId: string;
+}
+
 export default function TournamentsPage() {
   const [region, setRegion] = useState('');
   const [type, setType] = useState('');
@@ -57,7 +107,30 @@ export default function TournamentsPage() {
     }),
   });
 
+  const { data: trendData, isLoading: trendLoading } = useQuery({
+    queryKey: ['tournaments-card-usage-trend', region],
+    queryFn: async () => {
+      try {
+        return await apiClient.get('/tournaments/trends/card-usage', {
+          params: {
+            periods: 10,
+            ...(region && { region }),
+          },
+        });
+      } catch {
+        const fallbackRows = await buildTrendFallback(region || undefined);
+        return { data: { data: fallbackRows } };
+      }
+    },
+  });
+
+  const { data: topCardsData, isLoading: topCardsLoading } = useQuery({
+    queryKey: ['tournaments-top-cards-by-category', region],
+    queryFn: () => buildTopCardsByCategory(region || undefined),
+  });
+
   const tournaments: Tournament[] = data?.data?.data ?? [];
+  const trendRows: TrendRow[] = trendData?.data?.data ?? [];
   const total: number = data?.data?.meta?.total ?? 0;
   const totalPages = Math.ceil(total / take);
   const hasFilters = region || type || search || dateFrom || dateTo;
@@ -78,6 +151,13 @@ export default function TournamentsPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-4">
+        <CardUsageTrendSection
+          rows={trendRows}
+          loading={trendLoading}
+          topCards={topCardsData}
+          topCardsLoading={topCardsLoading}
+        />
+
         {/* Filter panel */}
         <div className="bg-white rounded-xl shadow-sm p-4 space-y-3">
           {/* Search + sort row */}
@@ -217,6 +297,280 @@ export default function TournamentsPage() {
               className="px-3 py-2 rounded-lg border text-sm disabled:opacity-30 hover:bg-gray-100">»</button>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+async function fetchTournamentDeckRefs(region?: string): Promise<TournamentDeckRef[]> {
+  const listRes = await apiClient.get('/tournaments', {
+    params: {
+      ...(region && { region }),
+      take: 60,
+      skip: 0,
+      sortBy: 'date',
+      sortOrder: 'desc',
+    },
+  });
+
+  const tournaments: Array<{ id: string }> = listRes.data?.data ?? [];
+  if (tournaments.length === 0) return [];
+
+  const chunks: Array<Array<{ id: string }>> = [];
+  for (let i = 0; i < tournaments.length; i += 8) {
+    chunks.push(tournaments.slice(i, i + 8));
+  }
+
+  const details: TournamentDetailForTrend[] = [];
+  for (const chunk of chunks) {
+    const chunkResult = await Promise.all(
+      chunk.map(async (t) => {
+        try {
+          const res = await apiClient.get(`/tournaments/${t.id}`);
+          return res.data as TournamentDetailForTrend;
+        } catch {
+          return null;
+        }
+      }),
+    );
+    details.push(...chunkResult.filter((x): x is TournamentDetailForTrend => !!x));
+  }
+
+  const refs: TournamentDeckRef[] = [];
+  for (const tournament of details) {
+    for (const result of tournament.results ?? []) {
+      if (result.deck?.id) refs.push({ date: tournament.date, deckId: result.deck.id });
+    }
+  }
+  return refs;
+}
+
+async function fetchDeckMapByIds(deckIds: string[]): Promise<Map<string, DeckDetailForTrend>> {
+  const uniqueDeckIds = Array.from(new Set(deckIds));
+  const deckMap = new Map<string, DeckDetailForTrend>();
+  for (let i = 0; i < uniqueDeckIds.length; i += 8) {
+    const chunk = uniqueDeckIds.slice(i, i + 8);
+    const deckChunk = await Promise.all(
+      chunk.map(async (deckId) => {
+        try {
+          const res = await apiClient.get(`/decks/${deckId}`);
+          return res.data as DeckDetailForTrend;
+        } catch {
+          return null;
+        }
+      }),
+    );
+    for (const deck of deckChunk) {
+      if (deck?.id) deckMap.set(deck.id, deck);
+    }
+  }
+  return deckMap;
+}
+
+async function buildTrendFallback(region?: string): Promise<TrendRow[]> {
+  const tournamentDeckRefs = await fetchTournamentDeckRefs(region);
+
+  const deckMap = await fetchDeckMapByIds(tournamentDeckRefs.map((r) => r.deckId));
+
+  const bucketMap = new Map<number, TrendRow>();
+  const bucketMs = 14 * 24 * 60 * 60 * 1000;
+
+  for (const ref of tournamentDeckRefs) {
+    const dateMs = new Date(ref.date).getTime();
+    const bucketStartMs = Math.floor(dateMs / bucketMs) * bucketMs;
+    const bucketEndMs = bucketStartMs + (13 * 24 * 60 * 60 * 1000);
+
+    if (!bucketMap.has(bucketStartMs)) {
+      bucketMap.set(bucketStartMs, {
+        periodStart: new Date(bucketStartMs).toISOString(),
+        periodEnd: new Date(bucketEndMs).toISOString(),
+        totalCards: 0,
+        pokemon: 0,
+        trainer: 0,
+        item: 0,
+        stadium: 0,
+        tools: 0,
+      });
+    }
+
+    const bucket = bucketMap.get(bucketStartMs)!;
+    const deck = deckMap.get(ref.deckId);
+    if (!deck) continue;
+
+    for (const deckCard of deck.cards ?? []) {
+      const qty = deckCard.quantity ?? 0;
+      const supertype = deckCard.card?.supertype ?? '';
+      const subtypes = deckCard.card?.subtypes ?? [];
+
+      bucket.totalCards += qty;
+      if (supertype === 'POKEMON') bucket.pokemon += qty;
+      if (supertype === 'TRAINER') bucket.trainer += qty;
+      if (supertype === 'TRAINER' && subtypes.includes('ITEM')) bucket.item += qty;
+      if (supertype === 'TRAINER' && subtypes.includes('STADIUM')) bucket.stadium += qty;
+      if (supertype === 'TRAINER' && subtypes.includes('TOOL')) bucket.tools += qty;
+    }
+  }
+
+  return Array.from(bucketMap.values())
+    .sort((a, b) => new Date(a.periodStart).getTime() - new Date(b.periodStart).getTime())
+    .slice(-10);
+}
+
+async function buildTopCardsByCategory(region?: string): Promise<TopCardsByCategory> {
+  const refs = await fetchTournamentDeckRefs(region);
+  const bucketMs = 14 * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  const latestBucketStart = Math.floor(now / bucketMs) * bucketMs;
+  const previousBucketStart = latestBucketStart - bucketMs;
+  const allowedBuckets = new Set([latestBucketStart, previousBucketStart]);
+
+  const recentRefs = refs.filter((r) => {
+    const start = Math.floor(new Date(r.date).getTime() / bucketMs) * bucketMs;
+    return allowedBuckets.has(start);
+  });
+
+  const deckMap = await fetchDeckMapByIds(recentRefs.map((r) => r.deckId));
+
+  const groups: Record<string, Record<string, number>> = {
+    pokemon: {},
+    trainer: {},
+    item: {},
+    stadium: {},
+    tools: {},
+  };
+
+  for (const ref of recentRefs) {
+    const deck = deckMap.get(ref.deckId);
+    if (!deck) continue;
+    for (const dc of deck.cards ?? []) {
+      const q = dc.quantity ?? 0;
+      const name = dc.card?.name || 'Unknown';
+      const supertype = dc.card?.supertype ?? '';
+      const subtypes = dc.card?.subtypes ?? [];
+
+      if (supertype === 'POKEMON') {
+        groups.pokemon[name] = (groups.pokemon[name] ?? 0) + q;
+      }
+      if (supertype === 'TRAINER') {
+        groups.trainer[name] = (groups.trainer[name] ?? 0) + q;
+      }
+      if (supertype === 'TRAINER' && subtypes.includes('ITEM')) {
+        groups.item[name] = (groups.item[name] ?? 0) + q;
+      }
+      if (supertype === 'TRAINER' && subtypes.includes('STADIUM')) {
+        groups.stadium[name] = (groups.stadium[name] ?? 0) + q;
+      }
+      if (supertype === 'TRAINER' && subtypes.includes('TOOL')) {
+        groups.tools[name] = (groups.tools[name] ?? 0) + q;
+      }
+    }
+  }
+
+  const top5 = (obj: Record<string, number>): TopCard[] =>
+    Object.entries(obj)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([name, usage]) => ({ name, usage }));
+
+  return {
+    pokemon: top5(groups.pokemon),
+    trainer: top5(groups.trainer),
+    item: top5(groups.item),
+    stadium: top5(groups.stadium),
+    tools: top5(groups.tools),
+  };
+}
+
+function CardUsageTrendSection({
+  rows,
+  loading,
+  topCards,
+  topCardsLoading,
+}: {
+  rows: TrendRow[];
+  loading: boolean;
+  topCards?: TopCardsByCategory;
+  topCardsLoading: boolean;
+}) {
+  if (loading) {
+    return (
+      <div className="mb-4 bg-white rounded-xl shadow-sm p-4">
+        <p className="text-sm text-gray-500">Loading 2-week card usage trend...</p>
+      </div>
+    );
+  }
+
+  if (!rows || rows.length === 0) {
+    return (
+      <div className="mb-4 bg-white rounded-xl shadow-sm p-4">
+        <p className="text-sm text-gray-500">No trend data available yet.</p>
+      </div>
+    );
+  }
+
+  const last = rows[rows.length - 1];
+  const prev = rows.length > 1 ? rows[rows.length - 2] : null;
+
+  const categories: Array<{ key: keyof TopCardsByCategory; label: string }> = [
+    { key: 'pokemon', label: 'Pokemon' },
+    { key: 'trainer', label: 'Trainer' },
+    { key: 'item', label: 'Item' },
+    { key: 'stadium', label: 'Stadium' },
+    { key: 'tools', label: 'Tools' },
+  ];
+
+  const maxTotal = Math.max(...rows.map((r) => r.totalCards), 1);
+
+  return (
+    <div className="mb-4 bg-white rounded-xl shadow-sm p-4 border border-gray-100">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <h2 className="text-base font-semibold text-gray-900">Card Usage Trend (Every 2 Weeks)</h2>
+        <span className="text-xs text-gray-500">
+          Latest window: {new Date(last.periodStart).toLocaleDateString()} - {new Date(last.periodEnd).toLocaleDateString()}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
+        {categories.map((cat) => {
+          const items = topCards?.[cat.key] ?? [];
+          return (
+            <div key={cat.key} className="rounded-lg border border-gray-100 p-3">
+              <p className="text-xs text-gray-500 mb-2">Top 5 {cat.label}</p>
+              {topCardsLoading ? (
+                <p className="text-xs text-gray-400">Loading...</p>
+              ) : items.length === 0 ? (
+                <p className="text-xs text-gray-400">No data</p>
+              ) : (
+                <div className="space-y-1">
+                  {items.map((it, idx) => (
+                    <div key={`${it.name}-${idx}`} className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-gray-700 truncate">{idx + 1}. {it.name}</span>
+                      <span className="text-gray-500 shrink-0">{it.usage.toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div>
+        <p className="text-xs text-gray-500 mb-2">Total card usage per 2-week bucket</p>
+        <div className="flex items-end gap-1 h-24">
+          {rows.map((r) => {
+            const height = Math.max(8, Math.round((r.totalCards / maxTotal) * 96));
+            return (
+              <div key={r.periodStart} className="flex-1 flex flex-col items-center justify-end">
+                <div
+                  className="w-full max-w-[24px] bg-gradient-to-t from-indigo-500 to-violet-400 rounded-t"
+                  style={{ height }}
+                  title={`${new Date(r.periodStart).toLocaleDateString()} - ${new Date(r.periodEnd).toLocaleDateString()}: ${r.totalCards.toLocaleString()}`}
+                />
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

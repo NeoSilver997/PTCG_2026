@@ -27,12 +27,34 @@ export class TournamentsController {
     return this.tournamentsService.findAll(query);
   }
 
+  @Get('trends/card-usage')
+  @Throttle({ long: { limit: 100, ttl: 60000 } })
+  @ApiOperation({ summary: 'Get 2-week card usage trend by category' })
+  @ApiResponse({ status: 200, description: 'Card usage trend summary' })
+  getCardUsageTrend(
+    @Query('periods') periods?: string,
+    @Query('region') region?: string,
+  ) {
+    return this.tournamentsService.getCardUsageTrend(periods, region);
+  }
+
+  @Get('meta/deck-summary')
+  @Throttle({ long: { limit: 100, ttl: 60000 } })
+  @ApiOperation({ summary: 'Get deck meta-analysis with archetypes and top cards' })
+  @ApiResponse({ status: 200, description: 'Deck meta-summary with archetypes' })
+  getDeckMetaSummary(
+    @Query('region') region?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.tournamentsService.getDeckMetaSummary(region, limit);
+  }
+
   @Get('event/:eventId')
   @Throttle({ long: { limit: 100, ttl: 60000 } })
   @ApiOperation({ summary: 'Get tournament by external event ID with results and decks' })
   @ApiResponse({ status: 200, description: 'Tournament detail' })
   @ApiResponse({ status: 404, description: 'Not found' })
-  findByEventId(@Param('eventId') eventId: string) {
+  findByEventId(@Param('eventId') eventId: string): Promise<any> {
     return this.tournamentsService.findByEventId(eventId);
   }
 
@@ -41,7 +63,7 @@ export class TournamentsController {
   @ApiOperation({ summary: 'Get tournament with all results and decks' })
   @ApiResponse({ status: 200, description: 'Tournament detail' })
   @ApiResponse({ status: 404, description: 'Not found' })
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id') id: string): Promise<any> {
     return this.tournamentsService.findOne(id);
   }
 
