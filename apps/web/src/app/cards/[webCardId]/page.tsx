@@ -143,6 +143,9 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
   // State for variant navigation
   const [currentVariantIndex, setCurrentVariantIndex] = useState(0);
 
+  // State for weekly usage chart selection
+  const [selectedWeek, setSelectedWeek] = useState<string | null>(null);
+
   // Create all variants array including current card
   const allVariants = card ? [card, ...(card.languageVariants || [])] : [];
 
@@ -362,6 +365,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
       return data;
     },
     enabled: !!card && !isBasicEnergy,
+    staleTime: 1000 * 60 * 60, // cache for 1 hour
   });
 
   if (isLoading) {
@@ -1100,73 +1104,177 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
               <div className="bg-white rounded-lg p-6 shadow-sm">
                 <h2 className="text-xl font-semibold mb-4 text-gray-900">相關賽事牌組</h2>
 
-                {/* Weekly trend bar chart */}
                 {relatedDecks.weeklyTrend && relatedDecks.weeklyTrend.length > 0 ? (
-                  <div className="mb-5">
-                    <h3 className="text-sm font-medium text-gray-600 mb-2">每週使用牌組數 (近12週)</h3>
-                    <div className="flex items-end gap-1 h-16">
-                      {(() => {
-                        const maxCount = Math.max(...relatedDecks.weeklyTrend.map((w: any) => w.deckCount), 1);
-                        return relatedDecks.weeklyTrend.map((w: any, i: number) => (
-                          <div key={i} className="flex-1 flex flex-col items-center gap-0.5 group">
-                            <span className="text-[9px] text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">{w.deckCount}</span>
-                            <div
-                              className="w-full bg-blue-400 hover:bg-blue-500 rounded-t transition-colors"
-                              style={{ height: `${Math.max(3, (w.deckCount / maxCount) * 40)}px` }}
-                              title={`${new Date(w.weekStart).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })}: ${w.deckCount} decks`}
-                            />
-                          </div>
-                        ));
-                      })()}
+                  <>
+                    {/* Weekly usage % bar chart */}
+                    <div className="mb-5">
+                      <h3 className="text-sm font-medium text-gray-600 mb-3">每週使用率 (近12週) — 點擊週份查看牌組</h3>
+                      <div className="flex items-end gap-0.5 h-20">
+                        {(() => {
+                          const maxPct = Math.max(
+                            ...relatedDecks.weeklyTrend.map((w: any) => w.usagePct ?? 0),
+                            1
+                          );
+                          return relatedDecks.weeklyTrend.map((w: any) => {
+                            const isSelected = selectedWeek === w.weekStart;
+                            const pct = w.usagePct ?? 0;
+                            const hasData = w.deckCount > 0;
+                            return (
+                              <button
+                                key={w.weekStart}
+                                className="flex-1 flex flex-col items-center gap-0.5 group"
+                                onClick={() => setSelectedWeek(isSelected ? null : w.weekStart)}
+                                title={`${new Date(w.weekStart).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })}: ${pct}% (${w.deckCount}/${w.totalDecks} 牌組)`}
+                              >
+                                <span
+                                  className={`text-[9px] whitespace-nowrap transition-opacity ${
+                                    isSelected
+                                      ? 'opacity-100 text-blue-700 font-bold'
+                                      : 'opacity-0 group-hover:opacity-100 text-gray-500'
+                                  }`}
+                                >
+                                  {pct > 0 ? `${pct}%` : ''}
+                                </span>
+                                <div
+                                  className={`w-full rounded-sm transition-colors ${
+                                    isSelected
+                                      ? 'bg-blue-600'
+                                      : hasData
+                                      ? 'bg-blue-400 hover:bg-blue-500'
+                                      : 'bg-gray-200'
+                                  }`}
+                                  style={{
+                                    height: `${Math.max(hasData ? 4 : 2, (pct / maxPct) * 48)}px`,
+                                  }}
+                                />
+                                <span
+                                  className={`text-[8px] leading-tight ${
+                                    isSelected ? 'text-blue-600 font-semibold' : 'text-gray-400'
+                                  }`}
+                                >
+                                  {new Date(w.weekStart).toLocaleDateString('zh-TW', {
+                                    month: 'numeric',
+                                    day: 'numeric',
+                                  })}
+                                </span>
+                              </button>
+                            );
+                          });
+                        })()}
+                      </div>
+                      <p className="text-[10px] text-gray-400 mt-1">
+                        最高使用率:{' '}
+                        {Math.max(
+                          ...relatedDecks.weeklyTrend.map((w: any) => w.usagePct ?? 0),
+                          0
+                        ).toFixed(1)}
+                        % · 共{' '}
+                        {relatedDecks.weeklyTrend.reduce(
+                          (s: number, w: any) => s + (w.deckCount ?? 0),
+                          0
+                        )}{' '}
+                        個牌組 (近12週)
+                      </p>
                     </div>
-                    <p className="text-[10px] text-gray-400 mt-1">
-                      共 {relatedDecks.weeklyTrend.reduce((s: number, w: any) => s + w.deckCount, 0)} 個牌組 (近12週)
-                    </p>
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-400 mb-4">近12週無賽事使用記錄</p>
-                )}
 
-                {/* Top 10 decks */}
-                {relatedDecks.topDecks && relatedDecks.topDecks.length > 0 && (
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-600 mb-2">近期相關牌組 (最多10個)</h3>
-                    <div className="space-y-2">
-                      {relatedDecks.topDecks.map((deck: any, i: number) => (
-                        <div key={deck.deckId} className="flex items-center gap-3 p-2.5 bg-gray-50 rounded-lg border border-gray-100 hover:border-gray-300 transition-colors">
-                          <span className="text-xs font-bold text-gray-400 w-5 shrink-0">{i + 1}</span>
-                          <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 bg-gray-200 text-gray-600">
-                            #{deck.placement}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900 truncate">{deck.playerName}</p>
-                            <p className="text-xs text-gray-500 truncate">{deck.tournamentName}</p>
-                            <p className="text-xs text-gray-400">{deck.tournamentDate ? new Date(deck.tournamentDate).toLocaleDateString('zh-TW') : ''} · ×{deck.quantity}</p>
-                          </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            {deck.deckCode && (
-                              <>
-                                <a
-                                  href={`https://www.pokemon-card.com/deck/confirm.html/deckID/${deck.deckCode}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="font-mono text-[10px] text-blue-500 hover:text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded transition-colors"
-                                >
-                                  {deck.deckCode} ↗
-                                </a>
-                                <Link
-                                  href={`/deck-builder/event/${deck.deckCode}`}
-                                  className="text-xs text-blue-600 hover:text-blue-800 px-2 py-1 bg-blue-50 rounded transition-colors"
-                                >
-                                  View
-                                </Link>
-                              </>
+                    {/* Deck list for selected week or most recent week with data */}
+                    {(() => {
+                      const displayWeek = selectedWeek
+                        ? relatedDecks.weeklyTrend.find((w: any) => w.weekStart === selectedWeek)
+                        : relatedDecks.weeklyTrend
+                            .filter((w: any) => (w.deckCount ?? 0) > 0)
+                            .at(-1);
+
+                      if (!displayWeek?.decks?.length) {
+                        return (
+                          <p className="text-sm text-gray-400">
+                            {selectedWeek ? '此週無相關牌組記錄' : '近12週無賽事使用記錄'}
+                          </p>
+                        );
+                      }
+
+                      const weekLabel = new Date(displayWeek.weekStart).toLocaleDateString('zh-TW', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                      });
+
+                      return (
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-600 mb-2 flex items-center gap-2">
+                            <span>
+                              {selectedWeek ? `${weekLabel} 週` : '最近相關牌組'} ({displayWeek.deckCount} 個 ·{' '}
+                              {displayWeek.usagePct}% 使用率)
+                            </span>
+                            {selectedWeek && (
+                              <button
+                                className="text-xs text-blue-500 hover:text-blue-700 transition-colors"
+                                onClick={() => setSelectedWeek(null)}
+                              >
+                                清除篩選 ×
+                              </button>
+                            )}
+                          </h3>
+                          <div className="space-y-2">
+                            {displayWeek.decks.map((deck: any, i: number) => (
+                              <div
+                                key={deck.deckId}
+                                className="flex items-center gap-3 p-2.5 bg-gray-50 rounded-lg border border-gray-100 hover:border-gray-300 transition-colors"
+                              >
+                                <span className="text-xs font-bold text-gray-400 w-5 shrink-0">
+                                  {i + 1}
+                                </span>
+                                <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 bg-gray-200 text-gray-600">
+                                  #{deck.placement}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-gray-900 truncate">
+                                    {deck.playerName}
+                                  </p>
+                                  <p className="text-xs text-gray-500 truncate">
+                                    {deck.tournamentName}
+                                  </p>
+                                  <p className="text-xs text-gray-400">
+                                    {deck.tournamentDate
+                                      ? new Date(deck.tournamentDate).toLocaleDateString('zh-TW')
+                                      : ''}{' '}
+                                    · ×{deck.quantity}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  {deck.deckCode && (
+                                    <>
+                                      <a
+                                        href={`https://www.pokemon-card.com/deck/confirm.html/deckID/${deck.deckCode}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="font-mono text-[10px] text-blue-500 hover:text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded transition-colors"
+                                      >
+                                        {deck.deckCode} ↗
+                                      </a>
+                                      <Link
+                                        href={`/deck-builder/event/${deck.deckCode}`}
+                                        className="text-xs text-blue-600 hover:text-blue-800 px-2 py-1 bg-blue-50 rounded transition-colors"
+                                      >
+                                        View
+                                      </Link>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                            {displayWeek.deckCount > displayWeek.decks.length && (
+                              <p className="text-xs text-gray-400 text-center pt-1">
+                                顯示前 {displayWeek.decks.length} 個，共 {displayWeek.deckCount} 個牌組
+                              </p>
                             )}
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  </div>
+                      );
+                    })()}
+                  </>
+                ) : (
+                  <p className="text-sm text-gray-400">近12週無賽事使用記錄</p>
                 )}
               </div>
             )}

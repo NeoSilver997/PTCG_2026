@@ -920,22 +920,11 @@ export class CardsService {
     if (!found) throw new NotFoundException(`Card ${webCardId} not found`);
     const cardId = found.id;
 
-    const [weeklyRows, topDecks] = await Promise.all([
-      this.prisma.$queryRaw<Array<{ week_start: Date; deck_count: bigint }>>`
-        SELECT
-          date_trunc('week', t.date)::date AS week_start,
-          COUNT(DISTINCT d.id)::bigint AS deck_count
-        FROM deck_cards dc
-        JOIN decks d ON d.id = dc."deckId"
-        JOIN tournament_results tr ON tr."deckId" = d.id
-        JOIN tournaments t ON t.id = tr."tournamentId"
-        WHERE dc."cardId" = ${cardId}
-          AND t.date >= now() - interval '12 weeks'
-        GROUP BY 1
-        ORDER BY 1 ASC
-      `,
+    const [cardDeckRows, totalRows] = await Promise.all([
+      // All decks containing this card across last 12 weeks
       this.prisma.$queryRaw<Array<any>>`
         SELECT
+          date_trunc('week', t.date)::date AS week_start,
           d.id AS "deckId",
           d."deckCode",
           tr."playerName",
@@ -950,28 +939,73 @@ export class CardsService {
         JOIN tournament_results tr ON tr."deckId" = d.id
         JOIN tournaments t ON t.id = tr."tournamentId"
         WHERE dc."cardId" = ${cardId}
-        ORDER BY t.date DESC, tr.placement ASC
-        LIMIT 10
+          AND t.date >= now() - interval '12 weeks'
+        ORDER BY week_start ASC, t.date DESC, tr.placement ASC
+      `,
+      // Total distinct decks per week (denominator for usage %)
+      this.prisma.$queryRaw<Array<{ week_start: Date; total_decks: bigint }>>`
+        SELECT
+          date_trunc('week', t.date)::date AS week_start,
+          COUNT(DISTINCT tr."deckId")::bigint AS total_decks
+        FROM tournament_results tr
+        JOIN tournaments t ON t.id = tr."tournamentId"
+        WHERE t.date >= now() - interval '12 weeks'
+          AND tr."deckId" IS NOT NULL
+        GROUP BY 1
+        ORDER BY 1 ASC
       `,
     ]);
 
-    return {
-      weeklyTrend: weeklyRows.map((r) => ({
-        weekStart: r.week_start,
-        deckCount: Number(r.deck_count),
-      })),
-      topDecks: topDecks.map((r) => ({
-        deckId: r.deckId,
-        deckCode: r.deckCode,
-        playerName: r.playerName,
-        placement: Number(r.placement),
-        tournamentName: r.tournamentName,
-        tournamentDate: r.tournamentDate,
-        eventId: r.eventId,
-        region: r.region,
-        quantity: Number(r.quantity),
-      })),
-    };
+    // Map total decks per week
+    const totalByWeek = new Map<string, number>();
+    for (const row of totalRows) {
+      const week = new Date(row.week_start).toISOString().split('T')[0];
+      totalByWeek.set(week, Number(row.total_decks));
+    }
+
+    // Group card decks by week, keeping up to 20 per week
+    const weekMap = new Map<string, { count: number; decks: any[] }>();
+    for (const row of cardDeckRows) {
+      const week = new Date(row.week_start).toISOString().split('T')[0];
+      if (!weekMap.has(week)) weekMap.set(week, { count: 0, decks: [] });
+      const entry = weekMap.get(week)!;
+      entry.count++;
+      if (entry.decks.length < 20) {
+        entry.decks.push({
+          deckId: row.deckId,
+          deckCode: row.deckCode,
+          playerName: row.playerName,
+          placement: Number(row.placement),
+          tournamentName: row.tournamentName,
+          tournamentDate: row.tournamentDate,
+          eventId: row.eventId,
+          region: row.region,
+          quantity: Number(row.quantity),
+        });
+      }
+    }
+
+    // Merge into sorted unique weeks
+    const allWeekKeys = new Set([...weekMap.keys(), ...totalByWeek.keys()]);
+    const weeklyTrend = Array.from(allWeekKeys)
+      .sort()
+      .map((weekKey) => {
+        const entry = weekMap.get(weekKey);
+        const totalDecks = totalByWeek.get(weekKey) ?? 0;
+        const deckCount = entry?.count ?? 0;
+        return {
+          weekStart: weekKey,
+          deckCount,
+          totalDecks,
+          usagePct:
+            totalDecks > 0
+              ? Math.round((deckCount / totalDecks) * 1000) / 10
+              : 0,
+          decks: entry?.decks ?? [],
+        };
+      });
+
+    return { weeklyTrend };
   }
 
   /**
