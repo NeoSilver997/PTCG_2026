@@ -8,6 +8,7 @@ import apiClient from '@/lib/api-client';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type CategoryKey = 'all' | 'pokemon' | 'supporter' | 'item' | 'stadium' | 'tool' | 'energy';
+type ViewMode = 'count' | 'pct';
 
 interface WeeklyTopCard {
   name: string;
@@ -15,13 +16,19 @@ interface WeeklyTopCard {
   supertype: string;
   subtypes: string[];
   webCardId?: string;
-  weeklyUsage: [number, number, number, number]; // week 0=oldest → 3=newest
+  /** weeklyUsage[0]=oldest … [3]=newest */
+  weeklyUsage: [number, number, number, number];
+  /** % of total category usage that week (0–100) */
+  weeklyPct: [number, number, number, number];
   totalUsage: number;
+  totalPct: number;
 }
 
 interface TopCardsPeriodData {
   cards: WeeklyTopCard[];
   weekLabels: [string, string, string, string];
+  /** sum of all category-matching card usage per week — denominator for % */
+  weeklyTotals: [number, number, number, number];
   periodStart: string;
   periodEnd: string;
 }
@@ -93,23 +100,33 @@ async function buildWeeklyTopCards(
     fmtWeekLabel(new Date(periodStart.getTime() + i * 7 * 24 * 60 * 60 * 1000)),
   ) as [string, string, string, string];
 
-  // Fetch tournaments in date range (max 100)
-  const listRes = await apiClient.get('/tournaments', {
-    params: {
-      ...(region && { region }),
-      dateFrom: toDateStr(periodStart),
-      dateTo: toDateStr(periodEnd),
-      take: 100,
-      skip: 0,
-      sortBy: 'date',
-      sortOrder: 'desc',
-    },
-  });
-
-  const tournaments: Array<{ id: string; date: string }> = listRes.data?.data ?? [];
-  if (tournaments.length === 0) {
-    return { cards: [], weekLabels, periodStart: periodStart.toISOString(), periodEnd: periodEnd.toISOString() };
+  // Fetch all tournaments in the date range, paginating through take:100 pages
+  const PAGE_SIZE = 100;
+  const tournaments: Array<{ id: string; date: string }> = [];
+  let skip = 0;
+  while (true) {
+    const listRes = await apiClient.get('/tournaments', {
+      params: {
+        ...(region && { region }),
+        dateFrom: toDateStr(periodStart),
+        dateTo: toDateStr(periodEnd),
+        take: PAGE_SIZE,
+        skip,
+        sortBy: 'date',
+        sortOrder: 'desc',
+      },
+    });
+    const page: Array<{ id: string; date: string }> = listRes.data?.data ?? [];
+    tournaments.push(...page);
+    const total: number = listRes.data?.meta?.total ?? 0;
+    skip += PAGE_SIZE;
+    if (skip >= total || page.length === 0) break;
   }
+  const emptyResult: TopCardsPeriodData = {
+    cards: [], weekLabels, weeklyTotals: [0, 0, 0, 0],
+    periodStart: periodStart.toISOString(), periodEnd: periodEnd.toISOString(),
+  };
+  if (tournaments.length === 0) return emptyResult;
 
   // Fetch tournament details in chunks of 8
   const deckRefs: Array<{ weekIdx: number; deckId: string }> = [];
@@ -135,9 +152,7 @@ async function buildWeeklyTopCards(
     }
   }
 
-  if (deckRefs.length === 0) {
-    return { cards: [], weekLabels, periodStart: periodStart.toISOString(), periodEnd: periodEnd.toISOString() };
-  }
+  if (deckRefs.length === 0) return emptyResult;
 
   // Fetch unique decks in chunks of 8
   const uniqueDeckIds = Array.from(new Set(deckRefs.map((r) => r.deckId)));
@@ -157,7 +172,9 @@ async function buildWeeklyTopCards(
     }
   }
 
-  // Accumulate weekly card usage
+  // 4. Accumulate weekly card usage.
+  // Key by webCardId (not name) so each expansion variant gets its own correct
+  // image URL — fixes cases like ルナトーン where first-seen imageUrl was wrong.
   const cardMap = new Map<string, {
     name: string; imageUrl: string | null; supertype: string;
     subtypes: string[]; webCardId?: string;
@@ -174,7 +191,9 @@ async function buildWeeklyTopCards(
       const subtypes = c.subtypes ?? [];
       if (!matchesCategory(supertype, subtypes, category)) continue;
 
-      let entry = cardMap.get(c.name);
+      // Use webCardId as canonical key; fall back to name when absent
+      const mapKey = c.webCardId ?? c.name;
+      let entry = cardMap.get(mapKey);
       if (!entry) {
         entry = {
           name: c.name,
@@ -184,38 +203,63 @@ async function buildWeeklyTopCards(
           webCardId: c.webCardId,
           weeklyUsage: [0, 0, 0, 0],
         };
-        cardMap.set(c.name, entry);
+        cardMap.set(mapKey, entry);
+      } else {
+        // Fill in imageUrl / webCardId if we find a better one later
+        if (!entry.imageUrl && c.imageUrl) entry.imageUrl = c.imageUrl;
+        if (!entry.webCardId && c.webCardId) entry.webCardId = c.webCardId;
       }
       entry.weeklyUsage[ref.weekIdx] += dc.quantity ?? 0;
     }
   }
 
-  // Sort by total usage, top 30
+  // 5. Compute per-week totals (denominator for % view)
+  const weeklyTotals: [number, number, number, number] = [0, 0, 0, 0];
+  for (const e of cardMap.values()) {
+    for (let i = 0; i < 4; i++) weeklyTotals[i] += e.weeklyUsage[i];
+  }
+  const overallTotal = weeklyTotals.reduce((s, v) => s + v, 0);
+
+  // 6. Build top-30 with pre-computed percentage values
   const cards: WeeklyTopCard[] = Array.from(cardMap.values())
-    .map((c) => ({ ...c, totalUsage: c.weeklyUsage.reduce((s, v) => s + v, 0) }))
+    .map((c) => {
+      const totalUsage = c.weeklyUsage.reduce((s, v) => s + v, 0);
+      const weeklyPct = c.weeklyUsage.map((v, i) =>
+        weeklyTotals[i] > 0 ? Math.round((v / weeklyTotals[i]) * 1000) / 10 : 0,
+      ) as [number, number, number, number];
+      const totalPct = overallTotal > 0 ? Math.round((totalUsage / overallTotal) * 1000) / 10 : 0;
+      return { ...c, totalUsage, weeklyPct, totalPct };
+    })
     .sort((a, b) => b.totalUsage - a.totalUsage)
     .slice(0, 30);
 
-  return { cards, weekLabels, periodStart: periodStart.toISOString(), periodEnd: periodEnd.toISOString() };
+  return { cards, weekLabels, weeklyTotals, periodStart: periodStart.toISOString(), periodEnd: periodEnd.toISOString() };
 }
 
 // ── MiniTrendBar ──────────────────────────────────────────────────────────────
 function MiniTrendBar({
   weeklyUsage,
+  weeklyPct,
   maxUsage,
+  maxPct,
+  viewMode,
 }: {
   weeklyUsage: [number, number, number, number];
+  weeklyPct: [number, number, number, number];
   maxUsage: number;
+  maxPct: number;
+  viewMode: ViewMode;
 }) {
-  const max = maxUsage || 1;
+  const values = viewMode === 'pct' ? weeklyPct : weeklyUsage;
+  const max = (viewMode === 'pct' ? maxPct : maxUsage) || 1;
   return (
     <div className="flex items-end gap-0.5 h-5">
-      {weeklyUsage.map((v, i) => (
+      {values.map((v, i) => (
         <div
           key={i}
           className={`w-2.5 rounded-sm ${WEEK_BAR_COLORS[i]}`}
           style={{ height: `${Math.max(10, (v / max) * 100)}%` }}
-          title={`Week ${i + 1}: ${v}`}
+          title={viewMode === 'pct' ? `W${i + 1}: ${v}%` : `W${i + 1}: ${v} uses`}
         />
       ))}
     </div>
@@ -225,21 +269,32 @@ function MiniTrendBar({
 // ── TrendChart (in modal) ─────────────────────────────────────────────────────
 function TrendChart({
   weeklyUsage,
+  weeklyPct,
   weekLabels,
   maxUsage,
+  maxPct,
+  viewMode,
 }: {
   weeklyUsage: [number, number, number, number];
+  weeklyPct: [number, number, number, number];
   weekLabels: [string, string, string, string];
   maxUsage: number;
+  maxPct: number;
+  viewMode: ViewMode;
 }) {
-  const max = maxUsage || 1;
+  const values = viewMode === 'pct' ? weeklyPct : weeklyUsage;
+  const max = (viewMode === 'pct' ? maxPct : maxUsage) || 1;
   return (
     <div>
-      <p className="text-slate-400 text-[10px] uppercase tracking-wider mb-2">4-week trend</p>
+      <p className="text-slate-400 text-[10px] uppercase tracking-wider mb-2">
+        4-week trend {viewMode === 'pct' ? '(% of total)' : '(raw count)'}
+      </p>
       <div className="flex items-end gap-2" style={{ height: 72 }}>
-        {weeklyUsage.map((v, i) => (
+        {values.map((v, i) => (
           <div key={i} className="flex-1 flex flex-col items-center gap-1 h-full justify-end">
-            <span className="text-[10px] text-slate-300 font-semibold">{v > 0 ? v : ''}</span>
+            <span className="text-[10px] text-slate-300 font-semibold">
+              {v > 0 ? (viewMode === 'pct' ? `${v}%` : v) : ''}
+            </span>
             <div
               className={`w-full rounded-sm ${WEEK_BAR_COLORS[i]}`}
               style={{ height: `${Math.max(3, (v / max) * 52)}px` }}
@@ -257,11 +312,15 @@ function CardModal({
   card,
   weekLabels,
   maxUsage,
+  maxPct,
+  viewMode,
   onClose,
 }: {
   card: WeeklyTopCard;
   weekLabels: [string, string, string, string];
   maxUsage: number;
+  maxPct: number;
+  viewMode: ViewMode;
   onClose: () => void;
 }) {
   useEffect(() => {
@@ -294,6 +353,9 @@ function CardModal({
               {card.subtypes.map((st) => (
                 <span key={st} className="bg-slate-600 text-slate-300 px-2 py-0.5 rounded-full text-[10px]">{st}</span>
               ))}
+              {card.webCardId && (
+                <span className="bg-slate-700 text-slate-400 px-2 py-0.5 rounded-full text-[10px] font-mono">{card.webCardId}</span>
+              )}
             </div>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-white text-xl leading-none ml-3 shrink-0 mt-0.5">
@@ -324,13 +386,36 @@ function CardModal({
             <div className="bg-slate-700/50 rounded-lg px-3 py-2">
               <p className="text-slate-400 text-[10px] uppercase tracking-wider">Total (4 wks)</p>
               <p className="text-white text-xl font-bold">{card.totalUsage.toLocaleString()}</p>
-              <p className="text-slate-400 text-[10px]">tournament uses</p>
+              <p className="text-slate-400 text-[10px]">{card.totalPct}% of total usage · 4 wks</p>
             </div>
 
-            {/* Trend chart */}
-            <TrendChart weeklyUsage={card.weeklyUsage} weekLabels={weekLabels} maxUsage={maxUsage} />
+            {/* Trend chart (respects viewMode) */}
+            <TrendChart
+              weeklyUsage={card.weeklyUsage}
+              weeklyPct={card.weeklyPct}
+              weekLabels={weekLabels}
+              maxUsage={maxUsage}
+              maxPct={maxPct}
+              viewMode={viewMode}
+            />
           </div>
         </div>
+
+        {/* Quick pct sparklines when in count mode */}
+        {viewMode === 'count' && (
+          <div className="mt-3 pt-3 border-t border-slate-700/50">
+            <p className="text-slate-500 text-[10px] mb-1.5">Weekly usage %</p>
+            <div className="flex gap-3">
+              {card.weeklyPct.map((p, i) => (
+                <div key={i} className="flex-1 text-center">
+                  <div className={`h-1.5 rounded-full ${WEEK_BAR_COLORS[i]}`}
+                    style={{ width: `${Math.min(100, p * 4)}%` }} />
+                  <p className="text-slate-400 text-[9px] mt-0.5">{p > 0 ? `${p}%` : '—'}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Footer links */}
         <div className="mt-4 pt-3 border-t border-slate-700 flex gap-2">
@@ -370,9 +455,10 @@ export default function TopCardsPage() {
   const [region, setRegion] = useState('');
   const [category, setCategory] = useState<CategoryKey>('pokemon');
   const [periodEnd, setPeriodEnd] = useState(today);
+  const [viewMode, setViewMode] = useState<ViewMode>('count');
   const [selectedCard, setSelectedCard] = useState<WeeklyTopCard | null>(null);
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['tournament-top-cards-weekly', region, category, periodEnd],
     queryFn: () => buildWeeklyTopCards(region, category, periodEnd),
     staleTime: 5 * 60 * 1000,
@@ -380,6 +466,9 @@ export default function TopCardsPage() {
 
   const cardMaxWeekly = data?.cards
     ? Math.max(1, ...data.cards.flatMap((c) => c.weeklyUsage))
+    : 1;
+  const cardMaxPct = data?.cards
+    ? Math.max(1, ...data.cards.flatMap((c) => c.weeklyPct))
     : 1;
 
   const periodRange = data
@@ -405,9 +494,9 @@ export default function TopCardsPage() {
       <div className="max-w-7xl mx-auto px-4 py-4">
         {/* Filters */}
         <div className="bg-white rounded-xl shadow-sm p-4 mb-4 space-y-3">
-          {/* Date picker */}
+          {/* Row 1: Date picker + view toggle + refresh */}
           <div className="flex flex-wrap items-center gap-3">
-            <span className="text-sm text-gray-600 font-medium shrink-0">Period end date:</span>
+            <span className="text-sm text-gray-600 font-medium shrink-0">Period end:</span>
             <input
               type="date"
               value={periodEnd}
@@ -415,15 +504,43 @@ export default function TopCardsPage() {
               onChange={(e) => setPeriodEnd(e.target.value || today)}
               className="border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
-            <span className="text-xs text-gray-400">← shows 4 weeks back from this date</span>
+            <span className="text-xs text-gray-400">4 weeks back from this date</span>
             {periodEnd !== today && (
-              <button
-                onClick={() => setPeriodEnd(today)}
-                className="text-xs text-purple-600 hover:underline font-medium"
-              >
+              <button onClick={() => setPeriodEnd(today)} className="text-xs text-purple-600 hover:underline font-medium">
                 Reset to today
               </button>
             )}
+
+            <div className="ml-auto flex items-center gap-2">
+              {/* View mode toggle */}
+              <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs font-semibold">
+                <button
+                  onClick={() => setViewMode('count')}
+                  className={`px-3 py-1.5 transition-colors ${
+                    viewMode === 'count' ? 'bg-purple-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  # Count
+                </button>
+                <button
+                  onClick={() => setViewMode('pct')}
+                  className={`px-3 py-1.5 transition-colors border-l border-gray-200 ${
+                    viewMode === 'pct' ? 'bg-purple-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  % Usage
+                </button>
+              </div>
+              {/* Refresh */}
+              <button
+                onClick={() => refetch()}
+                disabled={isLoading || isFetching}
+                className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs text-gray-500 hover:border-purple-400 hover:text-purple-600 transition-colors disabled:opacity-40"
+                title="Refresh data"
+              >
+                {isFetching ? '⟳' : '↺'} Refresh
+              </button>
+            </div>
           </div>
 
           {/* Region tabs */}
@@ -463,7 +580,7 @@ export default function TopCardsPage() {
 
         {/* Week legend */}
         {data && data.cards.length > 0 && (
-          <div className="flex items-center gap-4 mb-3 px-1">
+          <div className="flex items-center gap-3 mb-3 px-1 flex-wrap">
             <span className="text-xs text-gray-500 font-medium">Bars (oldest → newest):</span>
             {data.weekLabels.map((label, i) => (
               <div key={i} className="flex items-center gap-1.5">
@@ -471,11 +588,16 @@ export default function TopCardsPage() {
                 <span className="text-xs text-gray-500">{label}</span>
               </div>
             ))}
+            {viewMode === 'pct' && (
+              <span className="ml-auto text-xs text-purple-600 font-medium bg-purple-50 px-2 py-0.5 rounded-full">
+                % of total category usage that week
+              </span>
+            )}
           </div>
         )}
 
         {/* Loading */}
-        {isLoading && (
+        {(isLoading || isFetching) && (
           <div className="bg-white rounded-xl shadow-sm p-10 text-center">
             <div className="flex justify-center mb-4">
               <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
@@ -486,14 +608,14 @@ export default function TopCardsPage() {
         )}
 
         {/* Error */}
-        {error && (
+        {!isLoading && error && (
           <div className="bg-white rounded-xl shadow-sm p-8 text-center text-red-500">
             Failed to load tournament data. Please try again.
           </div>
         )}
 
         {/* No data */}
-        {!isLoading && !error && data?.cards.length === 0 && (
+        {!isLoading && !isFetching && !error && data?.cards.length === 0 && (
           <div className="bg-white rounded-xl shadow-sm p-12 text-center">
             <div className="text-5xl mb-3">📭</div>
             <p className="text-gray-600 font-medium">No data found for this period</p>
@@ -504,15 +626,15 @@ export default function TopCardsPage() {
         )}
 
         {/* Top 30 grid */}
-        {!isLoading && !error && data && data.cards.length > 0 && (
+        {!isLoading && !isFetching && !error && data && data.cards.length > 0 && (
           <>
             <p className="text-xs text-gray-400 mb-3 px-0.5">
-              Showing top {data.cards.length} cards · click any card to view details
+              Showing top {data.cards.length} cards · click any card for details
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
               {data.cards.map((card, idx) => (
                 <button
-                  key={`${card.name}-${idx}`}
+                  key={card.webCardId ?? `${card.name}-${idx}`}
                   onClick={() => setSelectedCard(card)}
                   className="bg-white rounded-xl shadow-sm border border-gray-100 hover:border-purple-300 hover:shadow-md transition-all text-left p-2.5 group flex flex-col gap-2"
                 >
@@ -552,13 +674,26 @@ export default function TopCardsPage() {
                     )}
                   </div>
 
-                  {/* Usage + trend */}
+                  {/* Stat + trend bar */}
                   <div className="flex items-end justify-between gap-2 px-0.5">
-                    <p className="text-[10px] text-gray-500">
-                      <span className="font-bold text-gray-700 text-xs">{card.totalUsage.toLocaleString()}</span>
-                      {' uses'}
-                    </p>
-                    <MiniTrendBar weeklyUsage={card.weeklyUsage} maxUsage={cardMaxWeekly} />
+                    {viewMode === 'count' ? (
+                      <p className="text-[10px] text-gray-500">
+                        <span className="font-bold text-gray-700 text-xs">{card.totalUsage.toLocaleString()}</span>
+                        {' uses'}
+                      </p>
+                    ) : (
+                      <p className="text-[10px] text-gray-500">
+                        <span className="font-bold text-purple-600 text-xs">{card.totalPct}%</span>
+                        {' avg'}
+                      </p>
+                    )}
+                    <MiniTrendBar
+                      weeklyUsage={card.weeklyUsage}
+                      weeklyPct={card.weeklyPct}
+                      maxUsage={cardMaxWeekly}
+                      maxPct={cardMaxPct}
+                      viewMode={viewMode}
+                    />
                   </div>
                 </button>
               ))}
@@ -573,6 +708,8 @@ export default function TopCardsPage() {
           card={selectedCard}
           weekLabels={data.weekLabels}
           maxUsage={cardMaxWeekly}
+          maxPct={cardMaxPct}
+          viewMode={viewMode}
           onClose={() => setSelectedCard(null)}
         />
       )}

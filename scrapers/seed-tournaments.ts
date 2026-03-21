@@ -261,8 +261,12 @@ async function seedEvent(eventDir: string, options: CliOptions): Promise<{ impor
   }
 
   const event = readJsonFile<EventInfo>(infoPath);
-  if (!event.event_id || !event.event_title) {
+  if (!event.event_id) {
     return { imported: false };
+  }
+  // Fall back to host name when title is empty (common in JP data)
+  if (!event.event_title) {
+    event.event_title = event.event_host ?? `Event ${event.event_id}`;
   }
 
   const existingTournament = await prisma.tournament.findUnique({ where: { eventId: event.event_id } });
