@@ -47,6 +47,10 @@ interface RawDeckCard {
     subtypes?: string[];
     imageUrl?: string;
     webCardId?: string;
+    /** Set by API for Pokémon cards — used to group all variants of the same species */
+    primaryCardId?: string;
+    /** Resolved canonical webCardId for the primary card (JA_JP preferred) */
+    canonicalWebCardId?: string;
   };
 }
 
@@ -179,8 +183,9 @@ async function buildWeeklyTopCards(
   }
 
   // 4. Accumulate weekly card usage.
-  // Key by webCardId (not name) so each expansion variant gets its own correct
-  // image URL — fixes cases like ルナトーン where first-seen imageUrl was wrong.
+  // Pokémon are keyed by primaryCardId so all variants of the same species
+  // (different expansions / art) are aggregated together.
+  // Trainers & Energy are keyed by webCardId / name (they are unique per name).
   const cardMap = new Map<string, {
     name: string; imageUrl: string | null; supertype: string;
     subtypes: string[]; webCardId?: string;
@@ -197,8 +202,16 @@ async function buildWeeklyTopCards(
       const subtypes = c.subtypes ?? [];
       if (!matchesCategory(supertype, subtypes, category)) continue;
 
-      // Use webCardId as canonical key; fall back to name when absent
-      const mapKey = c.webCardId ?? c.name;
+      // Pok\u00e9mon: group by species name — same Pok\u00e9mon across different sets
+      // (different expansion versions, different attacks/primaryCardId) must be
+      // merged into one usage row. primaryCardId only links language variants of
+      // the *exact same printing*, so it's too granular here.
+      // Trainers/Energy: group by webCardId (unique per name) with name fallback.
+      const mapKey =
+        supertype === 'POKEMON'
+          ? c.name
+          : (c.webCardId ?? c.name);
+
       let entry = cardMap.get(mapKey);
       if (!entry) {
         entry = {
@@ -206,14 +219,20 @@ async function buildWeeklyTopCards(
           imageUrl: c.imageUrl ?? null,
           supertype,
           subtypes,
-          webCardId: c.webCardId,
+          // Prefer canonicalWebCardId so the card-page link goes to the right variant
+          webCardId: c.canonicalWebCardId ?? c.webCardId,
           weeklyUsage: [0, 0, 0, 0],
         };
         cardMap.set(mapKey, entry);
       } else {
-        // Fill in imageUrl / webCardId if we find a better one later
+        // Keep the best available imageUrl and webCardId
         if (!entry.imageUrl && c.imageUrl) entry.imageUrl = c.imageUrl;
-        if (!entry.webCardId && c.webCardId) entry.webCardId = c.webCardId;
+        // Upgrade webCardId: canonicalWebCardId > jp* > anything
+        if (c.canonicalWebCardId) {
+          entry.webCardId = c.canonicalWebCardId;
+        } else if (!entry.webCardId && c.webCardId) {
+          entry.webCardId = c.webCardId;
+        }
       }
       entry.weeklyUsage[ref.weekIdx] += dc.quantity ?? 0;
     }
@@ -533,7 +552,8 @@ function RankChangeIndicator({ rankChange, priorRank }: { rankChange: number | n
 }
 
 // ── Weekly top-10 local cache ─────────────────────────────────────────────────
-const CACHE_VER = 'v2';
+// v4: group Pok\u00e9mon by species name (not primaryCardId) for cross-set aggregation
+const CACHE_VER = 'v4';
 function getCacheKey(region: string, cat: CategoryKey, weekKey: string) {
   return `ptcg-topcards-${CACHE_VER}-${region || 'all'}-${cat}-${weekKey}`;
 }
