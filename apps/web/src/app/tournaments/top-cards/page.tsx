@@ -74,18 +74,23 @@ const CATEGORIES: Array<{ key: CategoryKey; label: string; activeClass: string }
 ];
 
 const WEEK_BAR_COLORS = ['bg-slate-300', 'bg-blue-300', 'bg-blue-400', 'bg-blue-500'] as const;
-/** Higher = rarer / better art → prefer that card's image in the top-cards grid */
+/** Higher = rarer / better art → prefer that card's image in the top-cards grid.
+ *  Order: UR > SAR > AMAZING_RARE > SR > AR > SHINY_RARE > ACE_SPEC > RR > R > PROMO > U > C
+ */
 const RARITY_RANK: Record<string, number> = {
-  HYPER_RARE: 10,
-  SPECIAL_ILLUSTRATION_RARE: 9,
-  ULTRA_RARE: 8,
-  ILLUSTRATION_RARE: 7,
-  ACE_SPEC_RARE: 6,
+  HYPER_RARE: 12,                // UR
+  SPECIAL_ILLUSTRATION_RARE: 11, // SAR — better than SR
+  AMAZING_RARE: 10,
+  ULTRA_RARE: 9,                 // SR
+  ILLUSTRATION_RARE: 8,          // AR — better than normal
+  SHINY_RARE: 7,
+  ACE_SPEC: 6,                   // correct key (not ACE_SPEC_RARE)
   DOUBLE_RARE: 5,
   RARE: 4,
   PROMO: 3,
   UNCOMMON: 2,
   COMMON: 1,
+  // NORMAL variant = not in map → defaults to 0 (lowest)
 };
 
 // ── Data helpers ───────────────────────────────────────────────────────────────
@@ -358,23 +363,30 @@ function TrendChart({
   viewMode: ViewMode;
 }) {
   const values = viewMode === 'pct' ? weeklyPct : weeklyUsage;
-  const max = (viewMode === 'pct' ? maxPct : maxUsage) || 1;
+  // Scale to this card's own max so the trend shape is always visible
+  const cardMax = Math.max(...values) || 1;
+  const peakIdx = values.indexOf(Math.max(...values));
+  const troughIdx = values.indexOf(Math.min(...values));
   return (
     <div>
       <p className="text-slate-400 text-[10px] uppercase tracking-wider mb-2">
         4-week trend {viewMode === 'pct' ? '(% of total)' : '(raw count)'}
       </p>
-      <div className="flex items-end gap-2" style={{ height: 72 }}>
+      <div className="flex items-end gap-2" style={{ height: 80 }}>
         {values.map((v, i) => (
           <div key={i} className="flex-1 flex flex-col items-center gap-1 h-full justify-end">
-            <span className="text-[10px] text-slate-300 font-semibold">
-              {v > 0 ? (viewMode === 'pct' ? `${v}%` : v) : ''}
+            <span className={`text-[10px] font-bold leading-none ${
+              i === peakIdx ? 'text-white' : i === troughIdx ? 'text-slate-500' : 'text-slate-300'
+            }`}>
+              {viewMode === 'pct' ? `${v}%` : (v > 0 ? String(v) : '0')}
             </span>
             <div
               className={`w-full rounded-sm ${WEEK_BAR_COLORS[i]}`}
-              style={{ height: `${Math.max(3, (v / max) * 52)}px` }}
+              style={{ height: v > 0 ? `${(v / cardMax) * 52}px` : '2px', opacity: v > 0 ? 1 : 0.3 }}
             />
-            <span className="text-[9px] text-slate-500 truncate w-full text-center">{weekLabels[i]}</span>
+            <span className={`text-[9px] truncate w-full text-center ${
+              i === peakIdx ? 'text-white font-semibold' : 'text-slate-500'
+            }`}>{weekLabels[i]}</span>
           </div>
         ))}
       </div>
@@ -568,8 +580,8 @@ function RankChangeIndicator({ rankChange, priorRank }: { rankChange: number | n
 }
 
 // ── Weekly top-10 local cache ─────────────────────────────────────────────────
-// v6: default % view, top-50, best-rarity image, full-width trend bars
-const CACHE_VER = 'v6';
+// v7: correct RARITY_RANK keys (SAR>SR>AR, ACE_SPEC not ACE_SPEC_RARE), per-card chart scale, topN toggle
+const CACHE_VER = 'v7';
 function getCacheKey(region: string, cat: CategoryKey, weekKey: string) {
   return `ptcg-topcards-${CACHE_VER}-${region || 'all'}-${cat}-${weekKey}`;
 }
@@ -601,6 +613,7 @@ export default function TopCardsPage() {
   const [category, setCategory] = useState<CategoryKey>('pokemon');
   const [periodEnd, setPeriodEnd] = useState(today);
   const [viewMode, setViewMode] = useState<ViewMode>('pct');
+  const [topN, setTopN] = useState<number>(50);
   const [selectedCard, setSelectedCard] = useState<WeeklyTopCard | null>(null);
 
   // ── Per-week localStorage cache ──
@@ -674,6 +687,20 @@ export default function TopCardsPage() {
             )}
 
             <div className="ml-auto flex items-center gap-2">
+              {/* List size toggle */}
+              <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs font-semibold">
+                {[25, 50].map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => setTopN(n)}
+                    className={`px-2.5 py-1.5 transition-colors ${n > 25 ? 'border-l border-gray-200' : ''} ${
+                      topN === n ? 'bg-gray-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    Top {n}
+                  </button>
+                ))}
+              </div>
               {/* View mode toggle */}
               <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs font-semibold">
                 <button
@@ -791,10 +818,10 @@ export default function TopCardsPage() {
         {!isLoading && !isFetching && !error && data && data.cards.length > 0 && (
           <>
             <p className="text-xs text-gray-400 mb-3 px-0.5">
-              Showing top {data.cards.length} cards · click any card for details
+              Showing top {Math.min(data.cards.length, topN)} of {data.cards.length} cards · click any card for details
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-              {data.cards.map((card, idx) => (
+              {data.cards.slice(0, topN).map((card, idx) => (
                 <button
                   key={card.webCardId ?? `${card.name}-${idx}`}
                   onClick={() => setSelectedCard(card)}
@@ -846,19 +873,20 @@ export default function TopCardsPage() {
                     <span className="text-[10px] text-gray-400">{card.totalUsage.toLocaleString()} uses</span>
                   </div>
 
-                  {/* 4-week trend sparkline — full width */}
+                  {/* 4-week trend sparkline — per-card scale so trend shape is always visible */}
                   <div className="flex items-end gap-0.5 h-7 w-full px-0.5">
-                    {(viewMode === 'pct' ? card.weeklyPct : card.weeklyUsage).map((v, i) => {
-                      const maxVal = (viewMode === 'pct' ? cardMaxPct : cardMaxWeekly) || 1;
-                      return (
+                    {(() => {
+                      const vals = viewMode === 'pct' ? card.weeklyPct : card.weeklyUsage;
+                      const cardMax = Math.max(...vals) || 1;
+                      return vals.map((v, i) => (
                         <div
                           key={i}
                           className={`flex-1 rounded-sm ${WEEK_BAR_COLORS[i]}`}
-                          style={{ height: `${Math.max(10, (v / maxVal) * 100)}%` }}
+                          style={{ height: v > 0 ? `${(v / cardMax) * 100}%` : '2px', opacity: v > 0 ? 1 : 0.3 }}
                           title={viewMode === 'pct' ? `W${i + 1}: ${v}%` : `W${i + 1}: ${v}`}
                         />
-                      );
-                    })}
+                      ));
+                    })()}
                   </div>
                 </button>
               ))}
