@@ -19,6 +19,11 @@ const nextConfig: NextConfig = {
         hostname: 'www.pokemon-card.com',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'ptcg002.tcghk.trade',
+        pathname: '/**',
+      },
     ],
   },
   async rewrites() {

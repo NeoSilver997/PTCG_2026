@@ -22,6 +22,12 @@ interface WeeklyTopCard {
   weeklyPct: [number, number, number, number];
   totalUsage: number;
   totalPct: number;
+  /** True when prior-week data is sufficient AND card had zero usage last week but has usage this week */
+  isNew: boolean;
+  /** Positive = moved up, negative = moved down, null = debut (no prior week data) */
+  rankChange: number | null;
+  /** The card's rank based on the prior 3-week window; null if debut */
+  priorRank: number | null;
 }
 
 interface TopCardsPeriodData {
@@ -220,8 +226,32 @@ async function buildWeeklyTopCards(
   }
   const overallTotal = weeklyTotals.reduce((s, v) => s + v, 0);
 
-  // 6. Build top-30 with pre-computed percentage values
-  const cards: WeeklyTopCard[] = Array.from(cardMap.values())
+  // 6. Build top-30 with pre-computed percentage values, rank change vs prior 3-week period
+  //
+  // "Last week rank" = rank by cumulative usage across weeks 0+1+2 (the 3-week window
+  // that excludes this week).  Using 3 weeks instead of 1 week eliminates the sparsity
+  // problem: even if week-2 alone had no data, a card that was played in weeks 0 or 1
+  // will still have a prior rank.
+  const priorTotal3Weeks = weeklyTotals[0] + weeklyTotals[1] + weeklyTotals[2];
+
+  // Build prior-period sorted list keyed by webCardId / name
+  const priorPeriodEntries = Array.from(cardMap.values())
+    .map(c => ({
+      key: c.webCardId ?? c.name,
+      priorUsage: c.weeklyUsage[0] + c.weeklyUsage[1] + c.weeklyUsage[2],
+    }))
+    .filter(e => e.priorUsage > 0)
+    .sort((a, b) => b.priorUsage - a.priorUsage);
+
+  const priorRankMap = new Map<string, number>(
+    priorPeriodEntries.map((e, i) => [e.key, i + 1]),
+  );
+
+  // "NEW" = card has usage this week AND had zero usage across the entire prior 3-week window.
+  // Only shown when prior data is meaningful (>0 total across 3 weeks).
+  const priorDataReliable = priorTotal3Weeks > 0;
+
+  const baseCards = Array.from(cardMap.values())
     .map((c) => {
       const totalUsage = c.weeklyUsage.reduce((s, v) => s + v, 0);
       const weeklyPct = c.weeklyUsage.map((v, i) =>
@@ -230,8 +260,18 @@ async function buildWeeklyTopCards(
       const totalPct = overallTotal > 0 ? Math.round((totalUsage / overallTotal) * 1000) / 10 : 0;
       return { ...c, totalUsage, weeklyPct, totalPct };
     })
-    .sort((a, b) => b.totalUsage - a.totalUsage)
-    .slice(0, 30);
+    .sort((a, b) => b.totalUsage - a.totalUsage);
+
+  const cards: WeeklyTopCard[] = baseCards.slice(0, 30).map((c, i) => {
+    const cardKey = c.webCardId ?? c.name;
+    const priorUsage3w = c.weeklyUsage[0] + c.weeklyUsage[1] + c.weeklyUsage[2];
+    const priorRank = priorRankMap.get(cardKey) ?? null;
+    // rankChange: positive = moved UP in rank (smaller number = better)
+    const rankChange = priorRank !== null ? priorRank - (i + 1) : null;
+    // "NEW" = had no usage in the prior 3-week period at all
+    const isNew = priorDataReliable && c.weeklyUsage[3] > 0 && priorUsage3w === 0;
+    return { ...c, isNew, rankChange, priorRank };
+  });
 
   return { cards, weekLabels, weeklyTotals, periodStart: periodStart.toISOString(), periodEnd: periodEnd.toISOString() };
 }
@@ -345,7 +385,29 @@ function CardModal({
         {/* Header */}
         <div className="flex items-start justify-between mb-4">
           <div>
-            <h3 className="text-white font-bold text-lg leading-tight">{card.name}</h3>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-white font-bold text-lg leading-tight">{card.name}</h3>
+              {card.isNew && (
+                <span className="bg-emerald-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wide leading-none">
+                  NEW
+                </span>
+              )}
+              {card.rankChange !== null && card.rankChange > 0 && (
+                <span className="bg-emerald-900/70 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded leading-none">
+                  ▲ {card.rankChange} up
+                </span>
+              )}
+              {card.rankChange !== null && card.rankChange < 0 && (
+                <span className="bg-red-900/70 text-red-400 text-[10px] font-bold px-2 py-0.5 rounded leading-none">
+                  ▼ {Math.abs(card.rankChange)} down
+                </span>
+              )}
+              {card.rankChange === 0 && (
+                <span className="bg-slate-700 text-slate-400 text-[10px] font-bold px-2 py-0.5 rounded leading-none">
+                  ─ same
+                </span>
+              )}
+            </div>
             <div className="flex gap-1.5 flex-wrap mt-1.5">
               <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold text-white ${supertypeColor}`}>
                 {card.supertype}
@@ -382,11 +444,23 @@ function CardModal({
           )}
 
           <div className="flex-1 min-w-0 flex flex-col gap-3">
-            {/* Usage total */}
+            {/* Usage total + prior rank */}
             <div className="bg-slate-700/50 rounded-lg px-3 py-2">
               <p className="text-slate-400 text-[10px] uppercase tracking-wider">Total (4 wks)</p>
               <p className="text-white text-xl font-bold">{card.totalUsage.toLocaleString()}</p>
               <p className="text-slate-400 text-[10px]">{card.totalPct}% of total usage · 4 wks</p>
+              {card.priorRank !== null ? (
+                <p className="text-slate-400 text-[10px] mt-1">
+                  Prior 3-wk rank: <span className="text-slate-200 font-semibold">#{card.priorRank}</span>
+                  {card.rankChange !== null && card.rankChange !== 0 && (
+                    <span className={card.rankChange > 0 ? ' text-emerald-400' : ' text-red-400'}>
+                      {' '}{card.rankChange > 0 ? `▲${card.rankChange}` : `▼${Math.abs(card.rankChange)}`}
+                    </span>
+                  )}
+                </p>
+              ) : (
+                <p className="text-emerald-400 text-[10px] mt-1 font-semibold">★ Debut in top cards</p>
+              )}
             </div>
 
             {/* Trend chart (respects viewMode) */}
@@ -449,6 +523,41 @@ function RankBadge({ rank }: { rank: number }) {
   return <span className="text-[10px] font-bold text-gray-300 font-mono">{rank}</span>;
 }
 
+// ── Rank change indicator ─────────────────────────────────────────────────────
+function RankChangeIndicator({ rankChange, priorRank }: { rankChange: number | null; priorRank: number | null }) {
+  if (rankChange === null) return null;
+  const tip = priorRank !== null ? `Prior 3-wk rank: #${priorRank}` : undefined;
+  if (rankChange > 0) return <span className="text-emerald-500 text-[7px] font-bold leading-none" title={tip}>▲{rankChange}</span>;
+  if (rankChange < 0) return <span className="text-red-400 text-[7px] font-bold leading-none" title={tip}>▼{Math.abs(rankChange)}</span>;
+  return <span className="text-slate-400 text-[7px] leading-none" title={tip}>─</span>;
+}
+
+// ── Weekly top-10 local cache ─────────────────────────────────────────────────
+const CACHE_VER = 'v2';
+function getCacheKey(region: string, cat: CategoryKey, weekKey: string) {
+  return `ptcg-topcards-${CACHE_VER}-${region || 'all'}-${cat}-${weekKey}`;
+}
+function getWeekKey(dateStr: string): string {
+  const d = new Date(dateStr);
+  const day = d.getDay();
+  const monday = new Date(d.getTime() - (day === 0 ? 6 : day - 1) * 86_400_000);
+  return monday.toISOString().slice(0, 10);
+}
+function loadCache(key: string): (TopCardsPeriodData & { _cachedAt: number }) | null {
+  if (typeof window === 'undefined') return null;
+  try { return JSON.parse(localStorage.getItem(key) ?? 'null'); }
+  catch { return null; }
+}
+function saveCache(key: string, data: TopCardsPeriodData): void {
+  try {
+    localStorage.setItem(key, JSON.stringify({
+      ...data,
+      cards: data.cards.slice(0, 10),
+      _cachedAt: Date.now(),
+    }));
+  } catch { /* storage full – ignore */ }
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function TopCardsPage() {
   const today = toDateStr(new Date());
@@ -458,11 +567,28 @@ export default function TopCardsPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('count');
   const [selectedCard, setSelectedCard] = useState<WeeklyTopCard | null>(null);
 
-  const { data, isLoading, error, refetch, isFetching } = useQuery({
+  // ── Per-week localStorage cache ──
+  const weekKey = getWeekKey(periodEnd);
+  const cacheKey = getCacheKey(region, category, weekKey);
+  const [cachedData, setCachedData] = useState<TopCardsPeriodData | null>(null);
+  useEffect(() => {
+    const hit = loadCache(cacheKey);
+    if (hit) setCachedData(hit as TopCardsPeriodData);
+    else setCachedData(null);
+  }, [cacheKey]);
+
+  const { data: freshData, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['tournament-top-cards-weekly', region, category, periodEnd],
-    queryFn: () => buildWeeklyTopCards(region, category, periodEnd),
-    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const result = await buildWeeklyTopCards(region, category, periodEnd);
+      saveCache(cacheKey, result);
+      return result;
+    },
+    staleTime: 24 * 60 * 60 * 1000,  // re-fetch at most once per day
+    gcTime: 7 * 24 * 60 * 60 * 1000, // keep in-memory for a week
   });
+  // Prefer live data; fall back to localStorage top-10 while loading
+  const data = freshData ?? cachedData;
 
   const cardMaxWeekly = data?.cards
     ? Math.max(1, ...data.cards.flatMap((c) => c.weeklyUsage))
@@ -615,7 +741,7 @@ export default function TopCardsPage() {
         )}
 
         {/* No data */}
-        {!isLoading && !isFetching && !error && data?.cards.length === 0 && (
+        {!isLoading && !isFetching && !error && (data?.cards.length ?? 0) === 0 && !cachedData && (
           <div className="bg-white rounded-xl shadow-sm p-12 text-center">
             <div className="text-5xl mb-3">📭</div>
             <p className="text-gray-600 font-medium">No data found for this period</p>
@@ -640,12 +766,18 @@ export default function TopCardsPage() {
                 >
                   {/* Rank + name */}
                   <div className="flex items-start gap-1.5">
-                    <div className="shrink-0 w-5 flex justify-end pt-0.5">
+                    <div className="shrink-0 w-5 flex flex-col items-center pt-0.5 gap-0.5">
                       <RankBadge rank={idx + 1} />
+                      <RankChangeIndicator rankChange={card.rankChange} priorRank={card.priorRank} />
                     </div>
                     <p className="text-[11px] font-semibold text-gray-800 leading-tight group-hover:text-purple-700 transition-colors line-clamp-2 flex-1">
                       {card.name}
                     </p>
+                    {card.isNew && (
+                      <span className="shrink-0 bg-emerald-500 text-white text-[8px] font-black px-1 py-0.5 rounded uppercase tracking-wide leading-none mt-0.5">
+                        NEW
+                      </span>
+                    )}
                   </div>
 
                   {/* Card image */}

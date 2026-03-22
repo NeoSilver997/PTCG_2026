@@ -4,120 +4,104 @@ import { useState, useCallback, useEffect, Suspense } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import Image from 'next/image';
 import apiClient from '@/lib/api-client';
+import {
+  type DeckCardEntry,
+  type SectionKey,
+  SECTION_ORDER,
+  getSectionKey,
+  DeckSection,
+  PairedSection,
+  DeckSummary,
+  CardDetailModal,
+  CopyDeckModal,
+} from '@/components/deck-view';
 
-/* ---- Shared view-mode types & helpers ---- */
-interface AttackData { name: string; damage: string; cost: string[]; }
-interface ViewCard {
-  webCardId: string; name: string; imageUrl?: string | null;
-  supertype?: string | null; subtypes?: string[]; types?: string[];
-  rarity?: string | null; hp?: number | null;
-  attacks?: AttackData[] | null; evolutionStage?: string | null;
-}
-interface ViewEntry { quantity: number; card: ViewCard; }
-type SectionKey = 'pokemon' | 'supporter' | 'item' | 'ace' | 'tool' | 'stadium' | 'basic-energy' | 'special-energy';
-const SECTION_ORDER: SectionKey[] = ['pokemon','supporter','item','ace','tool','stadium','basic-energy','special-energy'];
-const SECTION_LABELS: Record<SectionKey,string> = { pokemon:'Pokémon', supporter:'Supporter', item:'Item', ace:'ACE SPEC', tool:'Pokémon Tool', stadium:'Stadium', 'basic-energy':'Basic Energy', 'special-energy':'Special Energy' };
-const SECTION_COLORS: Record<SectionKey,string> = { pokemon:'bg-emerald-600', supporter:'bg-blue-600', item:'bg-slate-500', ace:'bg-yellow-500', tool:'bg-purple-600', stadium:'bg-teal-600', 'basic-energy':'bg-orange-600', 'special-energy':'bg-pink-600' };
-function maxDamage(attacks?: AttackData[] | null) { return attacks?.length ? Math.max(...attacks.map(a=>parseInt(String(a.damage||'0').replace(/[^0-9]/g,''),10)||0)) : 0; }
-function getSectionKey(e: ViewEntry): SectionKey {
-  const { supertype, subtypes = [], rarity } = e.card;
-  if (supertype === 'POKEMON') return 'pokemon';
-  if (supertype === 'ENERGY') return subtypes.includes('BASIC_ENERGY') ? 'basic-energy' : 'special-energy';
-  if (rarity === 'ACE_SPEC') return 'ace';
-  if (subtypes.includes('SUPPORTER')) return 'supporter';
-  if (subtypes.includes('ITEM')) return 'item';
-  if (subtypes.includes('TOOL')) return 'tool';
-  if (subtypes.includes('STADIUM')) return 'stadium';
-  return 'item';
-}
-function sortSection(entries: ViewEntry[], section: SectionKey) {
-  return [...entries].sort((a,b) => section === 'pokemon'
-    ? (b.card.hp??0)-(a.card.hp??0) || maxDamage(b.card.attacks)-maxDamage(a.card.attacks)
-    : b.quantity-a.quantity || (a.card.name??'').localeCompare(b.card.name??''));
-}
-function ViewCardTile({ e, section }: { e: ViewEntry; section: SectionKey }) {
-  const dmg = section==='pokemon' ? maxDamage(e.card.attacks) : 0;
-  const col = SECTION_COLORS[section];
-  return (
-    <div className="relative">
-      <div className="relative w-full aspect-[2.5/3.5] bg-slate-700 rounded-lg overflow-hidden border border-slate-600 hover:border-slate-400 transition">
-        {e.card.imageUrl
-          ? <Image src={e.card.imageUrl} alt={e.card.name} fill sizes="140px" className="object-contain" unoptimized />
-          : <div className="absolute inset-0 flex items-center justify-center text-slate-500 text-[9px] text-center px-1">{e.card.name}</div>}
-      </div>
-      <div className={`absolute top-1 right-1 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shadow ${col}`}>×{e.quantity}</div>
-      {(e.card.hp??0)>0 && <div className="absolute top-1 left-1 bg-red-700 text-white text-[8px] font-bold px-1 py-0.5 rounded shadow">{e.card.hp}HP</div>}
-      {dmg>0 && <div className="absolute bottom-6 right-1 bg-orange-700 text-white text-[8px] font-bold px-1 py-0.5 rounded shadow">{dmg}</div>}
-      <p className="text-slate-300 text-[9px] mt-0.5 text-center line-clamp-1 leading-tight">{e.card.name}</p>
-      <p className="text-slate-600 text-[8px] text-center truncate leading-tight">
-        <Link href={`/cards/${e.card.webCardId}`} onClick={(evt) => evt.stopPropagation()} className="hover:text-slate-400 transition-colors">
-          {e.card.webCardId}
-        </Link>
-      </p>
-    </div>
-  );
-}
-function ViewSection({ section, entries }: { section: SectionKey; entries: ViewEntry[] }) {
-  if (!entries.length) return null;
-  const qty = entries.reduce((s,e)=>s+e.quantity,0);
-  return (
-    <div className="mb-5">
-      <div className="flex items-center gap-2 mb-2">
-        <span className={`px-2.5 py-0.5 rounded text-xs font-bold text-white ${SECTION_COLORS[section]}`}>{SECTION_LABELS[section]}</span>
-        <span className="text-slate-400 text-xs">{entries.length} types · {qty} cards</span>
-      </div>
-      <div className="grid grid-cols-5 sm:grid-cols-7 md:grid-cols-9 lg:grid-cols-11 gap-2">
-        {sortSection(entries,section).map(e => <ViewCardTile key={e.card.webCardId} e={e} section={section} />)}
-      </div>
-    </div>
-  );
-}
-function DeckViewMode({ deckId, onEdit }: { deckId: string; onEdit: ()=>void }) {
+/* ---- DeckViewMode (uses shared components) ---- */
+function DeckViewMode({ deckId, onEdit }: { deckId: string; onEdit: () => void }) {
+  const [selectedCard, setSelectedCard] = useState<DeckCardEntry | null>(null);
+  const [showCopyModal, setShowCopyModal] = useState(false);
+
   const { data, isLoading, isError } = useQuery({
     queryKey: ['deck', deckId],
-    queryFn: () => apiClient.get(`/decks/${deckId}`).then(r => r.data),
+    queryFn: () => apiClient.get(`/decks/${deckId}`).then((r) => r.data),
   });
-  if (isLoading) return <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center text-slate-400 text-sm">Loading deck...</div>;
-  if (isError || !data) return <div className="p-6 bg-slate-900 min-h-screen text-red-400">Deck not found.</div>;
-  const entries: ViewEntry[] = (data.cards ?? []).map((c: any) => ({ quantity: c.quantity, card: c.card }));
-  const sections = new Map<SectionKey, ViewEntry[]>();
-  SECTION_ORDER.forEach(k => sections.set(k, []));
-  entries.forEach(e => sections.get(getSectionKey(e))!.push(e));
-  const total = entries.reduce((s,e)=>s+e.quantity,0);
-  const pokQty = (sections.get('pokemon')??[]).reduce((s,e)=>s+e.quantity,0);
-  const trnQty = (['supporter','item','ace','tool','stadium'] as SectionKey[]).flatMap(k=>sections.get(k)??[]).reduce((s,e)=>s+e.quantity,0);
-  const enrQty = (['basic-energy','special-energy'] as SectionKey[]).flatMap(k=>sections.get(k)??[]).reduce((s,e)=>s+e.quantity,0);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center text-slate-400 text-sm">
+        Loading deck...
+      </div>
+    );
+  }
+  if (isError || !data) {
+    return <div className="p-6 bg-slate-900 min-h-screen text-red-400">Deck not found.</div>;
+  }
+
+  const entries: DeckCardEntry[] = (data.cards ?? []).map((c: { quantity: number; card: DeckCardEntry['card'] }) => ({
+    quantity: c.quantity,
+    card: c.card,
+  }));
+  const sections = new Map<SectionKey, DeckCardEntry[]>();
+  SECTION_ORDER.forEach((k) => sections.set(k, []));
+  entries.forEach((e) => sections.get(getSectionKey(e))!.push(e));
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
-        <div className="flex items-center gap-3 mb-4">
-          <Link href="/deck-builder/archetypes" className="text-slate-400 hover:text-white text-sm transition">← Archetypes</Link>
-          <button onClick={onEdit} className="ml-auto px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded-lg transition">✏️ Edit</button>
+
+        {/* Nav */}
+        <div className="flex items-center gap-3 mb-5 flex-wrap">
+          <Link href="/deck-builder/archetypes" className="text-slate-400 hover:text-white text-sm transition">
+            ← Archetypes
+          </Link>
+          <div className="flex-1" />
+          <button
+            onClick={onEdit}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded-lg transition"
+          >
+            ✏️ Edit
+          </button>
+          <button
+            onClick={() => setShowCopyModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded-lg transition shadow-md"
+          >
+            📋 複製牌組
+          </button>
+          {data.deckCode && (
+            <a
+              href={`https://www.pokemon-card.com/deck/confirm.html/deckID/${data.deckCode}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-400 hover:text-blue-300 font-mono text-xs underline underline-offset-2 transition"
+            >
+              #{data.deckCode} ↗
+            </a>
+          )}
         </div>
+
+        {/* Header + Summary */}
         <div className="bg-slate-700/60 rounded-xl p-4 mb-5 border border-slate-600">
-          <h1 className="text-white text-xl font-bold mb-2">{data.name}</h1>
-          <div className="flex flex-wrap gap-4 text-sm">
-            <span className="text-slate-300">Total: <span className="text-white font-semibold">{total}</span></span>
-            <span className="text-emerald-400">Pokémon: {pokQty}</span>
-            <span className="text-blue-400">Trainer: {trnQty}</span>
-            <span className="text-orange-400">Energy: {enrQty}</span>
-            {data.deckCode && (
-              <a
-                href={`https://www.pokemon-card.com/deck/confirm.html/deckID/${data.deckCode}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-400 hover:text-blue-300 font-mono text-xs underline underline-offset-2 transition-colors"
-                title="View on pokemon-card.com"
-              >
-                #{data.deckCode} ↗
-              </a>
-            )}
-          </div>
+          <h1 className="text-white text-xl font-bold mb-4">{data.name}</h1>
+          <DeckSummary entries={entries} />
         </div>
-        {SECTION_ORDER.map(key => <ViewSection key={key} section={key} entries={sections.get(key)??[]} />)}
+
+        <DeckSection section="pokemon-main" entries={sections.get('pokemon-main') ?? []} onCardClick={setSelectedCard} />
+        <DeckSection section="pokemon-support" entries={sections.get('pokemon-support') ?? []} onCardClick={setSelectedCard} />
+        <DeckSection section="ace" entries={sections.get('ace') ?? []} onCardClick={setSelectedCard} />
+        <PairedSection sectionA="supporter" sectionB="stadium"
+          entriesA={sections.get('supporter') ?? []} entriesB={sections.get('stadium') ?? []}
+          onCardClick={setSelectedCard} />
+        <PairedSection sectionA="item" sectionB="tool"
+          entriesA={sections.get('item') ?? []} entriesB={sections.get('tool') ?? []}
+          onCardClick={setSelectedCard} />
+        <PairedSection sectionA="basic-energy" sectionB="special-energy"
+          entriesA={sections.get('basic-energy') ?? []} entriesB={sections.get('special-energy') ?? []}
+          onCardClick={setSelectedCard} />
       </div>
+
+      {selectedCard && <CardDetailModal entry={selectedCard} onClose={() => setSelectedCard(null)} />}
+      {showCopyModal && <CopyDeckModal deckName={data.name} entries={entries} onClose={() => setShowCopyModal(false)} />}
     </div>
   );
 }

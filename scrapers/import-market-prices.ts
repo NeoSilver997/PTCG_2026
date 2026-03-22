@@ -1,11 +1,18 @@
 /**
- * Import BeehiveTCG market price data into PTCG_2026 PostgreSQL database.
+ * Market Price Import Script — Beehive TCG (HK)
  *
- * Usage: npx tsx scrapers/import-market-prices.ts [--data-dir=PATH] [--dry-run] [--verbose]
+ * Reads market-prices.json from PTCG_CardDB_Tc and upserts CardPrice + PriceHistory
+ * records into the PTCG_2026 PostgreSQL database via Prisma.
  *
- * Reads all market-prices-*.json files from PTCG_CardDB/data/, looks up HK cards
- * by expansion code + card number, and upserts CardPrice records.
- * Files are processed oldest→newest so the latest price wins.
+ * Match strategy:
+ *   Each entry has csvData.id (8-digit numeric string).
+ *   HK card webCardId = "hk" + csvData.id  (e.g., "00014477" → "hk00014477")
+ *
+ * Usage:
+ *   npx tsx scrapers/import-market-prices.ts
+ *   npx tsx scrapers/import-market-prices.ts --dry-run
+ *   npx tsx scrapers/import-market-prices.ts --verbose
+ *   npx tsx scrapers/import-market-prices.ts --file="C:/path/to/market-prices.json"
  */
 import { PrismaClient } from "../packages/database/node_modules/.prisma/client";
 import * as fs from "fs";
@@ -13,251 +20,247 @@ import * as path from "path";
 
 const prisma = new PrismaClient();
 
-const DEFAULT_DATA_DIR_CANDIDATES = [
-  "C:/AI_Server/Coding/PTCG_CardDB/data",
-  path.resolve(process.cwd(), "../PTCG_CardDB/data"),
+// ── Default file candidates ────────────────────────────────────────────────────
+const DEFAULT_FILE_CANDIDATES = [
+  path.resolve(__dirname, "../../PTCG_CardDB_Tc/market-prices.json"),
+  path.resolve(process.cwd(), "../PTCG_CardDB_Tc/market-prices.json"),
+  "C:/AI_Server/Coding/PTCG_CardDB_Tc/market-prices.json",
 ];
 
-interface PriceEntry {
-  price: number;
+// ── Types ──────────────────────────────────────────────────────────────────────
+interface MarketEntry {
+  name: string;
+  matched: boolean;
+  csvData?: { id?: string; name?: string; expansion?: string; rarity?: string };
+  listPrice?: number;
+  listStock?: number;
+  price?: number;
   currency?: string;
-  source?: string;
-  condition?: string;
-  date?: string;
-  metadata?: {
-    cardName?: string;
-    rarity?: string;
-    stockQuantity?: number;
-    isSoldOut?: boolean;
-    productUrl?: string;
-  };
+  stock?: number;
+  priceUpdated?: string;
+  lastSeen?: string;
 }
 
 interface MarketPriceFile {
-  [collectorNumber: string]: PriceEntry[];
+  summary?: Record<string, unknown>;
+  cards: MarketEntry[];
 }
 
-function resolveDataDir(override?: string): string {
-  const candidates = override
-    ? [override, ...DEFAULT_DATA_DIR_CANDIDATES]
-    : DEFAULT_DATA_DIR_CANDIDATES;
-  const found = candidates.find((c) => fs.existsSync(c));
-  if (!found) {
-    throw new Error(
-      `Market data directory not found. Checked: ${candidates.join(", ")}`,
-    );
-  }
-  return found;
+// ── Helpers ────────────────────────────────────────────────────────────────────
+function buildWebCardId(entry: MarketEntry): string | null {
+  const rawId = entry.csvData?.id;
+  if (!rawId || !/^\d+$/.test(rawId.trim())) return null;
+  // DB stores webCardId as "hk<number>" with no zero-padding (e.g. "hk14477")
+  const num = parseInt(rawId.trim(), 10);
+  if (isNaN(num)) return null;
+  return `hk${num}`;
 }
 
-/**
- * Parse filename to extract date and canonical expansion code.
- * e.g., "market-prices-20251213-SV9f.json"  → { date: "20251213", code: "SV9" }
- *       "market-prices-20251213-s10bf-pokemon-go.json" → { date: "20251213", code: "S10B" }
- *       "market-prices-20251213-SVC.json"   → { date: "20251213", code: "SVC" }
- */
-function parseFilename(filename: string): { date: string; code: string } | null {
-  const m = filename.match(/^market-prices-(\d{8})-(.+)\.json$/i);
-  if (!m) return null;
-  const date = m[1];
-  const raw = m[2];
-  // Take only leading ASCII alphanumeric segment (stop at hyphen, space, or non-ASCII)
-  const match = raw.match(/^([A-Za-z0-9]+)/);
-  if (!match) return null;
-  let code = match[1];
-  // Strip trailing 'f' — the HK market files use "{EXPANSION_CODE}f" naming
-  if (code.length > 1 && code.toLowerCase().endsWith("f")) {
-    code = code.slice(0, -1);
-  }
-  return { date, code: code.toUpperCase() };
+function resolvePrice(e: MarketEntry): number {
+  return e.price ?? e.listPrice ?? 0;
 }
 
-// Cache card DB lookups to avoid redundant queries across multiple date files
-const cardLookupCache = new Map<string, string | null>();
-
-async function findHkCardId(
-  expCode: string,
-  cardNum: string,
-): Promise<string | null> {
-  const cacheKey = `${expCode}:${cardNum}`;
-  if (cardLookupCache.has(cacheKey)) {
-    return cardLookupCache.get(cacheKey) ?? null;
-  }
-
-  // Try both unpadded ("124") and zero-padded ("001") card numbers
-  const paddedNum = cardNum.padStart(3, "0");
-
-  const results = await prisma.$queryRaw<Array<{ id: string }>>`
-    SELECT c.id
-    FROM cards c
-    JOIN primary_cards pc ON c."primaryCardId" = pc.id
-    JOIN primary_expansions pe ON pc."primaryExpansionId" = pe.id
-    WHERE UPPER(pe.code) = ${expCode}
-      AND (pc."cardNumber" = ${cardNum} OR pc."cardNumber" = ${paddedNum})
-      AND c."webCardId" LIKE 'hk%'
-    LIMIT 1
-  `;
-
-  const id = results.length > 0 ? results[0].id : null;
-  cardLookupCache.set(cacheKey, id);
-  return id;
+function resolveInStock(e: MarketEntry): boolean {
+  const s = e.stock ?? e.listStock ?? 0;
+  return s > 0;
 }
+
+function resolveFetchedAt(e: MarketEntry): Date {
+  if (e.priceUpdated) return new Date(e.priceUpdated);
+  if (e.lastSeen) return new Date(e.lastSeen);
+  return new Date();
+}
+
+const CHUNK = 200;
 
 async function main() {
   const args = process.argv.slice(2);
   const dryRun = args.includes("--dry-run");
   const verbose = args.includes("--verbose");
-  const dataDirArg = args.find((a) => a.startsWith("--data-dir="))?.split("=")[1];
-  const dataDir = resolveDataDir(dataDirArg);
+  const fileArgRaw = args.find((a) => a.startsWith("--file="));
+  const fileArg = fileArgRaw ? fileArgRaw.substring(7) : undefined;
 
-  console.log("=".repeat(60));
-  console.log("PTCG_2026 - Market Price Import (BeehiveTCG → HK cards)");
-  console.log(`Source: ${dataDir}`);
-  if (dryRun) console.log("Mode: dry-run (no writes)");
-  console.log("=".repeat(60));
-
-  // Collect all valid market-price files, sorted oldest→newest (newest wins)
-  const allFiles = fs
-    .readdirSync(dataDir)
-    .filter((f) => f.startsWith("market-prices-") && f.endsWith(".json"))
-    .map((f) => ({ name: f, parsed: parseFilename(f) }))
-    .filter((f): f is { name: string; parsed: { date: string; code: string } } =>
-      f.parsed !== null,
-    )
-    .sort((a, b) => a.parsed.date.localeCompare(b.parsed.date)); // oldest first
-
-  console.log(`Found ${allFiles.length} market price files\n`);
-
-  // Accumulate latest price per card (cardId → price data)
-  // Processing oldest→newest means the last write per cardId is the freshest price.
-  const priceMap = new Map<
-    string,
-    {
-      price: number;
-      currency: string;
-      condition: string | null;
-      inStock: boolean;
-      fetchedAt: Date;
-    }
-  >();
-
-  let filesProcessed = 0;
-  let totalResolved = 0;
-  let totalNotFound = 0;
-  const notFoundExpansions = new Set<string>();
-
-  for (const file of allFiles) {
-    const { code: expCode } = file.parsed;
-    const filePath = path.join(dataDir, file.name);
-
-    let marketData: MarketPriceFile;
-    try {
-      marketData = JSON.parse(fs.readFileSync(filePath, "utf-8")) as MarketPriceFile;
-    } catch {
-      console.warn(`  ⚠ Failed to parse ${file.name}, skipping`);
-      continue;
-    }
-
-    let fileResolved = 0;
-    let fileNotFound = 0;
-
-    for (const [collectorNumber, entries] of Object.entries(marketData)) {
-      if (!Array.isArray(entries) || entries.length === 0) continue;
-      const entry = entries[0]; // first entry is most recent
-      if (entry.price == null) continue;
-
-      // Extract numeric card number from "124/100" → "124"
-      const rawNum = collectorNumber.split("/")[0].trim();
-      if (!rawNum || !/^\d+$/.test(rawNum)) continue;
-
-      const cardId = await findHkCardId(expCode, rawNum);
-      if (!cardId) {
-        fileNotFound++;
-        notFoundExpansions.add(expCode);
-        continue;
-      }
-
-      priceMap.set(cardId, {
-        price: entry.price,
-        currency: entry.currency ?? "HKD",
-        condition: entry.condition ?? null,
-        inStock: !(entry.metadata?.isSoldOut ?? false),
-        fetchedAt: entry.date ? new Date(entry.date) : new Date(),
-      });
-
-      fileResolved++;
-    }
-
-    totalResolved += fileResolved;
-    totalNotFound += fileNotFound;
-    filesProcessed++;
-
-    if (verbose) {
-      console.log(
-        `  ✓ ${file.name} [${expCode}]: ${fileResolved} resolved, ${fileNotFound} not found`,
-      );
-    } else {
-      process.stdout.write(`${expCode} `);
-    }
+  // Resolve the JSON file path
+  const candidates = fileArg
+    ? [path.resolve(fileArg), ...DEFAULT_FILE_CANDIDATES]
+    : DEFAULT_FILE_CANDIDATES;
+  const filePath = candidates.find((c) => fs.existsSync(c));
+  if (!filePath) {
+    console.error("❌ market-prices.json not found in:");
+    candidates.forEach((c) => console.error("   ", c));
+    console.error("\n   Provide --file=<path> or ensure PTCG_CardDB_Tc is a sibling folder.");
+    process.exit(1);
   }
 
-  console.log(`\n\nFiles processed  : ${filesProcessed}`);
-  console.log(`Cards resolved   : ${totalResolved} entries across all files`);
-  console.log(`Cards not found  : ${totalNotFound}`);
-  console.log(`Unique card prices: ${priceMap.size}`);
-  if (notFoundExpansions.size > 0) {
-    console.log(
-      `Expansions with unmatched cards (may not be in DB): ${Array.from(notFoundExpansions).join(", ")}`,
-    );
+  console.log("=".repeat(60));
+  console.log("PTCG_2026 — Market Price Import (Beehive TCG HK)");
+  console.log(`Source : ${filePath}`);
+  if (dryRun) console.log("Mode   : dry-run (no writes)");
+  console.log("=".repeat(60));
+
+  // 1. Parse JSON
+  const raw: MarketPriceFile = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+  console.log(`\n📊 File stats:`);
+  console.log(`   Total entries     : ${raw.cards.length}`);
+  if (raw.summary) {
+    const s = raw.summary as Record<string, unknown>;
+    console.log(`   Matched entries   : ${s.matchedCards ?? "?"}`);
+    console.log(`   Last update       : ${s.lastUpdate ?? "?"}`);
   }
 
-  if (dryRun || priceMap.size === 0) {
-    console.log(
-      dryRun
-        ? "\nDry run complete — no data written."
-        : "\nNo matchable prices found. Check that HK card data is imported first.",
-    );
+  // 2. Build webCardId → entry map (skip unmatched and entries without id)
+  const idMap = new Map<string, MarketEntry>(); // webCardId → entry
+  let skippedUnmatched = 0;
+  let skippedNoId = 0;
+  let skippedZeroPrice = 0;
+
+  for (const entry of raw.cards) {
+    if (!entry.matched) { skippedUnmatched++; continue; }
+    const wid = buildWebCardId(entry);
+    if (!wid) { skippedNoId++; continue; }
+    const price = resolvePrice(entry);
+    if (price <= 0) { skippedZeroPrice++; continue; }
+    idMap.set(wid, entry);
+  }
+
+  const webCardIds = Array.from(idMap.keys());
+  console.log(`\n🔑 Eligible entries  : ${webCardIds.length}`);
+  console.log(`   Skipped unmatched  : ${skippedUnmatched}`);
+  console.log(`   Skipped no id      : ${skippedNoId}`);
+  console.log(`   Skipped price=0    : ${skippedZeroPrice}`);
+
+  if (webCardIds.length === 0) {
+    console.warn("\n⚠️  Nothing to import.");
     return;
   }
 
-  // Replace all existing OTHER-source prices and insert fresh batch
-  console.log("\nClearing existing market prices (source: OTHER)...");
-  const { count: deleted } = await prisma.cardPrice.deleteMany({
-    where: { source: "OTHER" },
-  });
-  console.log(`Deleted ${deleted} existing price records.`);
+  // 3. Batch-lookup cards in DB by webCardId
+  console.log("\n🔍 Looking up cards in database…");
+  const cardDbMap = new Map<string, string>(); // webCardId → internal card.id
 
-  console.log("Inserting new prices...");
-  const priceData = Array.from(priceMap.entries()).map(([cardId, p]) => ({
-    cardId,
-    source: "OTHER" as const,
-    price: p.price,
-    currency: p.currency,
-    condition: p.condition,
-    inStock: p.inStock,
-    fetchedAt: p.fetchedAt,
-  }));
+  for (let i = 0; i < webCardIds.length; i += CHUNK) {
+    const batch = webCardIds.slice(i, i + CHUNK);
+    const found = await prisma.card.findMany({
+      where: { webCardId: { in: batch } },
+      select: { id: true, webCardId: true },
+    });
+    for (const c of found) cardDbMap.set(c.webCardId, c.id);
+  }
 
-  const CHUNK = 500;
-  let inserted = 0;
-  for (let i = 0; i < priceData.length; i += CHUNK) {
-    const chunk = priceData.slice(i, i + CHUNK);
-    await prisma.cardPrice.createMany({ data: chunk });
-    inserted += chunk.length;
+  console.log(`   Found in DB        : ${cardDbMap.size} / ${webCardIds.length}`);
+  console.log(`   Not in DB (skip)   : ${webCardIds.length - cardDbMap.size}`);
+
+  if (cardDbMap.size === 0) {
+    console.warn("\n⚠️  No cards matched in DB. Import HK cards first with import-cards-direct.ts.");
+    return;
+  }
+
+  if (dryRun) {
+    console.log("\nDry run complete — no data written.");
+    return;
+  }
+
+  // 4. Fetch existing CardPrice rows for all matched cards
+  console.log("\n💾 Upserting CardPrice records…");
+  const allCardIds = Array.from(cardDbMap.values());
+
+  const existingPrices = new Map<string, { id: string; price: number }>();
+  for (let i = 0; i < allCardIds.length; i += CHUNK) {
+    const batch = allCardIds.slice(i, i + CHUNK);
+    const rows = await prisma.cardPrice.findMany({
+      where: { cardId: { in: batch }, source: "OTHER" },
+      select: { id: true, cardId: true, price: true },
+    });
+    for (const r of rows) existingPrices.set(r.cardId, { id: r.id, price: r.price });
+  }
+
+  // 5. Prepare upsert lists
+  const toCreate: Array<{
+    cardId: string; source: "OTHER"; price: number;
+    currency: string; inStock: boolean; fetchedAt: Date;
+  }> = [];
+
+  const toUpdate: Array<{
+    id: string; price: number; currency: string;
+    inStock: boolean; fetchedAt: Date;
+  }> = [];
+
+  const historyRows: Array<{
+    cardId: string; source: "OTHER"; price: number;
+    currency: string; date: Date;
+  }> = [];
+
+  for (const [wid, cardId] of cardDbMap) {
+    const entry = idMap.get(wid)!;
+    const price = resolvePrice(entry);
+    const currency = entry.currency ?? "HKD";
+    const inStock = resolveInStock(entry);
+    const fetchedAt = resolveFetchedAt(entry);
+
+    const existing = existingPrices.get(cardId);
+    if (existing) {
+      toUpdate.push({ id: existing.id, price, currency, inStock, fetchedAt });
+      // Record history only when price changed
+      if (Math.abs(price - existing.price) > 0.01) {
+        historyRows.push({ cardId, source: "OTHER", price, currency, date: fetchedAt });
+      }
+    } else {
+      toCreate.push({ cardId, source: "OTHER", price, currency, inStock, fetchedAt });
+      historyRows.push({ cardId, source: "OTHER", price, currency, date: fetchedAt });
+    }
+
+    if (verbose) {
+      const action = existing ? "UPDATE" : "CREATE";
+      console.log(`  [${action}] ${wid} → HK$${price} (${inStock ? "in stock" : "out of stock"})`);
+    }
+  }
+
+  // 6. Write in chunks inside transactions
+  let upserted = 0;
+  let histAdded = 0;
+
+  // Creates
+  for (let i = 0; i < toCreate.length; i += CHUNK) {
+    const chunk = toCreate.slice(i, i + CHUNK);
+    await prisma.cardPrice.createMany({ data: chunk, skipDuplicates: true });
+    upserted += chunk.length;
     process.stdout.write(".");
   }
 
-  const finalCount = await prisma.cardPrice.count();
+  // Updates
+  for (const u of toUpdate) {
+    await prisma.cardPrice.update({
+      where: { id: u.id },
+      data: { price: u.price, currency: u.currency, inStock: u.inStock, fetchedAt: u.fetchedAt },
+    });
+    upserted++;
+  }
+
+  // History
+  for (let i = 0; i < historyRows.length; i += CHUNK) {
+    const chunk = historyRows.slice(i, i + CHUNK);
+    await prisma.priceHistory.createMany({ data: chunk });
+    histAdded += chunk.length;
+  }
+
   console.log(`\n\n${"=".repeat(60)}`);
   console.log("IMPORT COMPLETE");
-  console.log(`Inserted: ${inserted} CardPrice records`);
-  console.log(`Total CardPrice count in DB: ${finalCount}`);
   console.log("=".repeat(60));
+  console.log(`Cards matched in DB    : ${cardDbMap.size}`);
+  console.log(`Prices created         : ${toCreate.length}`);
+  console.log(`Prices updated         : ${toUpdate.length}`);
+  console.log(`Total upserted         : ${upserted}`);
+  console.log(`History entries added  : ${histAdded}`);
+  console.log(`Source                 : OTHER (Beehive TCG HK)`);
+  console.log(`Currency               : HKD`);
+  console.log("=".repeat(60));
+  console.log("\n✅ Done!");
 }
 
 main()
   .catch((e) => {
-    console.error(e);
+    console.error("\n❌ Import failed:", e.message ?? e);
     process.exit(1);
   })
   .finally(() => prisma.$disconnect());
+

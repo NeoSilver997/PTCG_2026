@@ -20,6 +20,18 @@ import { UpsertPriceDto } from './dto/upsert-price.dto';
 export class PricesController {
   constructor(private readonly pricesService: PricesService) {}
 
+  @Get()
+  @Throttle({ long: { limit: 100, ttl: 60000 } })
+  @ApiOperation({ summary: 'List cards with prices (paginated)' })
+  @ApiQuery({ name: 'take', required: false, type: Number })
+  @ApiQuery({ name: 'skip', required: false, type: Number })
+  listRecent(@Query('take') take?: string, @Query('skip') skip?: string) {
+    return this.pricesService.listRecent(
+      take ? parseInt(take, 10) : 50,
+      skip ? parseInt(skip, 10) : 0,
+    );
+  }
+
   @Get('movers')
   @Throttle({ long: { limit: 100, ttl: 60000 } })
   @ApiOperation({ summary: 'Get top price movers in the last 7 days' })

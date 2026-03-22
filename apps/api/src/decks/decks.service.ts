@@ -11,7 +11,7 @@ export class DecksService {
 
   constructor(private prisma: PrismaService) {}
 
-  async findAll(query: FindAllDecksDto) {
+  async findAll(query: FindAllDecksDto): Promise<{ data: any[]; meta: { total: number; skip: number; take: number } }> {
     const where: any = {};
 
     if (query.archetype) where.archetype = query.archetype;
@@ -51,7 +51,7 @@ export class DecksService {
     return { data: enriched, meta: { total, skip: query.skip ?? 0, take: query.take ?? 50 } };
   }
 
-  async findOne(id: string) {
+  async findOne(id: string): Promise<any> {
     const deck = await this.prisma.deck.findUnique({
       where: { id },
       include: {
@@ -86,7 +86,7 @@ export class DecksService {
     return deck;
   }
 
-  async findOneByCode(deckCode: string) {
+  async findOneByCode(deckCode: string): Promise<any> {
     const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
       SELECT id FROM decks WHERE "deckCode" = ${deckCode} LIMIT 1
     `;
@@ -108,7 +108,7 @@ export class DecksService {
     }
   }
 
-  async create(dto: CreateDeckDto) {
+  async create(dto: CreateDeckDto): Promise<any> {
     if (dto.cards && dto.cards.length > 0) {
       await this.validateCardCounts(dto.cards);
     }
@@ -152,7 +152,7 @@ export class DecksService {
     return deck;
   }
 
-  async addCards(deckId: string, cards: { cardId: string; quantity: number }[]) {
+  async addCards(deckId: string, cards: { cardId: string; quantity: number }[]): Promise<any> {
     const deck = await this.prisma.deck.findUnique({ where: { id: deckId } });
     if (!deck) throw new NotFoundException(`Deck ${deckId} not found`);
 
@@ -175,7 +175,7 @@ export class DecksService {
     return this.findOne(deckId);
   }
 
-  async removeCard(deckId: string, webCardId: string) {
+  async removeCard(deckId: string, webCardId: string): Promise<any> {
     const deck = await this.prisma.deck.findUnique({ where: { id: deckId } });
     if (!deck) throw new NotFoundException(`Deck ${deckId} not found`);
 

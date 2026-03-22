@@ -91,6 +91,28 @@ export class PricesService {
     });
   }
 
+  async listRecent(take = 50, skip = 0) {
+    const rows = await this.prisma.cardPrice.findMany({
+      orderBy: { fetchedAt: 'desc' },
+      skip,
+      take,
+      select: {
+        id: true,
+        source: true,
+        price: true,
+        currency: true,
+        condition: true,
+        inStock: true,
+        fetchedAt: true,
+        card: {
+          select: { id: true, webCardId: true, name: true, imageUrl: true },
+        },
+      },
+    });
+    const total = await this.prisma.cardPrice.count();
+    return { data: rows, total, skip, take };
+  }
+
   async getTopMovers(take = 20) {
     // Cards with biggest price change in last 7 days
     const since = new Date();

@@ -71,7 +71,7 @@ export class TournamentsService {
     };
   }
 
-  async findAll(query: FindAllTournamentsDto) {
+  async findAll(query: FindAllTournamentsDto): Promise<{ data: any[]; meta: { total: number; skip: number; take: number } }> {
     const where: any = {};
 
     if (query.region) where.region = query.region;

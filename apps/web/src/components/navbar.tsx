@@ -10,6 +10,7 @@ export function Navbar() {
   const isDeckBuilderRoute = pathname.startsWith('/deck-builder');
   const isDeckStudioRoute = pathname.startsWith('/deck-studio');
   const isBattlesRoute = pathname.startsWith('/battles');
+  const isBrowseRoute = pathname.startsWith('/browse');
   const breadcrumbLabel = isCardsRoute
     ? pathname.endsWith('/new')
       ? '新增卡片'
@@ -36,6 +37,12 @@ export function Navbar() {
               <span className="ml-2 text-purple-200">管理後台</span>
             </div>
             <div className="text-purple-200 text-sm flex items-center gap-4">
+              <Link
+                href="/browse"
+                className={isBrowseRoute ? 'text-white font-semibold' : 'hover:text-white'}
+              >
+                卡片瀏覽
+              </Link>
               <Link
                 href="/cards"
                 className={isCardsRoute ? 'text-white font-semibold' : 'hover:text-white'}
