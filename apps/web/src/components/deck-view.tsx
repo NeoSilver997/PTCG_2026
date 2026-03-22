@@ -46,6 +46,7 @@ export interface DeckCardEntry {
 export type SectionKey =
   | 'pokemon-main'
   | 'pokemon-support'
+  | 'pokemon-evolution'
   | 'supporter'
   | 'item'
   | 'ace'
@@ -54,11 +55,14 @@ export type SectionKey =
   | 'basic-energy'
   | 'special-energy';
 
+export type PokemonRole = 'pokemon-main' | 'pokemon-support' | 'pokemon-evolution';
+
 /* ─── Constants ──────────────────────────────────────────────────── */
 
 export const SECTION_ORDER: SectionKey[] = [
   'pokemon-main',
   'pokemon-support',
+  'pokemon-evolution',
   'supporter',
   'item',
   'ace',
@@ -71,6 +75,7 @@ export const SECTION_ORDER: SectionKey[] = [
 export const SECTION_LABELS: Record<SectionKey, string> = {
   'pokemon-main': '主力寶可夢',
   'pokemon-support': '輔助寶可夢',
+  'pokemon-evolution': '進化鏈寶可夢',
   supporter: 'Supporter',
   item: 'Item',
   ace: 'ACE SPEC',
@@ -83,6 +88,7 @@ export const SECTION_LABELS: Record<SectionKey, string> = {
 export const SECTION_COLORS: Record<SectionKey, string> = {
   'pokemon-main': 'bg-emerald-600',
   'pokemon-support': 'bg-teal-600',
+  'pokemon-evolution': 'bg-violet-600',
   supporter: 'bg-blue-600',
   item: 'bg-slate-500',
   ace: 'bg-yellow-500',
@@ -129,7 +135,7 @@ export function getSectionKey(entry: DeckCardEntry): SectionKey {
 
 export function sortSection(entries: DeckCardEntry[], section: SectionKey): DeckCardEntry[] {
   return [...entries].sort((a, b) => {
-    if (section === 'pokemon-main' || section === 'pokemon-support') {
+    if (section === 'pokemon-main' || section === 'pokemon-support' || section === 'pokemon-evolution') {
       const hpDiff = (b.card.hp ?? 0) - (a.card.hp ?? 0);
       if (hpDiff !== 0) return hpDiff;
       return maxDamage(b.card.attacks) - maxDamage(a.card.attacks);
@@ -485,16 +491,24 @@ export function CopyDeckModal({
 
 /* ─── Card Tile ──────────────────────────────────────────────────── */
 
+const ROLE_LABELS: Record<PokemonRole, string> = {
+  'pokemon-main': '主力',
+  'pokemon-support': '輔助',
+  'pokemon-evolution': '進化鏈',
+};
+
 export function CardTile({
   entry,
   section,
   onClick,
+  onRoleChange,
 }: {
   entry: DeckCardEntry;
   section: SectionKey;
   onClick?: (entry: DeckCardEntry) => void;
+  onRoleChange?: (webCardId: string, role: PokemonRole) => void;
 }) {
-  const isPokemon = section === 'pokemon-main' || section === 'pokemon-support';
+  const isPokemon = section === 'pokemon-main' || section === 'pokemon-support' || section === 'pokemon-evolution';
   const dmg = isPokemon ? maxDamage(entry.card.attacks) : 0;
   const colorClass = SECTION_COLORS[section] ?? 'bg-slate-600';
 
@@ -545,6 +559,24 @@ export function CardTile({
       <p className="text-slate-300 text-[10px] mt-0.5 text-center line-clamp-1 leading-tight group-hover:text-white transition-colors">
         {entry.card.name}
       </p>
+      {/* Role override buttons — Pokémon only, shown when wired up */}
+      {onRoleChange && isPokemon && (
+        <div className="flex gap-0.5 mt-0.5">
+          {(['pokemon-main', 'pokemon-support', 'pokemon-evolution'] as PokemonRole[]).map((role) => (
+            <button
+              key={role}
+              onClick={(e) => { e.stopPropagation(); onRoleChange(entry.card.canonicalWebCardId ?? entry.card.webCardId, role); }}
+              className={`flex-1 text-[8px] py-0.5 rounded transition-colors ${
+                section === role
+                  ? 'bg-indigo-500 text-white font-bold'
+                  : 'bg-slate-700 text-slate-400 hover:bg-slate-600 hover:text-slate-200'
+              }`}
+            >
+              {ROLE_LABELS[role]}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -555,10 +587,12 @@ export function DeckSection({
   section,
   entries,
   onCardClick,
+  onRoleChange,
 }: {
   section: SectionKey;
   entries: DeckCardEntry[];
   onCardClick?: (entry: DeckCardEntry) => void;
+  onRoleChange?: (webCardId: string, role: PokemonRole) => void;
 }) {
   if (entries.length === 0) return null;
   const qty = entries.reduce((s, e) => s + e.quantity, 0);
@@ -574,9 +608,63 @@ export function DeckSection({
       </div>
       <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 xl:grid-cols-12 gap-2">
         {sortSection(entries, section).map((e) => (
-          <CardTile key={e.card.webCardId} entry={e} section={section} onClick={onCardClick} />
+          <CardTile key={e.card.webCardId} entry={e} section={section} onClick={onCardClick} onRoleChange={onRoleChange} />
         ))}
       </div>
+    </div>
+  );
+}
+
+/* ─── Paired Pokémon Section (main + evolution in same row) ─────── */
+
+export function PairedPokemonSection({
+  sectionA,
+  sectionB,
+  entriesA,
+  entriesB,
+  onCardClick,
+  onRoleChange,
+}: {
+  sectionA: SectionKey;
+  sectionB: SectionKey;
+  entriesA: DeckCardEntry[];
+  entriesB: DeckCardEntry[];
+  onCardClick?: (entry: DeckCardEntry) => void;
+  onRoleChange?: (canonicalKey: string, role: PokemonRole) => void;
+}) {
+  if (!entriesA.length && !entriesB.length) return null;
+  const hasBoth = entriesA.length > 0 && entriesB.length > 0;
+  // Narrower cols when side-by-side, full cols when solo
+  const colsA = hasBoth
+    ? 'grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2'
+    : 'grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2';
+  const colsB = 'grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2';
+
+  const renderSide = (section: SectionKey, entries: DeckCardEntry[], cols: string) => {
+    if (!entries.length) return null;
+    const qty = entries.reduce((s, e) => s + e.quantity, 0);
+    return (
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-3">
+          <span className={`px-2.5 py-0.5 rounded text-xs font-bold text-white ${SECTION_COLORS[section] ?? 'bg-slate-600'}`}>
+            {SECTION_LABELS[section]}
+          </span>
+          <span className="text-slate-400 text-xs">{entries.length} 種 · {qty} 張</span>
+        </div>
+        <div className={cols}>
+          {sortSection(entries, section).map((e) => (
+            <CardTile key={e.card.webCardId} entry={e} section={section} onClick={onCardClick} onRoleChange={onRoleChange} />
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="mb-6 flex gap-4">
+      {renderSide(sectionA, entriesA, colsA)}
+      {hasBoth && <div className="w-px bg-slate-700 self-stretch" />}
+      {renderSide(sectionB, entriesB, colsB)}
     </div>
   );
 }

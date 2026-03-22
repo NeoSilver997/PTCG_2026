@@ -8,10 +8,12 @@ import apiClient from '@/lib/api-client';
 import {
   type DeckCardEntry,
   type SectionKey,
+  type PokemonRole,
   SECTION_ORDER,
   getSectionKey,
   DeckSection,
   PairedSection,
+  PairedPokemonSection,
   DeckSummary,
   CardDetailModal,
   CopyDeckModal,
@@ -30,6 +32,27 @@ interface DeckResponse {
 function DeckViewInner({ deckCode }: { deckCode: string }) {
   const [selectedCard, setSelectedCard] = useState<DeckCardEntry | null>(null);
   const [showCopyModal, setShowCopyModal] = useState(false);
+
+  const storageKey = `ptcg:pokemon-roles:${deckCode}`;
+  const [roleOverrides, setRoleOverrides] = useState<Map<string, PokemonRole>>(() => {
+    if (typeof window === 'undefined') return new Map();
+    try {
+      const stored = localStorage.getItem(`ptcg:pokemon-roles:${deckCode}`);
+      if (stored) return new Map(Object.entries(JSON.parse(stored) as Record<string, PokemonRole>));
+    } catch { /* ignore */ }
+    return new Map();
+  });
+
+  const handleRoleChange = (canonicalKey: string, role: PokemonRole) => {
+    setRoleOverrides((prev) => {
+      const next = new Map(prev);
+      next.set(canonicalKey, role);
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(Object.fromEntries(next)));
+      } catch { /* ignore */ }
+      return next;
+    });
+  };
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['deck-by-code', deckCode],
@@ -76,11 +99,14 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
         card: { webCardId: c.cardId, name: c.cardName, imageUrl: c.imageUrl },
       }));
 
-  // Group into sections
+  // Group into sections (respects per-card role overrides keyed by canonical/primary card ID)
   const sections = new Map<SectionKey, DeckCardEntry[]>();
   SECTION_ORDER.forEach((k) => sections.set(k, []));
   for (const entry of deckEntries) {
-    sections.get(getSectionKey(entry))!.push(entry);
+    const canonicalKey = entry.card.canonicalWebCardId ?? entry.card.webCardId;
+    const override = roleOverrides.get(canonicalKey);
+    const key: SectionKey = override ?? getSectionKey(entry);
+    sections.get(key)!.push(entry);
   }
 
   return (
@@ -119,11 +145,14 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
           <DeckSummary entries={deckEntries} />
         </div>
 
-        {/* Pokémon: Main attackers */}
-        <DeckSection
-          section="pokemon-main"
-          entries={sections.get('pokemon-main') ?? []}
+        {/* Pokémon: Main attackers + Evolution chain (same row) */}
+        <PairedPokemonSection
+          sectionA="pokemon-main"
+          sectionB="pokemon-evolution"
+          entriesA={sections.get('pokemon-main') ?? []}
+          entriesB={sections.get('pokemon-evolution') ?? []}
           onCardClick={setSelectedCard}
+          onRoleChange={handleRoleChange}
         />
 
         {/* Pokémon: Support / tech */}
@@ -131,6 +160,7 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
           section="pokemon-support"
           entries={sections.get('pokemon-support') ?? []}
           onCardClick={setSelectedCard}
+          onRoleChange={handleRoleChange}
         />
 
         {/* ACE SPEC */}
