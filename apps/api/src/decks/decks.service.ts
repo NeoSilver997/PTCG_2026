@@ -69,6 +69,8 @@ export class DecksService {
                 hp: true,
                 attacks: true,
                 evolutionStage: true,
+                primaryCardId: true,
+                language: true,
               },
             },
           },
@@ -82,8 +84,48 @@ export class DecksService {
     }
 
     await this.hydrateDeckExtras(deck);
+    await this.resolveCanonicalWebCardIds(deck);
 
     return deck;
+  }
+
+  /**
+   * For Pokémon cards, resolve the canonical (preferred JA_JP) webCardId for each
+   * primaryCard, so the UI can link to the correct card rather than whatever
+   * happened to be name-matched during import.
+   * Non-Pokémon cards are unique per name so no resolution is needed.
+   */
+  private async resolveCanonicalWebCardIds(deck: any): Promise<void> {
+    const pokemonEntries = (deck.cards ?? []).filter(
+      (dc: any) => dc.card?.supertype === 'POKEMON' && dc.card?.primaryCardId,
+    );
+    if (pokemonEntries.length === 0) return;
+
+    const primaryCardIds = [...new Set<string>(pokemonEntries.map((dc: any) => dc.card.primaryCardId))];
+
+    // Fetch all language variants for these primaryCards in one query.
+    // Prefer JA_JP first (tournament decks are JP), then any available language.
+    const variants = await this.prisma.card.findMany({
+      where: { primaryCardId: { in: primaryCardIds } },
+      select: { primaryCardId: true, webCardId: true, language: true },
+      orderBy: [{ language: 'asc' }, { createdAt: 'asc' }],
+    });
+
+    // Build primaryCardId -> best webCardId map (JA_JP wins over others)
+    const canonicalMap = new Map<string, string>();
+    for (const v of variants) {
+      const current = canonicalMap.get(v.primaryCardId);
+      if (!current || v.language === 'JA_JP') {
+        canonicalMap.set(v.primaryCardId, v.webCardId);
+      }
+    }
+
+    for (const dc of pokemonEntries) {
+      const canonical = canonicalMap.get(dc.card.primaryCardId);
+      if (canonical) {
+        dc.card.canonicalWebCardId = canonical;
+      }
+    }
   }
 
   async findOneByCode(deckCode: string): Promise<any> {

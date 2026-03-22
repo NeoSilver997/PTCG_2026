@@ -34,6 +34,8 @@ export interface DeckCardDetail {
   hp?: number | null;
   attacks?: AttackData[] | null;
   evolutionStage?: string | null;
+  /** Resolved canonical webCardId for primary-card-based linking (Pokémon only). */
+  canonicalWebCardId?: string | null;
 }
 
 export interface DeckCardEntry {
@@ -336,7 +338,7 @@ export function CardDetailModal({
             {/* Actions */}
             <div className="flex flex-col gap-1.5 pt-1 border-t border-slate-700">
               <Link
-                href={`/cards/${card.webCardId}`}
+                href={`/cards/${card.supertype === 'POKEMON' ? (card.canonicalWebCardId ?? card.webCardId) : card.webCardId}`}
                 target="_blank"
                 className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors"
               >
