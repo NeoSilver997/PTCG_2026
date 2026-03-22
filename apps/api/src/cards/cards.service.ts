@@ -915,15 +915,29 @@ export class CardsService {
   async getRelatedDecks(webCardId: string): Promise<any> {
     const found = await this.prisma.card.findUnique({
       where: { webCardId },
-      select: { id: true },
+      select: { id: true, primaryCardId: true },
     });
     if (!found) throw new NotFoundException(`Card ${webCardId} not found`);
-    const cardId = found.id;
+
+    // Collect all card IDs sharing the same primaryCard (all versions/languages)
+    let cardIds: string[];
+    let versionCount = 1;
+    if (found.primaryCardId) {
+      const siblings = await this.prisma.card.findMany({
+        where: { primaryCardId: found.primaryCardId },
+        select: { id: true },
+      });
+      cardIds = siblings.map((c) => c.id);
+      versionCount = cardIds.length;
+    } else {
+      cardIds = [found.id];
+    }
 
     const [cardDeckRows, totalRows] = await Promise.all([
-      // All decks containing this card across last 12 weeks
+      // All decks containing ANY version of this card across last 52 weeks.
+      // Deduplicate by (week, deckId) so a deck using multiple variants counts once.
       this.prisma.$queryRaw<Array<any>>`
-        SELECT
+        SELECT DISTINCT ON (date_trunc('week', t.date)::date, d.id)
           date_trunc('week', t.date)::date AS week_start,
           d.id AS "deckId",
           d."deckCode",
@@ -938,9 +952,9 @@ export class CardsService {
         JOIN decks d ON d.id = dc."deckId"
         JOIN tournament_results tr ON tr."deckId" = d.id
         JOIN tournaments t ON t.id = tr."tournamentId"
-        WHERE dc."cardId" = ${cardId}
-          AND t.date >= now() - interval '12 weeks'
-        ORDER BY week_start ASC, t.date DESC, tr.placement ASC
+        WHERE dc."cardId" = ANY(${cardIds})
+          AND t.date >= now() - interval '52 weeks'
+        ORDER BY date_trunc('week', t.date)::date ASC, d.id, t.date DESC, tr.placement ASC
       `,
       // Total distinct decks per week (denominator for usage %)
       this.prisma.$queryRaw<Array<{ week_start: Date; total_decks: bigint }>>`
@@ -949,7 +963,7 @@ export class CardsService {
           COUNT(DISTINCT tr."deckId")::bigint AS total_decks
         FROM tournament_results tr
         JOIN tournaments t ON t.id = tr."tournamentId"
-        WHERE t.date >= now() - interval '12 weeks'
+        WHERE t.date >= now() - interval '52 weeks'
           AND tr."deckId" IS NOT NULL
         GROUP BY 1
         ORDER BY 1 ASC
@@ -1005,7 +1019,7 @@ export class CardsService {
         };
       });
 
-    return { weeklyTrend };
+    return { weeklyTrend, versionCount };
   }
 
   /**

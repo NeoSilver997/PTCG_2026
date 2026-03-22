@@ -359,7 +359,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
   const isBasicEnergy = card?.supertype === 'ENERGY' && Array.isArray(card?.subtypes) && card.subtypes.includes('BASIC_ENERGY');
 
   const { data: relatedDecks } = useQuery({
-    queryKey: ['relatedDecks', webCardId],
+    queryKey: ['relatedDecks', card?.primaryCard?.id ?? webCardId],
     queryFn: async () => {
       const { data } = await apiClient.get(`/cards/web/${webCardId}/related-decks`);
       return data;
@@ -1108,7 +1108,14 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                   <>
                     {/* Weekly usage % bar chart */}
                     <div className="mb-5">
-                      <h3 className="text-sm font-medium text-gray-600 mb-3">每週使用率 (近12週) — 點擊週份查看牌組</h3>
+                      <h3 className="text-sm font-medium text-gray-600 mb-3">
+                      每週使用率 (近1年) — 點擊週份查看牌組
+                      {relatedDecks.versionCount > 1 && (
+                        <span className="ml-2 text-xs font-normal text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full">
+                          合計 {relatedDecks.versionCount} 個版本
+                        </span>
+                      )}
+                    </h3>
                       <div className="flex items-end gap-0.5 h-20">
                         {(() => {
                           const maxPct = Math.max(
@@ -1173,7 +1180,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                           (s: number, w: any) => s + (w.deckCount ?? 0),
                           0
                         )}{' '}
-                        個牌組 (近12週)
+                        個牌組 (近1年)
                       </p>
                     </div>
 
