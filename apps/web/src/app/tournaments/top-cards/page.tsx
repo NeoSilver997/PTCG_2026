@@ -47,6 +47,7 @@ interface RawDeckCard {
     subtypes?: string[];
     imageUrl?: string;
     webCardId?: string;
+    rarity?: string | null;
     /** Set by API for Pokémon cards — used to group all variants of the same species */
     primaryCardId?: string;
     /** Resolved canonical webCardId for the primary card (JA_JP preferred) */
@@ -73,6 +74,19 @@ const CATEGORIES: Array<{ key: CategoryKey; label: string; activeClass: string }
 ];
 
 const WEEK_BAR_COLORS = ['bg-slate-300', 'bg-blue-300', 'bg-blue-400', 'bg-blue-500'] as const;
+/** Higher = rarer / better art → prefer that card's image in the top-cards grid */
+const RARITY_RANK: Record<string, number> = {
+  HYPER_RARE: 10,
+  SPECIAL_ILLUSTRATION_RARE: 9,
+  ULTRA_RARE: 8,
+  ILLUSTRATION_RARE: 7,
+  ACE_SPEC_RARE: 6,
+  DOUBLE_RARE: 5,
+  RARE: 4,
+  PROMO: 3,
+  UNCOMMON: 2,
+  COMMON: 1,
+};
 
 // ── Data helpers ───────────────────────────────────────────────────────────────
 function toDateStr(d: Date): string {
@@ -188,7 +202,7 @@ async function buildWeeklyTopCards(
   // Trainers & Energy are keyed by webCardId / name (they are unique per name).
   const cardMap = new Map<string, {
     name: string; imageUrl: string | null; supertype: string;
-    subtypes: string[]; webCardId?: string;
+    subtypes: string[]; webCardId?: string; _rarityRank: number;
     weeklyUsage: [number, number, number, number];
   }>();
 
@@ -202,16 +216,12 @@ async function buildWeeklyTopCards(
       const subtypes = c.subtypes ?? [];
       if (!matchesCategory(supertype, subtypes, category)) continue;
 
-      // Pok\u00e9mon: group by species name — same Pok\u00e9mon across different sets
-      // (different expansion versions, different attacks/primaryCardId) must be
-      // merged into one usage row. primaryCardId only links language variants of
-      // the *exact same printing*, so it's too granular here.
-      // Trainers/Energy: group by webCardId (unique per name) with name fallback.
-      const mapKey =
-        supertype === 'POKEMON'
-          ? c.name
-          : (c.webCardId ?? c.name);
+      // Group by name for all card types — same-named cards across different sets
+      // (different printings of リーリエの決心, ドラメシヤ, etc.) are treated as
+      // one entry. webCardId / canonicalWebCardId is still resolved for the link.
+      const mapKey = c.name;
 
+      const incomingRarityRank = RARITY_RANK[c.rarity ?? ''] ?? 0;
       let entry = cardMap.get(mapKey);
       if (!entry) {
         entry = {
@@ -221,12 +231,18 @@ async function buildWeeklyTopCards(
           subtypes,
           // Prefer canonicalWebCardId so the card-page link goes to the right variant
           webCardId: c.canonicalWebCardId ?? c.webCardId,
+          _rarityRank: incomingRarityRank,
           weeklyUsage: [0, 0, 0, 0],
         };
         cardMap.set(mapKey, entry);
       } else {
-        // Keep the best available imageUrl and webCardId
-        if (!entry.imageUrl && c.imageUrl) entry.imageUrl = c.imageUrl;
+        // Use image from the highest-rarity version seen (best card art)
+        if (c.imageUrl && incomingRarityRank > entry._rarityRank) {
+          entry.imageUrl = c.imageUrl;
+          entry._rarityRank = incomingRarityRank;
+        } else if (!entry.imageUrl && c.imageUrl) {
+          entry.imageUrl = c.imageUrl;
+        }
         // Upgrade webCardId: canonicalWebCardId > jp* > anything
         if (c.canonicalWebCardId) {
           entry.webCardId = c.canonicalWebCardId;
@@ -281,7 +297,7 @@ async function buildWeeklyTopCards(
     })
     .sort((a, b) => b.totalUsage - a.totalUsage);
 
-  const cards: WeeklyTopCard[] = baseCards.slice(0, 30).map((c, i) => {
+  const cards: WeeklyTopCard[] = baseCards.slice(0, 50).map((c, i) => {
     const cardKey = c.webCardId ?? c.name;
     const priorUsage3w = c.weeklyUsage[0] + c.weeklyUsage[1] + c.weeklyUsage[2];
     const priorRank = priorRankMap.get(cardKey) ?? null;
@@ -552,8 +568,8 @@ function RankChangeIndicator({ rankChange, priorRank }: { rankChange: number | n
 }
 
 // ── Weekly top-10 local cache ─────────────────────────────────────────────────
-// v4: group Pok\u00e9mon by species name (not primaryCardId) for cross-set aggregation
-const CACHE_VER = 'v4';
+// v6: default % view, top-50, best-rarity image, full-width trend bars
+const CACHE_VER = 'v6';
 function getCacheKey(region: string, cat: CategoryKey, weekKey: string) {
   return `ptcg-topcards-${CACHE_VER}-${region || 'all'}-${cat}-${weekKey}`;
 }
@@ -572,7 +588,7 @@ function saveCache(key: string, data: TopCardsPeriodData): void {
   try {
     localStorage.setItem(key, JSON.stringify({
       ...data,
-      cards: data.cards.slice(0, 10),
+      cards: data.cards.slice(0, 50),
       _cachedAt: Date.now(),
     }));
   } catch { /* storage full – ignore */ }
@@ -584,7 +600,7 @@ export default function TopCardsPage() {
   const [region, setRegion] = useState('');
   const [category, setCategory] = useState<CategoryKey>('pokemon');
   const [periodEnd, setPeriodEnd] = useState(today);
-  const [viewMode, setViewMode] = useState<ViewMode>('count');
+  const [viewMode, setViewMode] = useState<ViewMode>('pct');
   const [selectedCard, setSelectedCard] = useState<WeeklyTopCard | null>(null);
 
   // ── Per-week localStorage cache ──
@@ -631,7 +647,7 @@ export default function TopCardsPage() {
           </Link>
           <h1 className="text-3xl font-bold">⚡ Top Cards · Meta Trend</h1>
           <p className="text-purple-200 mt-1">
-            Top 30 tournament-used cards with 4-week usage trends
+            Top 50 tournament-used cards with 4-week usage trends
             {periodRange && <> · <span className="text-white font-medium">{periodRange}</span></>}
           </p>
         </div>
@@ -771,7 +787,7 @@ export default function TopCardsPage() {
           </div>
         )}
 
-        {/* Top 30 grid */}
+        {/* Top 50 grid */}
         {!isLoading && !isFetching && !error && data && data.cards.length > 0 && (
           <>
             <p className="text-xs text-gray-400 mb-3 px-0.5">
@@ -800,52 +816,49 @@ export default function TopCardsPage() {
                     )}
                   </div>
 
-                  {/* Card image */}
-                  <div className="flex justify-center">
-                    {card.imageUrl ? (
-                      <div
-                        className="relative w-full max-w-[90px] rounded-lg overflow-hidden bg-gray-100 border border-gray-200 group-hover:shadow-md transition-shadow mx-auto"
-                        style={{ aspectRatio: '2.5/3.5' }}
-                      >
-                        <Image
-                          src={card.imageUrl}
-                          alt={card.name}
-                          fill
-                          sizes="90px"
-                          className="object-cover"
-                          unoptimized
-                        />
-                      </div>
-                    ) : (
-                      <div
-                        className="w-full max-w-[90px] rounded-lg bg-gray-100 flex items-center justify-center border border-gray-200 mx-auto"
-                        style={{ aspectRatio: '2.5/3.5' }}
-                      >
-                        <span className="text-gray-400 text-sm">?</span>
-                      </div>
-                    )}
+                  {/* Card image — full-width, best-rarity art */}
+                  {card.imageUrl ? (
+                    <div
+                      className="relative w-full rounded-lg overflow-hidden bg-gray-100 border border-gray-200 group-hover:shadow-md transition-shadow"
+                      style={{ aspectRatio: '2.5/3.5' }}
+                    >
+                      <Image
+                        src={card.imageUrl}
+                        alt={card.name}
+                        fill
+                        sizes="160px"
+                        className="object-cover"
+                        unoptimized
+                      />
+                    </div>
+                  ) : (
+                    <div
+                      className="w-full rounded-lg bg-gray-100 flex items-center justify-center border border-gray-200"
+                      style={{ aspectRatio: '2.5/3.5' }}
+                    >
+                      <span className="text-gray-400 text-sm">?</span>
+                    </div>
+                  )}
+
+                  {/* Stats: always show both % and total count */}
+                  <div className="flex items-baseline justify-between gap-1 px-0.5">
+                    <span className="font-bold text-purple-600 text-sm leading-none">{card.totalPct}%</span>
+                    <span className="text-[10px] text-gray-400">{card.totalUsage.toLocaleString()} uses</span>
                   </div>
 
-                  {/* Stat + trend bar */}
-                  <div className="flex items-end justify-between gap-2 px-0.5">
-                    {viewMode === 'count' ? (
-                      <p className="text-[10px] text-gray-500">
-                        <span className="font-bold text-gray-700 text-xs">{card.totalUsage.toLocaleString()}</span>
-                        {' uses'}
-                      </p>
-                    ) : (
-                      <p className="text-[10px] text-gray-500">
-                        <span className="font-bold text-purple-600 text-xs">{card.totalPct}%</span>
-                        {' avg'}
-                      </p>
-                    )}
-                    <MiniTrendBar
-                      weeklyUsage={card.weeklyUsage}
-                      weeklyPct={card.weeklyPct}
-                      maxUsage={cardMaxWeekly}
-                      maxPct={cardMaxPct}
-                      viewMode={viewMode}
-                    />
+                  {/* 4-week trend sparkline — full width */}
+                  <div className="flex items-end gap-0.5 h-7 w-full px-0.5">
+                    {(viewMode === 'pct' ? card.weeklyPct : card.weeklyUsage).map((v, i) => {
+                      const maxVal = (viewMode === 'pct' ? cardMaxPct : cardMaxWeekly) || 1;
+                      return (
+                        <div
+                          key={i}
+                          className={`flex-1 rounded-sm ${WEEK_BAR_COLORS[i]}`}
+                          style={{ height: `${Math.max(10, (v / maxVal) * 100)}%` }}
+                          title={viewMode === 'pct' ? `W${i + 1}: ${v}%` : `W${i + 1}: ${v}`}
+                        />
+                      );
+                    })}
                   </div>
                 </button>
               ))}
