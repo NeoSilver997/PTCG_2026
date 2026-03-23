@@ -754,4 +754,172 @@ export class TournamentsService {
       })),
     };
   }
+
+  async getPlayerLeaderboard(regionRaw?: string, sinceDateRaw?: string, limitRaw?: string) {
+    const validRegions = new Set(['JP', 'HK', 'EN']);
+    const region = regionRaw && validRegions.has(regionRaw.toUpperCase())
+      ? regionRaw.toUpperCase()
+      : null;
+    const limit = Math.min(Math.max(Number(limitRaw || 50) || 50, 10), 200);
+
+    const regionSql = region ? `AND t.region = '${region}'` : '';
+    const sinceDate = sinceDateRaw && /^\d{4}-\d{2}-\d{2}$/.test(sinceDateRaw)
+      ? sinceDateRaw
+      : null;
+    const sinceDateSql = sinceDate ? `AND t.date >= '${sinceDate}'::timestamp` : '';
+
+    const rows = await this.prisma.$queryRawUnsafe<Array<{
+      rank: number;
+      player_name: string;
+      total_points: number;
+      tournaments_played: number;
+      best_placement: number;
+      wins: number;
+      last_decks: string | any[] | null;
+    }>>(
+      `
+      WITH pre_evolutions AS (
+        SELECT DISTINCT dc."deckId", c_base.name as pre_evo_name
+        FROM deck_cards dc
+        JOIN cards c_evolved ON c_evolved.id = dc."cardId"
+          AND c_evolved.supertype = 'POKEMON'
+          AND c_evolved."evolvesFrom" IS NOT NULL
+        JOIN cards c_base ON c_base.name = c_evolved."evolvesFrom" AND c_base.supertype = 'POKEMON'
+        JOIN deck_cards dc_base ON dc_base."deckId" = dc."deckId" AND dc_base."cardId" = c_base.id
+        JOIN tournament_results tr ON tr."deckId" = dc."deckId"
+        JOIN tournaments t ON t.id = tr."tournamentId"
+        WHERE 1=1 ${regionSql} ${sinceDateSql}
+      ),
+      deck_key_pokemon AS (
+        SELECT
+          d.id as deck_id,
+          c.name,
+          c."imageUrl",
+          dc.quantity,
+          ROW_NUMBER() OVER (
+            PARTITION BY d.id
+            ORDER BY
+              (CASE WHEN c.name ILIKE '%ex' THEN 1000 ELSE 0 END +
+               CASE c."evolutionStage"
+                 WHEN 'STAGE_2' THEN 300
+                 WHEN 'STAGE_1' THEN 200
+                 ELSE 100
+               END) DESC,
+              dc.quantity DESC,
+              c.name ASC
+          ) as rn
+        FROM decks d
+        JOIN deck_cards dc ON dc."deckId" = d.id
+        JOIN cards c ON c.id = dc."cardId"
+        WHERE c.supertype = 'POKEMON' AND dc.quantity >= 2
+          AND NOT EXISTS (
+            SELECT 1 FROM pre_evolutions pe WHERE pe."deckId" = d.id AND pe.pre_evo_name = c.name
+          )
+      ),
+      deck_archetype_names AS (
+        SELECT
+          deck_id,
+          CASE
+            WHEN COUNT(*) >= 2
+              THEN MIN(CASE WHEN rn = 1 THEN name END) || '/' || MIN(CASE WHEN rn = 2 THEN name END)
+            ELSE MIN(CASE WHEN rn = 1 THEN name END)
+          END as archetype_name,
+          MIN(CASE WHEN rn = 1 THEN "imageUrl" END) as key1_image,
+          MIN(CASE WHEN rn = 2 THEN "imageUrl" END) as key2_image
+        FROM deck_key_pokemon
+        WHERE rn <= 2
+        GROUP BY deck_id
+      ),
+      player_points AS (
+        SELECT
+          tr."playerName" as player_name,
+          tr.id as result_id,
+          tr.placement,
+          tr."deckId" as deck_id,
+          t.name as tournament_name,
+          t.date as tournament_date,
+          t."eventId" as event_id,
+          CASE
+            WHEN tr.placement = 1 THEN 20
+            WHEN tr.placement = 2 THEN 10
+            WHEN tr.placement = 3 THEN 5
+            WHEN tr.placement = 4 THEN 3
+            WHEN tr.placement <= 8 THEN 2
+            WHEN tr.placement <= 16 THEN 1
+            ELSE 0
+          END as pts
+        FROM tournament_results tr
+        JOIN tournaments t ON t.id = tr."tournamentId"
+        WHERE tr."deckId" IS NOT NULL ${regionSql} ${sinceDateSql}
+      ),
+      player_totals AS (
+        SELECT
+          player_name,
+          SUM(pts)::int as total_points,
+          COUNT(*)::int as tournaments_played,
+          MIN(placement)::int as best_placement,
+          SUM(CASE WHEN placement = 1 THEN 1 ELSE 0 END)::int as wins,
+          ROW_NUMBER() OVER (ORDER BY SUM(pts) DESC, MIN(placement) ASC, player_name ASC) as rank
+        FROM player_points
+        GROUP BY player_name
+        LIMIT ${limit}
+      ),
+      player_last_decks AS (
+        SELECT
+          pp.player_name,
+          pp.placement,
+          pp.tournament_name,
+          pp.tournament_date,
+          pp.event_id,
+          d."deckCode" as deck_code,
+          COALESCE(dan.archetype_name, '???') as archetype_name,
+          dan.key1_image,
+          dan.key2_image,
+          ROW_NUMBER() OVER (PARTITION BY pp.player_name ORDER BY pp.tournament_date DESC, pp.placement ASC) as deck_rn
+        FROM player_points pp
+        JOIN player_totals pt ON pt.player_name = pp.player_name
+        LEFT JOIN decks d ON d.id = pp.deck_id
+        LEFT JOIN deck_archetype_names dan ON dan.deck_id = pp.deck_id
+      )
+      SELECT
+        pt.rank,
+        pt.player_name,
+        pt.total_points,
+        pt.tournaments_played,
+        pt.best_placement,
+        pt.wins,
+        json_agg(
+          json_build_object(
+            'placement', pld.placement,
+            'tournamentName', pld.tournament_name,
+            'tournamentDate', pld.tournament_date,
+            'eventId', pld.event_id,
+            'deckCode', pld.deck_code,
+            'archetypeName', pld.archetype_name,
+            'key1Image', pld.key1_image,
+            'key2Image', pld.key2_image
+          ) ORDER BY pld.tournament_date DESC, pld.placement ASC
+        ) FILTER (WHERE pld.deck_rn <= 5) as last_decks
+      FROM player_totals pt
+      LEFT JOIN player_last_decks pld ON pld.player_name = pt.player_name AND pld.deck_rn <= 5
+      GROUP BY pt.rank, pt.player_name, pt.total_points, pt.tournaments_played, pt.best_placement, pt.wins
+      ORDER BY pt.rank
+      `,
+    );
+
+    return rows.map(r => ({
+      rank: Number(r.rank),
+      playerName: r.player_name,
+      totalPoints: Number(r.total_points),
+      tournamentsPlayed: Number(r.tournaments_played),
+      bestPlacement: Number(r.best_placement),
+      wins: Number(r.wins),
+      lastDecks: (() => {
+        try {
+          const d = typeof r.last_decks === 'string' ? JSON.parse(r.last_decks) : r.last_decks;
+          return Array.isArray(d) ? d : [];
+        } catch { return []; }
+      })(),
+    }));
+  }
 }

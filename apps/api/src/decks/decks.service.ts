@@ -259,4 +259,52 @@ export class DecksService {
       }
     }
   }
+
+  /* ── Pokémon role overrides per event deck ───────────────────── */
+
+  /** Returns the most-recently assigned role for each card across ALL decks (for cross-deck presets). */
+  async lookupCardRoles(cardIds: string[]): Promise<Record<string, string>> {
+    if (!cardIds.length) return {};
+    const rows = await this.prisma.$queryRaw<Array<{ canonicalWebCardId: string; role: string }>>`
+      SELECT DISTINCT ON ("canonicalWebCardId") "canonicalWebCardId", role::text
+      FROM deck_card_roles
+      WHERE "canonicalWebCardId" = ANY(${cardIds})
+      ORDER BY "canonicalWebCardId", "updatedAt" DESC
+    `;
+    return Object.fromEntries(rows.map((r) => [r.canonicalWebCardId, r.role]));
+  }
+
+  /** Returns a map of canonicalWebCardId → role for all saved overrides in a deck. */
+  async getRolesForDeck(deckCode: string): Promise<Record<string, string>> {
+    const rows = await this.prisma.$queryRaw<Array<{ canonicalWebCardId: string; role: string }>>`
+      SELECT "canonicalWebCardId", role::text FROM deck_card_roles
+      WHERE "deckCode" = ${deckCode}
+    `;
+    return Object.fromEntries(rows.map((r) => [r.canonicalWebCardId, r.role]));
+  }
+
+  /** Upserts a single role override. Returns the saved entry. */
+  async upsertRole(deckCode: string, canonicalWebCardId: string, role: string): Promise<{ canonicalWebCardId: string; role: string }> {
+    const VALID_ROLES = ['POKEMON_MAIN', 'POKEMON_SUPPORT', 'POKEMON_EVOLUTION'];
+    if (!VALID_ROLES.includes(role)) {
+      throw new BadRequestException(`Invalid role: ${role}. Must be one of ${VALID_ROLES.join(', ')}`);
+    }
+    const id = `${deckCode}:${canonicalWebCardId}`;
+    await this.prisma.$executeRaw`
+      INSERT INTO deck_card_roles (id, "deckCode", "canonicalWebCardId", role, "createdAt", "updatedAt")
+      VALUES (${id}, ${deckCode}, ${canonicalWebCardId}, ${role}::"DeckPokemonRole", NOW(), NOW())
+      ON CONFLICT ("deckCode", "canonicalWebCardId")
+      DO UPDATE SET role = ${role}::"DeckPokemonRole", "updatedAt" = NOW()
+    `;
+    return { canonicalWebCardId, role };
+  }
+
+  /** Removes a single role override (card reverts to heuristic). */
+  async clearRole(deckCode: string, canonicalWebCardId: string): Promise<void> {
+    await this.prisma.$executeRaw`
+      DELETE FROM deck_card_roles
+      WHERE "deckCode" = ${deckCode} AND "canonicalWebCardId" = ${canonicalWebCardId}
+    `;
+  }
 }
+

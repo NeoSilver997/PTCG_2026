@@ -135,12 +135,16 @@ export function getSectionKey(entry: DeckCardEntry): SectionKey {
 
 export function sortSection(entries: DeckCardEntry[], section: SectionKey): DeckCardEntry[] {
   return [...entries].sort((a, b) => {
+    // Primary sort: quantity descending (most copies first = highest usage in this deck)
+    const qDiff = b.quantity - a.quantity;
+    if (qDiff !== 0) return qDiff;
+    // Secondary sort for Pokémon: HP desc → max damage desc
     if (section === 'pokemon-main' || section === 'pokemon-support' || section === 'pokemon-evolution') {
       const hpDiff = (b.card.hp ?? 0) - (a.card.hp ?? 0);
       if (hpDiff !== 0) return hpDiff;
       return maxDamage(b.card.attacks) - maxDamage(a.card.attacks);
     }
-    return b.quantity - a.quantity || (a.card.name ?? '').localeCompare(b.card.name ?? '');
+    return (a.card.name ?? '').localeCompare(b.card.name ?? '');
   });
 }
 

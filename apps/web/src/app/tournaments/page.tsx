@@ -125,10 +125,20 @@ export default function TournamentsPage() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-gradient-to-r from-purple-700 to-blue-600 text-white px-6 py-8">
-        <h1 className="text-3xl font-bold">Tournaments</h1>
-        <p className="text-purple-200 mt-1 text-lg">
-          {isLoading ? 'Loading...' : <><span className="font-bold text-white">{total.toLocaleString()}</span> events found</>}
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold">Tournaments</h1>
+            <p className="text-purple-200 mt-1 text-lg">
+              {isLoading ? 'Loading...' : <><span className="font-bold text-white">{total.toLocaleString()}</span> events found</>}
+            </p>
+          </div>
+          <Link
+            href="/tournaments/leaderboard"
+            className="flex items-center gap-2 px-4 py-2 bg-white/15 hover:bg-white/25 border border-white/30 rounded-lg text-white text-sm font-medium transition"
+          >
+            🏆 Player Leaderboard
+          </Link>
+        </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-4">

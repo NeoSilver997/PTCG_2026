@@ -1,7 +1,7 @@
 'use client';
 
-import { use, useState, Suspense } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { use, useState, useEffect, Suspense } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { Copy } from 'lucide-react';
 import apiClient from '@/lib/api-client';
@@ -33,25 +33,69 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
   const [selectedCard, setSelectedCard] = useState<DeckCardEntry | null>(null);
   const [showCopyModal, setShowCopyModal] = useState(false);
 
+  const DB_TO_ROLE: Record<string, PokemonRole> = {
+    POKEMON_MAIN: 'pokemon-main',
+    POKEMON_SUPPORT: 'pokemon-support',
+    POKEMON_EVOLUTION: 'pokemon-evolution',
+  };
+  const DB_ROLE: Record<PokemonRole, string> = {
+    'pokemon-main': 'POKEMON_MAIN',
+    'pokemon-support': 'POKEMON_SUPPORT',
+    'pokemon-evolution': 'POKEMON_EVOLUTION',
+  };
+
   const storageKey = `ptcg:pokemon-roles:${deckCode}`;
-  const [roleOverrides, setRoleOverrides] = useState<Map<string, PokemonRole>>(() => {
+  const queryClient = useQueryClient();
+
+  // DB roles for this deck (source of truth)
+  const { data: dbRoles } = useQuery<Record<string, string>>({
+    queryKey: ['deck-roles', deckCode],
+    queryFn: async () => {
+      const res = await apiClient.get<Record<string, string>>(`/decks/code/${deckCode}/roles`);
+      try { localStorage.setItem(storageKey, JSON.stringify(res.data)); } catch { /**/ }
+      return res.data;
+    },
+    staleTime: 0,
+  });
+
+  // Local state: seeded from localStorage for instant rendering, then synced from DB
+  const [localRoles, setLocalRoles] = useState<Map<string, PokemonRole>>(() => {
     if (typeof window === 'undefined') return new Map();
     try {
-      const stored = localStorage.getItem(`ptcg:pokemon-roles:${deckCode}`);
+      const stored = localStorage.getItem(storageKey);
       if (stored) return new Map(Object.entries(JSON.parse(stored) as Record<string, PokemonRole>));
-    } catch { /* ignore */ }
+    } catch { /**/ }
     return new Map();
   });
 
-  const handleRoleChange = (canonicalKey: string, role: PokemonRole) => {
-    setRoleOverrides((prev) => {
+  // Sync deck-specific DB roles → local state (merge: DB wins per-card, keep unrelated local entries)
+  useEffect(() => {
+    if (!dbRoles) return;
+    setLocalRoles((prev) => {
       const next = new Map(prev);
-      next.set(canonicalKey, role);
-      try {
-        localStorage.setItem(storageKey, JSON.stringify(Object.fromEntries(next)));
-      } catch { /* ignore */ }
+      for (const [k, v] of Object.entries(dbRoles)) {
+        const mapped = DB_TO_ROLE[v] ?? v as PokemonRole;
+        if (mapped) next.set(k, mapped);
+      }
       return next;
     });
+  }, [dbRoles]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const upsertMutation = useMutation({
+    mutationFn: async ({ cardId, role }: { cardId: string; role: PokemonRole }) => {
+      await apiClient.put(`/decks/code/${deckCode}/roles/${cardId}`, { role: DB_ROLE[role] });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['deck-roles', deckCode] }),
+  });
+
+  const handleRoleChange = (canonicalKey: string, role: PokemonRole) => {
+    setLocalRoles((prev) => {
+      const next = new Map(prev);
+      next.set(canonicalKey, role);
+      try { localStorage.setItem(storageKey, JSON.stringify(Object.fromEntries(next))); } catch { /**/ }
+      return next;
+    });
+    upsertMutation.mutate({ cardId: canonicalKey, role });
   };
 
   const { data, isLoading, isError } = useQuery({
@@ -71,6 +115,57 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
       }
     },
   });
+
+  // Collect Pokémon canonical IDs from already-loaded deck data (safe with undefined)
+  const pokemonCanonicalIds = [...new Set(
+    (data?.cards ?? [])
+      .filter((e) => e.card.supertype === 'POKEMON')
+      .map((e) => e.card.canonicalWebCardId ?? e.card.webCardId)
+      .filter((id): id is string => !!id)
+  )];
+
+  // Cross-deck role lookup: fills defaults for cards not yet assigned in this deck
+  const { data: globalRoles } = useQuery<Record<string, string>>({
+    queryKey: ['global-roles', deckCode],
+    queryFn: async () => {
+      if (!pokemonCanonicalIds.length) return {};
+      const res = await apiClient.get<Record<string, string>>(
+        `/decks/roles/lookup?cards=${pokemonCanonicalIds.join(',')}`
+      );
+      return res.data;
+    },
+    enabled: !!data && pokemonCanonicalIds.length > 0,
+    staleTime: 60_000,
+  });
+
+  // Apply cross-deck presets: global role wins when this deck has no deck-specific override
+  useEffect(() => {
+    if (!globalRoles || !dbRoles) return;
+    setLocalRoles((prev) => {
+      const next = new Map(prev);
+      let changed = false;
+      for (const [cardId, dbRoleStr] of Object.entries(globalRoles)) {
+        // Skip if this specific deck has an explicit saved role for this card
+        if (dbRoles[cardId]) continue;
+        const mapped = DB_TO_ROLE[dbRoleStr];
+        if (mapped && next.get(cardId) !== mapped) { next.set(cardId, mapped); changed = true; }
+      }
+      return changed ? next : prev;
+    });
+  }, [globalRoles, dbRoles]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Remap: force-apply all saved roles (clears local state, re-seeds from DB + global)
+  const handleRemapRoles = () => {
+    const fresh = new Map<string, PokemonRole>();
+    for (const [k, v] of Object.entries(dbRoles ?? {})) {
+      const mapped = DB_TO_ROLE[v]; if (mapped) fresh.set(k, mapped);
+    }
+    for (const [k, v] of Object.entries(globalRoles ?? {})) {
+      if (!fresh.has(k)) { const mapped = DB_TO_ROLE[v]; if (mapped) fresh.set(k, mapped); }
+    }
+    setLocalRoles(fresh);
+    try { localStorage.setItem(storageKey, JSON.stringify(Object.fromEntries(fresh))); } catch { /**/ }
+  };
 
   if (isLoading) {
     return (
@@ -104,7 +199,7 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
   SECTION_ORDER.forEach((k) => sections.set(k, []));
   for (const entry of deckEntries) {
     const canonicalKey = entry.card.canonicalWebCardId ?? entry.card.webCardId;
-    const override = roleOverrides.get(canonicalKey);
+    const override = localRoles.get(canonicalKey);
     const key: SectionKey = override ?? getSectionKey(entry);
     sections.get(key)!.push(entry);
   }
@@ -119,6 +214,13 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
             ← Archetypes
           </Link>
           <div className="flex-1" />
+          <button
+            onClick={handleRemapRoles}
+            title="Reset sections using saved roles from deck_card_roles"
+            className="px-3 py-1.5 bg-slate-600 hover:bg-slate-500 text-slate-200 text-sm rounded-lg transition"
+          >
+            ↺ 重設角色
+          </button>
           <button
             onClick={() => setShowCopyModal(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded-lg transition shadow-md"

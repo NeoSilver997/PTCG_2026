@@ -235,6 +235,20 @@ model BattleLog {
   @@map("battle_logs")
 }
 
+// Pokémon role overrides per event deck (keyed by deckCode + canonicalWebCardId)
+model DeckCardRole {
+  id                 String          @id @default(cuid())
+  deckCode           String
+  canonicalWebCardId String
+  role               DeckPokemonRole
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  @@unique([deckCode, canonicalWebCardId])
+  @@index([deckCode])
+  @@map("deck_card_roles")
+}
+
 model Deck {
   id                 String             @id @default(cuid())
   userId             String?
@@ -462,6 +476,12 @@ enum DeckArchetype {
   MIDRANGE
   TOOLBOX
   OTHER
+}
+
+enum DeckPokemonRole {
+  POKEMON_MAIN
+  POKEMON_SUPPORT
+  POKEMON_EVOLUTION
 }
 
 enum PriceSource {

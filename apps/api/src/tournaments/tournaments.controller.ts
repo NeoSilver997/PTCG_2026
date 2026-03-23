@@ -64,6 +64,18 @@ export class TournamentsController {
     return this.tournamentsService.getArchetypeDecks(archetypeName, region, sinceDate, skip, take);
   }
 
+  @Get('leaderboard')
+  @Throttle({ long: { limit: 100, ttl: 60000 } })
+  @ApiOperation({ summary: 'Top 50 players by tournament points with last 5 decks' })
+  @ApiResponse({ status: 200, description: 'Player leaderboard' })
+  getPlayerLeaderboard(
+    @Query('region') region?: string,
+    @Query('sinceDate') sinceDate?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.tournamentsService.getPlayerLeaderboard(region, sinceDate, limit);
+  }
+
   @Get('event/:eventId')
   @Throttle({ long: { limit: 100, ttl: 60000 } })
   @ApiOperation({ summary: 'Get tournament by external event ID with results and decks' })
