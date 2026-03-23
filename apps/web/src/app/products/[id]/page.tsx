@@ -2,7 +2,6 @@
 
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/api-client';
-import { Navbar } from '@/components/navbar';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Edit, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
@@ -74,7 +73,6 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Navbar />
         <div className="w-full px-6 py-8">
           <div className="text-center py-12">載入中...</div>
         </div>
@@ -85,7 +83,6 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
   if (error || !product) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Navbar />
         <div className="w-full px-6 py-8">
           <div className="text-center py-12 text-red-600">
             找不到商品或載入失敗
@@ -97,7 +94,6 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navbar />
 
       <div className="w-full px-6 py-8">
         {/* Header */}

@@ -2,7 +2,6 @@
 
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/api-client';
-import { Navbar } from '@/components/navbar';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
@@ -371,7 +370,6 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Navbar />
         <div className="w-full px-6 py-8">
           <div className="text-center">載入中...</div>
         </div>
@@ -382,7 +380,6 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
   if (error || !card) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Navbar />
         <div className="w-full px-6 py-8">
           <div className="text-center text-red-600">找不到卡片資料</div>
         </div>
@@ -392,7 +389,6 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navbar />
 
       <div className="w-full px-6 py-8">
         {/* Back Button */}

@@ -645,6 +645,21 @@ export class CardsService {
             const subtypeConditions = value.hasSome.map(st => `c."${key}" @> '["${st}"]'::jsonb`);
             return subtypeConditions.length > 0 ? `(${subtypeConditions.join(' OR ')})` : null;
           }
+          if (key === 'webCardId' && typeof value === 'string')
+            return `c."webCardId" = '${value.replace(/'/g, "''")}'`;
+          if (key === 'artist' && typeof value === 'object' && value !== null && 'contains' in value)
+            return `c."artist" ILIKE '%${String((value as any).contains).replace(/'/g, "''")}'`;
+          if (key === 'hp' && typeof value === 'object' && value !== null) {
+            const hpParts: string[] = [];
+            if ((value as any).gte !== undefined) hpParts.push(`c.hp >= ${Number((value as any).gte)}`);
+            if ((value as any).lte !== undefined) hpParts.push(`c.hp <= ${Number((value as any).lte)}`);
+            return hpParts.length > 0 ? `(${hpParts.join(' AND ')})` : null;
+          }
+          if (key === 'regionalExpansion' && typeof value === 'object' && value !== null && 'code' in value) {
+            const codeVal = (value as any).code;
+            const codeStr = typeof codeVal === 'string' ? codeVal : codeVal?.equals;
+            if (codeStr) return `re.code ILIKE '${codeStr.replace(/'/g, "''")}'`;
+          }
           return null;
         })
         .filter(Boolean);
@@ -701,7 +716,11 @@ export class CardsService {
           LIMIT ${Math.min(take, 100)} OFFSET ${skip}
         `),
         this.prisma.$queryRawUnsafe<[{ count: bigint }]>(`
-          SELECT COUNT(*) as count FROM cards c ${whereClause}
+          SELECT COUNT(*) as count FROM cards c
+          LEFT JOIN primary_cards pc ON c."primaryCardId" = pc.id
+          LEFT JOIN regional_expansions re ON c."regionalExpansionId" = re.id
+          LEFT JOIN primary_expansions pe ON re."primaryExpansionId" = pe.id
+          ${whereClause}
         `)
       ]);
 
@@ -1173,5 +1192,44 @@ export class CardsService {
       where: { webCardId },
       data: updateData,
     });
+  }
+
+  async getCardStats(): Promise<{
+    total: number;
+    byLanguage: Array<{ language: string; count: number }>;
+    bySupertype: Array<{ supertype: string; count: number }>;
+    byExpansion: Array<{ code: string; nameEn: string; count: number }>;
+  }> {
+    const [total, byLanguage, bySupertype, byExpansion] = await Promise.all([
+      this.prisma.card.count(),
+
+      this.prisma.$queryRaw<Array<{ language: string; count: number }>>`
+        SELECT language::text, COUNT(*)::int as count
+        FROM cards GROUP BY language ORDER BY count DESC
+      `,
+
+      this.prisma.$queryRaw<Array<{ supertype: string; count: number }>>`
+        SELECT supertype::text, COUNT(*)::int as count
+        FROM cards WHERE supertype IS NOT NULL
+        GROUP BY supertype ORDER BY count DESC
+      `,
+
+      this.prisma.$queryRaw<Array<{ code: string; nameEn: string; count: number }>>`
+        SELECT pe.code, pe."nameEn", COUNT(c.id)::int as count
+        FROM cards c
+        JOIN primary_cards pc ON pc.id = c."primaryCardId"
+        JOIN primary_expansions pe ON pe.id = pc."primaryExpansionId"
+        GROUP BY pe.code, pe."nameEn"
+        ORDER BY count DESC
+        LIMIT 30
+      `,
+    ]);
+
+    return {
+      total,
+      byLanguage: byLanguage.map((r) => ({ language: r.language, count: Number(r.count) })),
+      bySupertype: bySupertype.map((r) => ({ supertype: r.supertype, count: Number(r.count) })),
+      byExpansion: byExpansion.map((r) => ({ code: r.code, nameEn: r.nameEn, count: Number(r.count) })),
+    };
   }
 }

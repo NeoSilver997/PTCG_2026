@@ -4,7 +4,6 @@ import { use, useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/api-client';
 import Link from 'next/link';
-import { Navbar } from '@/components/navbar';
 import { Plus, Trash2, Copy } from 'lucide-react';
 
 interface RelatedCardEntry {
@@ -396,7 +395,6 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navbar />
 
       <div className="w-full px-6 py-8">
         {isLoading && (

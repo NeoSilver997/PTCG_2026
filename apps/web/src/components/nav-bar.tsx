@@ -4,38 +4,40 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const navLinks = [
-  { href: '/cards', label: 'Cards' },
+  { href: '/cards',       label: 'Cards' },
   { href: '/tournaments', label: 'Tournaments' },
   { href: '/deck-builder', label: 'Deck Builder' },
   { href: '/deck-studio', label: 'Deck Studio' },
-  { href: '/battles', label: 'Battles' },
-  { href: '/inventory', label: 'Inventory' },
-  { href: '/market', label: 'Market' },
-  { href: '/admin/scraper-jobs', label: 'Scraper Jobs' },
+  { href: '/battles',     label: 'Battles' },
+  { href: '/browse',      label: 'Browse' },
+  { href: '/inventory',   label: 'Inventory' },
+  { href: '/market',      label: 'Market' },
+  { href: '/products',    label: 'Products' },
+  { href: '/admin/scraper-jobs', label: 'Scraper' },
 ];
 
 export function NavBar() {
   const pathname = usePathname();
 
   return (
-    <nav className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-14">
-          <Link href="/" className="flex items-center gap-2 font-bold text-blue-700 text-lg hover:text-blue-800">
+    <nav className="sticky top-0 z-50 bg-slate-900 border-b border-slate-700 shadow-sm">
+      <div className="max-w-[1920px] mx-auto px-4">
+        <div className="flex items-center gap-4 h-10">
+          <Link href="/" className="flex items-center gap-1.5 font-bold text-blue-400 text-sm whitespace-nowrap hover:text-blue-300 flex-shrink-0">
             <span>⚡</span>
-            <span>PTCG CardDB</span>
+            <span>PTCG</span>
           </Link>
-          <div className="flex items-center gap-1 overflow-x-auto">
+          <div className="flex items-center gap-0.5 overflow-x-auto scrollbar-none flex-1">
             {navLinks.map(({ href, label }) => {
-              const active = pathname.startsWith(href);
+              const active = pathname === href || (href !== '/' && pathname.startsWith(href));
               return (
                 <Link
                   key={href}
                   href={href}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
+                  className={`px-2.5 py-1 rounded text-xs font-medium whitespace-nowrap transition-colors ${
                     active
-                      ? 'bg-blue-100 text-blue-700'
-                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                      ? 'bg-blue-600 text-white'
+                      : 'text-slate-400 hover:bg-slate-700 hover:text-slate-200'
                   }`}
                 >
                   {label}

@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Navbar } from '@/components/navbar';
 import apiClient from '@/lib/api-client';
 import { useRouter } from 'next/navigation';
 import { Search, SlidersHorizontal, LayoutGrid } from 'lucide-react';
@@ -178,7 +177,6 @@ export default function BrowsePage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navbar />
 
       {/* ── Sticky Top Toolbar ─────────────────────────────────────────── */}
       <div className="sticky top-16 z-30 bg-white border-b shadow-sm">

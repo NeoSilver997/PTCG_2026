@@ -79,6 +79,13 @@ export class CardsController {
     }
   }
 
+  @Get('stats')
+  @ApiOperation({ summary: 'Get card count stats by language, supertype, and expansion' })
+  @ApiResponse({ status: 200, description: 'Card statistics' })
+  async getCardStats() {
+    return await this.cardsService.getCardStats();
+  }
+
   @Get()
   @ApiOperation({ summary: 'Get cards with pagination, filters, and sorting' })
   @ApiResponse({ status: 200, description: 'Returns paginated cards' })

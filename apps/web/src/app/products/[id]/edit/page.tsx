@@ -2,7 +2,6 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/api-client';
-import { Navbar } from '@/components/navbar';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Save, X } from 'lucide-react';
 import Link from 'next/link';
@@ -91,7 +90,6 @@ export default function ProductEditPage({ params }: { params: Promise<{ id: stri
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Navbar />
         <div className="max-w-4xl mx-auto px-6 py-8">
           <div className="text-center py-12">載入中...</div>
         </div>
@@ -102,7 +100,6 @@ export default function ProductEditPage({ params }: { params: Promise<{ id: stri
   if (!product) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Navbar />
         <div className="max-w-4xl mx-auto px-6 py-8">
           <div className="text-center py-12 text-red-600">
             找不到商品
@@ -114,7 +111,6 @@ export default function ProductEditPage({ params }: { params: Promise<{ id: stri
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navbar />
 
       <div className="max-w-4xl mx-auto px-6 py-8">
         {/* Header */}

@@ -36,6 +36,8 @@ export interface DeckCardDetail {
   evolutionStage?: string | null;
   /** Resolved canonical webCardId for primary-card-based linking (Pokémon only). */
   canonicalWebCardId?: string | null;
+  /** Primary card UUID – preferred key for role storage across language variants. */
+  primaryCardId?: string | null;
 }
 
 export interface DeckCardEntry {

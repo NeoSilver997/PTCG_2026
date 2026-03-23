@@ -88,14 +88,14 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['deck-roles', deckCode] }),
   });
 
-  const handleRoleChange = (canonicalKey: string, role: PokemonRole) => {
+  const handleRoleChange = (primaryKey: string, role: PokemonRole) => {
     setLocalRoles((prev) => {
       const next = new Map(prev);
-      next.set(canonicalKey, role);
+      next.set(primaryKey, role);
       try { localStorage.setItem(storageKey, JSON.stringify(Object.fromEntries(next))); } catch { /**/ }
       return next;
     });
-    upsertMutation.mutate({ cardId: canonicalKey, role });
+    upsertMutation.mutate({ cardId: primaryKey, role });
   };
 
   const { data, isLoading, isError } = useQuery({
@@ -116,11 +116,11 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
     },
   });
 
-  // Collect Pokémon canonical IDs from already-loaded deck data (safe with undefined)
-  const pokemonCanonicalIds = [...new Set(
+  // Collect Pokémon primary IDs (prefer primaryCardId, fall back to canonical/webCardId)
+  const pokemonPrimaryIds = [...new Set(
     (data?.cards ?? [])
       .filter((e) => e.card.supertype === 'POKEMON')
-      .map((e) => e.card.canonicalWebCardId ?? e.card.webCardId)
+      .map((e) => e.card.primaryCardId ?? e.card.canonicalWebCardId ?? e.card.webCardId)
       .filter((id): id is string => !!id)
   )];
 
@@ -128,13 +128,13 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
   const { data: globalRoles } = useQuery<Record<string, string>>({
     queryKey: ['global-roles', deckCode],
     queryFn: async () => {
-      if (!pokemonCanonicalIds.length) return {};
+      if (!pokemonPrimaryIds.length) return {};
       const res = await apiClient.get<Record<string, string>>(
-        `/decks/roles/lookup?cards=${pokemonCanonicalIds.join(',')}`
+        `/decks/roles/lookup?cards=${pokemonPrimaryIds.join(',')}`
       );
       return res.data;
     },
-    enabled: !!data && pokemonCanonicalIds.length > 0,
+    enabled: !!data && pokemonPrimaryIds.length > 0,
     staleTime: 60_000,
   });
 
@@ -187,19 +187,30 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
   }
 
   // Prefer DB-sourced cards (has HP, attacks, subtypes) over raw deckData
-  const deckEntries: DeckCardEntry[] = (data.cards && data.cards.length > 0)
-    ? data.cards
-    : (data.deckData ?? []).map((c) => ({
-        quantity: c.quantity,
-        card: { webCardId: c.cardId, name: c.cardName, imageUrl: c.imageUrl },
-      }));
+  // Merge: use DB cards first, then add any deckData entries whose webCardId has no DB match.
+  // DB webCardIds use "jp12345" format; deckData cardIds use "12345" (numeric only).
+  // Build a normalized set (numeric suffix) to correctly match across both formats.
+  const dbCards = data.cards ?? [];
+  // Extract numeric suffix from webCardId (e.g. "jp48778" → "48778", "hk00014744" → "00014744")
+  const normalizeId = (id: string) => id.replace(/^[a-z]+0*/i, '') || id;
+  const dbNormalizedIds = new Set(dbCards.map((e) => normalizeId(e.card.webCardId)));
+  const deckDataFallback: DeckCardEntry[] = (data.deckData ?? [])
+    .filter((c: any) => !dbNormalizedIds.has(normalizeId(String(c.cardId))))
+    .map((c: any) => ({
+      quantity: c.quantity,
+      card: { webCardId: c.cardId, name: c.cardName, imageUrl: c.imageUrl ?? null },
+    }));
+  const deckEntries: DeckCardEntry[] = [
+    ...(dbCards.length > 0 ? dbCards : []),
+    ...deckDataFallback,
+  ];
 
-  // Group into sections (respects per-card role overrides keyed by canonical/primary card ID)
+  // Group into sections (role key: primaryCardId > canonicalWebCardId > webCardId)
   const sections = new Map<SectionKey, DeckCardEntry[]>();
   SECTION_ORDER.forEach((k) => sections.set(k, []));
   for (const entry of deckEntries) {
-    const canonicalKey = entry.card.canonicalWebCardId ?? entry.card.webCardId;
-    const override = localRoles.get(canonicalKey);
+    const primaryKey = entry.card.primaryCardId ?? entry.card.canonicalWebCardId ?? entry.card.webCardId;
+    const override = localRoles.get(primaryKey);
     const key: SectionKey = override ?? getSectionKey(entry);
     sections.get(key)!.push(entry);
   }

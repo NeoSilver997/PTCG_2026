@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import apiClient from '@/lib/api-client';
 import Link from 'next/link';
-import { Navbar } from '@/components/navbar';
 
 interface Product {
   id: string;
@@ -83,7 +82,6 @@ export default function ProductsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navbar />
       <div className="max-w-[1920px] mx-auto px-6 py-8">
         {/* Header */}
         <div className="mb-6">
