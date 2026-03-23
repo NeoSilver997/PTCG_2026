@@ -836,6 +836,7 @@ export class TournamentsService {
           tr.id as result_id,
           tr.placement,
           tr."deckId" as deck_id,
+          t.id::text as tournament_db_id,
           t.name as tournament_name,
           t.date as tournament_date,
           t."eventId" as event_id,
@@ -868,6 +869,7 @@ export class TournamentsService {
         SELECT
           pp.player_name,
           pp.placement,
+          pp.tournament_db_id,
           pp.tournament_name,
           pp.tournament_date,
           pp.event_id,
@@ -891,6 +893,7 @@ export class TournamentsService {
         json_agg(
           json_build_object(
             'placement', pld.placement,
+            'tournamentId', pld.tournament_db_id,
             'tournamentName', pld.tournament_name,
             'tournamentDate', pld.tournament_date,
             'eventId', pld.event_id,
@@ -899,27 +902,178 @@ export class TournamentsService {
             'key1Image', pld.key1_image,
             'key2Image', pld.key2_image
           ) ORDER BY pld.tournament_date DESC, pld.placement ASC
-        ) FILTER (WHERE pld.deck_rn <= 5) as last_decks
+        ) FILTER (WHERE pld.deck_rn <= 15) as last_decks
       FROM player_totals pt
-      LEFT JOIN player_last_decks pld ON pld.player_name = pt.player_name AND pld.deck_rn <= 5
+      LEFT JOIN player_last_decks pld ON pld.player_name = pt.player_name AND pld.deck_rn <= 15
       GROUP BY pt.rank, pt.player_name, pt.total_points, pt.tournaments_played, pt.best_placement, pt.wins
       ORDER BY pt.rank
       `,
     );
 
-    return rows.map(r => ({
-      rank: Number(r.rank),
-      playerName: r.player_name,
-      totalPoints: Number(r.total_points),
-      tournamentsPlayed: Number(r.tournaments_played),
-      bestPlacement: Number(r.best_placement),
-      wins: Number(r.wins),
-      lastDecks: (() => {
-        try {
-          const d = typeof r.last_decks === 'string' ? JSON.parse(r.last_decks) : r.last_decks;
-          return Array.isArray(d) ? d : [];
-        } catch { return []; }
-      })(),
-    }));
+    const statsRows = await this.prisma.$queryRawUnsafe<Array<{
+      total_days: number;
+      total_events: number;
+    }>>(
+      `SELECT
+        COUNT(DISTINCT t.date::date)::int as total_days,
+        COUNT(DISTINCT t.id)::int as total_events
+       FROM tournaments t
+       WHERE 1=1 ${regionSql} ${sinceDateSql}
+         AND EXISTS (SELECT 1 FROM tournament_results tr WHERE tr."tournamentId" = t.id AND tr."deckId" IS NOT NULL)
+      `,
+    );
+
+    return {
+      players: rows.map(r => ({
+        rank: Number(r.rank),
+        playerName: r.player_name,
+        totalPoints: Number(r.total_points),
+        tournamentsPlayed: Number(r.tournaments_played),
+        bestPlacement: Number(r.best_placement),
+        wins: Number(r.wins),
+        lastDecks: (() => {
+          try {
+            const d = typeof r.last_decks === 'string' ? JSON.parse(r.last_decks) : r.last_decks;
+            return Array.isArray(d) ? d : [];
+          } catch { return []; }
+        })(),
+      })),
+      totalDays: Number(statsRows[0]?.total_days) || 0,
+      totalEvents: Number(statsRows[0]?.total_events) || 0,
+    };
+  }
+
+  async getPlayerDecks(playerNameRaw: string, regionRaw?: string, sinceDateRaw?: string) {
+    const validRegions = new Set(['JP', 'HK', 'EN']);
+    const region = regionRaw && validRegions.has(regionRaw.toUpperCase())
+      ? regionRaw.toUpperCase()
+      : null;
+    const regionSql = region ? `AND t.region = '${region}'` : '';
+    const sinceDate = sinceDateRaw && /^\d{4}-\d{2}-\d{2}$/.test(sinceDateRaw)
+      ? sinceDateRaw
+      : null;
+    const sinceDateSql = sinceDate ? `AND t.date >= '${sinceDate}'::timestamp` : '';
+    // Sanitize player name for safe interpolation into SQL string
+    const escapedName = playerNameRaw.replace(/'/g, "''").slice(0, 200);
+
+    const rows = await this.prisma.$queryRawUnsafe<Array<{
+      placement: number;
+      tournament_id: string;
+      tournament_name: string;
+      tournament_date: string;
+      region: string;
+      deck_code: string | null;
+      archetype_name: string;
+      key1_image: string | null;
+      key2_image: string | null;
+      pts: number;
+    }>>(
+      `
+      WITH pre_evolutions AS (
+        SELECT DISTINCT dc."deckId", c_base.name as pre_evo_name
+        FROM tournament_results tr
+        JOIN decks d ON d.id = tr."deckId"
+        JOIN deck_cards dc ON dc."deckId" = d.id
+        JOIN cards c_evolved ON c_evolved.id = dc."cardId"
+          AND c_evolved.supertype = 'POKEMON'
+          AND c_evolved."evolvesFrom" IS NOT NULL
+        JOIN cards c_base ON c_base.name = c_evolved."evolvesFrom" AND c_base.supertype = 'POKEMON'
+        JOIN deck_cards dc_base ON dc_base."deckId" = dc."deckId" AND dc_base."cardId" = c_base.id
+        WHERE tr."playerName" = '${escapedName}'
+      ),
+      deck_key_pokemon AS (
+        SELECT
+          d.id as deck_id,
+          c.name,
+          c."imageUrl",
+          dc.quantity,
+          ROW_NUMBER() OVER (
+            PARTITION BY d.id
+            ORDER BY
+              (CASE WHEN c.name ILIKE '%ex' THEN 1000 ELSE 0 END +
+               CASE c."evolutionStage"
+                 WHEN 'STAGE_2' THEN 300
+                 WHEN 'STAGE_1' THEN 200
+                 ELSE 100
+               END) DESC,
+              dc.quantity DESC,
+              c.name ASC
+          ) as rn
+        FROM decks d
+        JOIN deck_cards dc ON dc."deckId" = d.id
+        JOIN cards c ON c.id = dc."cardId"
+        WHERE c.supertype = 'POKEMON' AND dc.quantity >= 2
+          AND NOT EXISTS (
+            SELECT 1 FROM pre_evolutions pe WHERE pe."deckId" = d.id AND pe.pre_evo_name = c.name
+          )
+      ),
+      deck_archetype_names AS (
+        SELECT
+          deck_id,
+          CASE
+            WHEN COUNT(*) >= 2
+              THEN MIN(CASE WHEN rn = 1 THEN name END) || '/' || MIN(CASE WHEN rn = 2 THEN name END)
+            ELSE MIN(CASE WHEN rn = 1 THEN name END)
+          END as archetype_name,
+          MIN(CASE WHEN rn = 1 THEN "imageUrl" END) as key1_image,
+          MIN(CASE WHEN rn = 2 THEN "imageUrl" END) as key2_image
+        FROM deck_key_pokemon
+        WHERE rn <= 2
+        GROUP BY deck_id
+      )
+      SELECT
+        tr.placement::int as placement,
+        t.id::text as tournament_id,
+        t.name as tournament_name,
+        t.date as tournament_date,
+        t.region as region,
+        d."deckCode" as deck_code,
+        COALESCE(dan.archetype_name, '???') as archetype_name,
+        dan.key1_image,
+        dan.key2_image,
+        CASE
+          WHEN tr.placement = 1 THEN 20
+          WHEN tr.placement = 2 THEN 10
+          WHEN tr.placement = 3 THEN 5
+          WHEN tr.placement = 4 THEN 3
+          WHEN tr.placement <= 8 THEN 2
+          WHEN tr.placement <= 16 THEN 1
+          ELSE 0
+        END::int as pts
+      FROM tournament_results tr
+      JOIN tournaments t ON t.id = tr."tournamentId"
+      LEFT JOIN decks d ON d.id = tr."deckId"
+      LEFT JOIN deck_archetype_names dan ON dan.deck_id = tr."deckId"
+      WHERE tr."playerName" = '${escapedName}'
+        AND tr."deckId" IS NOT NULL
+        ${regionSql} ${sinceDateSql}
+      ORDER BY t.date DESC, tr.placement ASC
+      `,
+    );
+
+    const totalPoints = rows.reduce((s, r) => s + Number(r.pts), 0);
+    const tournamentsPlayed = rows.length;
+    const bestPlacement = rows.length > 0 ? Math.min(...rows.map(r => Number(r.placement))) : 0;
+    const wins = rows.filter(r => Number(r.placement) === 1).length;
+
+    return {
+      playerName: playerNameRaw,
+      totalPoints,
+      tournamentsPlayed,
+      bestPlacement,
+      wins,
+      decks: rows.map(r => ({
+        placement: Number(r.placement),
+        tournamentId: r.tournament_id,
+        tournamentName: r.tournament_name,
+        tournamentDate: r.tournament_date,
+        region: r.region,
+        deckCode: r.deck_code,
+        archetypeName: r.archetype_name,
+        key1Image: r.key1_image,
+        key2Image: r.key2_image,
+        pts: Number(r.pts),
+      })),
+    };
   }
 }

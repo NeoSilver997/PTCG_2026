@@ -76,6 +76,18 @@ export class TournamentsController {
     return this.tournamentsService.getPlayerLeaderboard(region, sinceDate, limit);
   }
 
+  @Get('player/:playerName')
+  @Throttle({ long: { limit: 100, ttl: 60000 } })
+  @ApiOperation({ summary: 'Get all tournament decks for a specific player' })
+  @ApiResponse({ status: 200, description: 'Player deck history' })
+  getPlayerDecks(
+    @Param('playerName') playerName: string,
+    @Query('region') region?: string,
+    @Query('sinceDate') sinceDate?: string,
+  ) {
+    return this.tournamentsService.getPlayerDecks(playerName, region, sinceDate);
+  }
+
   @Get('event/:eventId')
   @Throttle({ long: { limit: 100, ttl: 60000 } })
   @ApiOperation({ summary: 'Get tournament by external event ID with results and decks' })
