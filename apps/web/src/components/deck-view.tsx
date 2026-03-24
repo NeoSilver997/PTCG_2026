@@ -571,7 +571,7 @@ export function CardTile({
           {(['pokemon-main', 'pokemon-support', 'pokemon-evolution'] as PokemonRole[]).map((role) => (
             <button
               key={role}
-              onClick={(e) => { e.stopPropagation(); onRoleChange(entry.card.canonicalWebCardId ?? entry.card.webCardId, role); }}
+              onClick={(e) => { e.stopPropagation(); onRoleChange(entry.card.primaryCardId ?? entry.card.canonicalWebCardId ?? entry.card.webCardId, role); }}
               className={`flex-1 text-[8px] py-0.5 rounded transition-colors ${
                 section === role
                   ? 'bg-indigo-500 text-white font-bold'

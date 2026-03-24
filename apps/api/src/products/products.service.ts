@@ -1,7 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { GetProductsDto } from './dto/get-products.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import * as fs from 'fs';
+import * as path from 'path';
 
 @Injectable()
 export class ProductsService {
@@ -59,10 +61,9 @@ export class ProductsService {
       this.prisma.product.count({ where }),
     ]);
 
-    // Transform products for frontend
     const transformedProducts = products.map(product => ({
       ...product,
-      productType: product.productType?.code || null,
+      productType: product.productType ?? null,
       cardOnly: product.cardOnly === '1' || product.cardOnly === 'true' || product.cardOnly === 'Yes',
       beginnerFlag: product.beginnerFlag === 1,
     }));
@@ -89,10 +90,9 @@ export class ProductsService {
       throw new NotFoundException(`Product with ID ${id} not found`);
     }
 
-    // Transform the data for the frontend
     return {
       ...product,
-      productType: product.productType?.code || null,
+      productType: product.productType ?? null,
       cardOnly: product.cardOnly === '1' || product.cardOnly === 'true' || product.cardOnly === 'Yes',
       beginnerFlag: product.beginnerFlag === 1,
     };
@@ -140,5 +140,66 @@ export class ProductsService {
     } catch (error) {
       throw new NotFoundException(`Product with ID ${id} not found`);
     }
+  }
+
+  async importFromFiles(): Promise<{ imported: number; skipped: number; errors: number }> {
+    const logger = new Logger('ProductsImport');
+    const dataDir = path.join(__dirname, '..', '..', '..', '..', '..', 'data');
+    const filePath = path.join(dataDir, 'chinese_products.json');
+
+    let imported = 0;
+    let skipped = 0;
+    let errors = 0;
+
+    if (!fs.existsSync(filePath)) {
+      logger.warn(`Product data file not found: ${filePath}`);
+      return { imported, skipped, errors };
+    }
+
+    const products: any[] = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    logger.log(`Importing ${products.length} products from ${filePath}`);
+
+    for (const p of products) {
+      try {
+        await this.prisma.product.upsert({
+          where: {
+            country_code_productName_releaseDate: {
+              country: p.country,
+              productName: p.product_name,
+              code: p.code || '',
+              releaseDate: p.release_date || null,
+            },
+          },
+          update: {
+            price: p.price || null,
+            releaseDate: p.release_date || null,
+            link: p.link || null,
+            imageUrl: p.image_url || null,
+            include: p.include || null,
+            cardOnly: p.card_only || null,
+            storesAvailable: p.stores_available || null,
+          },
+          create: {
+            country: p.country,
+            productName: p.product_name,
+            price: p.price || null,
+            releaseDate: p.release_date || null,
+            code: p.code || null,
+            link: p.link || null,
+            imageUrl: p.image_url || null,
+            include: p.include || null,
+            cardOnly: p.card_only || null,
+            storesAvailable: p.stores_available || null,
+          },
+        });
+        imported++;
+      } catch (error) {
+        logger.error(`Failed to upsert product ${p.product_name}: ${error.message}`);
+        errors++;
+      }
+    }
+
+    logger.log(`Import complete: ${imported} upserted, ${skipped} skipped, ${errors} errors`);
+    return { imported, skipped, errors };
   }
 }

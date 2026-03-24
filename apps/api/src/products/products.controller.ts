@@ -1,4 +1,4 @@
-import { Controller, Get, Query, HttpCode, HttpStatus, Param, Put, Body } from '@nestjs/common';
+import { Controller, Get, Post, Query, HttpCode, HttpStatus, Param, Put, Body } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery, ApiParam, ApiBody } from '@nestjs/swagger';
 import { ProductsService } from './products.service';
 import { GetProductsDto } from './dto/get-products.dto';
@@ -36,5 +36,12 @@ export class ProductsController {
   @ApiBody({ type: UpdateProductDto })
   async updateProduct(@Param('id') id: string, @Body() updateData: UpdateProductDto) {
     return this.productsService.updateProduct(id, updateData);
+  }
+
+  @Post('import')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Re-import products from local JSON data files' })
+  async importProducts() {
+    return this.productsService.importFromFiles();
   }
 }

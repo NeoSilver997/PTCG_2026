@@ -35,6 +35,8 @@ export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{ imported: number; skipped: number; errors: number } | null>(null);
   
   // Filters
   const [country, setCountry] = useState('');
@@ -85,10 +87,40 @@ export default function ProductsPage() {
       <div className="max-w-[1920px] mx-auto px-6 py-8">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">商品瀏覽</h1>
-          <p className="text-gray-600 mt-1">
-            共 {total} 件商品
-          </p>
+          <div className="flex justify-between items-start">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">商品瀏覽</h1>
+              <p className="text-gray-600 mt-1">
+                共 {total} 件商品
+              </p>
+            </div>
+            <div className="flex flex-col items-end gap-2">
+              <button
+                onClick={async () => {
+                  setImporting(true);
+                  setImportResult(null);
+                  try {
+                    const res = await apiClient.post('/products/import');
+                    setImportResult(res.data);
+                    fetchProducts();
+                  } catch (e) {
+                    console.error('Import failed:', e);
+                  } finally {
+                    setImporting(false);
+                  }
+                }}
+                disabled={importing}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors text-sm"
+              >
+                {importing ? '導入中...' : '🔄 重新導入商品'}
+              </button>
+              {importResult && (
+                <p className="text-xs text-gray-600">
+                  已導入 {importResult.imported} 件 · 跳過 {importResult.skipped} 件 · 錯誤 {importResult.errors} 件
+                </p>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Filters */}

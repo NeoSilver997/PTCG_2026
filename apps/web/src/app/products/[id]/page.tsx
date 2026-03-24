@@ -38,13 +38,14 @@ async function fetchProductDetail(id: string) {
   return data;
 }
 
-async function fetchRelatedCards(productCode: string) {
+async function fetchRelatedCards(productCode: string, skip = 0) {
   const { data } = await apiClient.get('/cards', {
     params: {
       expansionCode: productCode,
-      take: 50,
-      sortBy: 'id',
-      sortOrder: 'desc'
+      take: 100,
+      skip,
+      sortBy: 'webCardId',
+      sortOrder: 'asc'
     }
   });
   return data;
