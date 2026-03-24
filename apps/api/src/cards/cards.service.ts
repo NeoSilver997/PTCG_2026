@@ -581,7 +581,7 @@ export class CardsService {
     // hasAbilities, hasAttackText, and attackName require raw SQL due to Prisma JSON field limitations
     // evolvesTo requires raw SQL for exact CSV value matching
     // expansionReleaseDate requires raw SQL because Prisma does not support two-level nested orderBy
-    if (hasAbilities !== undefined || hasAttackText !== undefined || evolvesTo || attackName || actualSortBy === 'expansionReleaseDate' || actualSortBy === 'expansionCode') {
+    if (hasAbilities !== undefined || hasAttackText !== undefined || evolvesTo || attackName || actualSortBy === 'expansionReleaseDate' || actualSortBy === 'expansionCode' || expansionCode) {
       const jsonFieldConditions: string[] = [];
       
       // For JSON fields: null (JSON null) is different from NULL (SQL null)
@@ -658,7 +658,11 @@ export class CardsService {
           if (key === 'regionalExpansion' && typeof value === 'object' && value !== null && 'code' in value) {
             const codeVal = (value as any).code;
             const codeStr = typeof codeVal === 'string' ? codeVal : codeVal?.equals;
-            if (codeStr) return `re.code ILIKE '${codeStr.replace(/'/g, "''")}'`;
+            if (codeStr) {
+              const codes = codeStr.split(',').map((c: string) => c.trim()).filter(Boolean);
+              if (codes.length === 1) return `re.code ILIKE '${codes[0].replace(/'/g, "''")}'`;
+              return `(${codes.map((c: string) => `re.code ILIKE '${c.replace(/'/g, "''")}'`).join(' OR ')})`;
+            }
           }
           return null;
         })

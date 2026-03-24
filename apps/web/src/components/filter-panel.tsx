@@ -1,6 +1,23 @@
 import { Search, SlidersHorizontal, X } from 'lucide-react';
 import { useState } from 'react';
 
+const DEFAULT_EXPANSION_CODES = 'm4,m3,m2a,m1l,m1s,sv11w,sv11b,sv10';
+const QUICK_EXPANSIONS = [
+  { code: 'm4',    label: 'M4' },
+  { code: 'm3',    label: 'M3' },
+  { code: 'm2a',   label: 'M2A' },
+  { code: 'm2',   label: 'M2' },
+  { code: 'm1l',   label: 'M1L' },
+  { code: 'm1s',   label: 'M1S' },
+  { code: 'sv11w', label: 'SV11W' },
+  { code: 'sv11b', label: 'SV11B' },
+  { code: 'sv10',  label: 'SV10' },
+  { code: 'sv9',   label: 'SV9' },
+  { code: 'sv9a',  label: 'SV9A' },
+  { code: 'sv8',   label: 'SV8' },
+  { code: 'sv7',   label: 'SV7' },
+];
+
 interface FilterPanelProps {
   filters: {
     name: string;
@@ -47,10 +64,20 @@ export function FilterPanel({ filters, onFilterChange }: FilterPanelProps) {
       maxHp: '',
       artist: '',
       regulationMark: '',
-      expansionCode: '',
+      expansionCode: DEFAULT_EXPANSION_CODES,
       hasAbilities: '',
       hasAttackText: '',
     });
+  };
+
+  const activeExpansions = new Set(
+    (filters.expansionCode || '').split(',').map(c => c.trim().toLowerCase()).filter(Boolean)
+  );
+  const toggleExpansion = (code: string) => {
+    const codeL = code.toLowerCase();
+    const next = new Set(activeExpansions);
+    if (next.has(codeL)) next.delete(codeL); else next.add(codeL);
+    updateFilter('expansionCode', Array.from(next).join(','));
   };
   
   const hasActiveFilters = filters.name || filters.supertype || filters.types || 
@@ -215,7 +242,66 @@ export function FilterPanel({ filters, onFilterChange }: FilterPanelProps) {
           </select>
         </div>
       </div>
-      
+
+      {/* Expansion Quick-Select (Always Visible) */}
+      <div className="mt-3 pt-3 border-t border-gray-100">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-xs font-medium text-gray-500 shrink-0">擴展包:</span>
+          {QUICK_EXPANSIONS.map(({ code, label }, idx) => (
+            <>
+              {idx > 0 && activeExpansions.has(QUICK_EXPANSIONS[idx - 1].code) && activeExpansions.has(code) && (
+                <span key={`or-${code}`} className="text-[10px] font-bold text-purple-400 shrink-0">OR</span>
+              )}
+              <button
+                key={code}
+                onClick={() => toggleExpansion(code)}
+                className={`px-2.5 py-1 rounded-full text-xs border transition ${
+                  activeExpansions.has(code)
+                    ? 'bg-purple-600 text-white border-purple-600 shadow'
+                    : 'bg-gray-50 text-gray-700 border-gray-300 hover:border-purple-400'
+                }`}
+              >
+                {label}
+              </button>
+            </>
+          ))}
+          {activeExpansions.size > 0 && (
+            <button
+              onClick={() => updateFilter('expansionCode', '')}
+              className="px-2 py-1 rounded text-xs text-gray-400 hover:text-red-500 transition"
+              title="清除擴展包篩選"
+            >
+              ✕
+            </button>
+          )}
+          <input
+            type="text"
+            placeholder="輸入代碼..."
+            onBlur={(e: React.FocusEvent<HTMLInputElement>) => {
+              const val = e.target.value.trim().toLowerCase();
+              if (val) {
+                const next = new Set(activeExpansions);
+                next.add(val);
+                updateFilter('expansionCode', Array.from(next).join(','));
+                e.target.value = '';
+              }
+            }}
+            onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+              if (e.key === 'Enter') {
+                const val = (e.target as HTMLInputElement).value.trim().toLowerCase();
+                if (val) {
+                  const next = new Set(activeExpansions);
+                  next.add(val);
+                  updateFilter('expansionCode', Array.from(next).join(','));
+                  (e.target as HTMLInputElement).value = '';
+                }
+              }
+            }}
+            className="w-24 px-2 py-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-purple-500"
+          />
+        </div>
+      </div>
+
       {/* Advanced Filters (Expandable) */}
       {isExpanded && (
         <div className="mt-4 pt-4 border-t border-gray-200">
@@ -333,20 +419,6 @@ export function FilterPanel({ filters, onFilterChange }: FilterPanelProps) {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
               />
             </div>
-            {/* Expansion Code */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                擴展包
-              </label>
-              <input
-                type="text"
-                placeholder="例: sv9, sv10"
-                value={filters.expansionCode || ''}
-                onChange={(e) => updateFilter('expansionCode', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-              />
-            </div>
-
             {/* Has Abilities */}
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">

@@ -8,6 +8,39 @@ import apiClient from '@/lib/api-client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
+const DEFAULT_EXPANSION_CODES = 'm4,m3,m2a,m1l,m1s,sv11w,sv11b,sv10';
+const TAKE = 50;
+
+const DEFAULT_FILTERS = {
+  name: '',
+  supertype: '',
+  types: '',
+  rarity: '',
+  language: '',
+  sortBy: 'expansionReleaseDate',
+  sortOrder: 'desc',
+  webCardId: '',
+  subtypes: '',
+  variantType: '',
+  minHp: '',
+  maxHp: '',
+  artist: '',
+  regulationMark: '',
+  expansionCode: DEFAULT_EXPANSION_CODES,
+  hasAbilities: '',
+  hasAttackText: '',
+};
+
+function getInitialFilters() {
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem('cardFilters');
+      if (saved) return { ...DEFAULT_FILTERS, ...JSON.parse(saved) };
+    } catch {}
+  }
+  return { ...DEFAULT_FILTERS };
+}
+
 const LANG_LABEL: Record<string, string> = {
   JA_JP: '🇯🇵 Japan',
   ZH_HK: '🇭🇰 HK',
@@ -30,43 +63,18 @@ interface CardStats {
 export default function CardsPage() {
   const router = useRouter();
   const [showStats, setShowStats] = useState(true);
-  const [filters, setFilters] = useState({
-    name: '',
-    supertype: '',
-    types: '',
-    rarity: '',
-    language: '',
-    sortBy: 'expansionReleaseDate',
-    sortOrder: 'desc',
-    webCardId: '',
-    subtypes: '',
-    variantType: '',
-    minHp: '',
-    maxHp: '',
-    artist: '',
-    regulationMark: '',
-    expansionCode: '',
-    hasAbilities: '',
-    hasAttackText: '',
-  });
+  const [filters, setFilters] = useState<typeof DEFAULT_FILTERS>(getInitialFilters);
+  const [skip, setSkip] = useState(0);
 
-  // Load saved filters from localStorage on component mount
-  useEffect(() => {
-    const savedFilters = localStorage.getItem('cardFilters');
-    if (savedFilters) {
-      try {
-        const parsedFilters = JSON.parse(savedFilters);
-        setFilters(prevFilters => ({ ...prevFilters, ...parsedFilters }));
-      } catch (error) {
-        console.error('Error loading saved filters:', error);
-      }
-    }
-  }, []);
-
-  // Save filters to localStorage whenever they change
+  // Persist filters to localStorage whenever they change
   useEffect(() => {
     localStorage.setItem('cardFilters', JSON.stringify(filters));
   }, [filters]);
+
+  const updateFilters = (newFilters: typeof DEFAULT_FILTERS) => {
+    setFilters(newFilters);
+    setSkip(0);
+  };
 
   const { data: stats } = useQuery<CardStats>({
     queryKey: ['card-stats'],
@@ -78,7 +86,7 @@ export default function CardsPage() {
   });
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['cards', filters],
+    queryKey: ['cards', filters, skip],
     queryFn: async () => {
       const params = new URLSearchParams();
 
@@ -89,14 +97,17 @@ export default function CardsPage() {
         }
       });
 
-      // Add pagination
-      params.append('take', '50');
-      params.append('skip', '0');
+      params.append('take', String(TAKE));
+      params.append('skip', String(skip));
 
       const response = await apiClient.get(`/cards?${params.toString()}`);
       return response.data;
     },
   });
+
+  const totalCards: number = data?.pagination?.total ?? 0;
+  const totalPages = Math.ceil(totalCards / TAKE);
+  const currentPage = Math.floor(skip / TAKE) + 1;
 
   const handleCardClick = (card: any) => {
     router.push(`/cards/${card.webCardId}`);
@@ -138,7 +149,7 @@ export default function CardsPage() {
                   {stats.byLanguage.map(({ language, count }) => (
                     <button
                       key={language}
-                      onClick={() => setFilters((f) => ({ ...f, language: f.language === language ? '' : language }))}
+                      onClick={() => { setFilters((f) => ({ ...f, language: f.language === language ? '' : language })); setSkip(0); }}
                       className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-sm border transition ${
                         filters.language === language
                           ? 'bg-blue-600 text-white border-blue-600 shadow'
@@ -158,7 +169,7 @@ export default function CardsPage() {
                   {stats.bySupertype.map(({ supertype, count }) => (
                     <button
                       key={supertype}
-                      onClick={() => setFilters((f) => ({ ...f, supertype: f.supertype === supertype ? '' : supertype }))}
+                      onClick={() => { setFilters((f) => ({ ...f, supertype: f.supertype === supertype ? '' : supertype })); setSkip(0); }}
                       className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-sm border transition ${
                         filters.supertype === supertype
                           ? 'ring-2 ring-offset-1 ring-blue-500 ' + (SUPERTYPE_COLOR[supertype] ?? 'bg-gray-100 text-gray-700 border-gray-300')
@@ -178,10 +189,18 @@ export default function CardsPage() {
                   {stats.byExpansion.map(({ code, nameEn, count }) => (
                     <button
                       key={code}
-                      onClick={() => setFilters((f) => ({ ...f, expansionCode: f.expansionCode === code ? '' : code }))}
+                      onClick={() => {
+                        setFilters((f) => {
+                          const active = (f.expansionCode || '').split(',').map(c => c.trim().toLowerCase()).filter(Boolean);
+                          const lcode = code.toLowerCase();
+                          const updated = active.includes(lcode) ? active.filter(c => c !== lcode) : [...active, lcode];
+                          return { ...f, expansionCode: updated.join(',') };
+                        });
+                        setSkip(0);
+                      }}
                       title={nameEn}
                       className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs border transition ${
-                        filters.expansionCode === code
+                        (filters.expansionCode || '').split(',').some(c => c.trim().toLowerCase() === code.toLowerCase())
                           ? 'bg-purple-600 text-white border-purple-600 shadow'
                           : 'bg-gray-50 text-gray-700 border-gray-300 hover:border-purple-400'
                       }`}
@@ -203,7 +222,7 @@ export default function CardsPage() {
         )}
 
         <div className="mb-6">
-          <FilterPanel filters={filters} onFilterChange={setFilters} />
+          <FilterPanel filters={filters} onFilterChange={updateFilters} />
         </div>
 
         {isLoading ? (
@@ -214,11 +233,28 @@ export default function CardsPage() {
           <div>
             {data?.data && data.data.length > 0 ? (
               <>
-                <div className="mb-4 text-sm text-gray-600">
-                  顯示 {data.data.length} 張卡牌
-                  {data.pagination?.total && ` (總共 ${data.pagination.total} 張)`}
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-sm text-gray-600">
+                  <span>顯示 {skip + 1}–{Math.min(skip + data.data.length, totalCards)} / {totalCards} 張</span>
+                  {totalPages > 1 && (
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setSkip(Math.max(0, skip - TAKE))} disabled={skip === 0}
+                        className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-40 text-xs">上一頁</button>
+                      <span className="text-xs">第 {currentPage} / {totalPages} 頁</span>
+                      <button onClick={() => setSkip(skip + TAKE)} disabled={skip + TAKE >= totalCards}
+                        className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-40 text-xs">下一頁</button>
+                    </div>
+                  )}
                 </div>
                 <CardGrid cards={data.data} onCardClick={handleCardClick} />
+                {totalPages > 1 && (
+                  <div className="mt-6 flex justify-center items-center gap-3">
+                    <button onClick={() => setSkip(Math.max(0, skip - TAKE))} disabled={skip === 0}
+                      className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 text-sm">上一頁</button>
+                    <span className="text-sm text-gray-700">第 {currentPage} / {totalPages} 頁</span>
+                    <button onClick={() => setSkip(skip + TAKE)} disabled={skip + TAKE >= totalCards}
+                      className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 text-sm">下一頁</button>
+                  </div>
+                )}
               </>
             ) : (
               <div className="text-center py-12">
