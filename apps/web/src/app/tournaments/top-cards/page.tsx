@@ -18,7 +18,7 @@ interface WeeklyTopCard {
   webCardId?: string;
   /** weeklyUsage[0]=oldest … [3]=newest */
   weeklyUsage: [number, number, number, number];
-  /** % of total category usage that week (0–100) */
+  /** % of total decks that ran this card that week (deck inclusion rate, 0–100) */
   weeklyPct: [number, number, number, number];
   totalUsage: number;
   totalPct: number;
@@ -201,19 +201,23 @@ async function buildWeeklyTopCards(
     }
   }
 
-  // 4. Accumulate weekly card usage.
-  // Pokémon are keyed by primaryCardId so all variants of the same species
-  // (different expansions / art) are aggregated together.
-  // Trainers & Energy are keyed by webCardId / name (they are unique per name).
+  // 4. Accumulate weekly card usage — tracked as distinct deck count, not quantity.
+  // This gives "deck inclusion rate" = % of decks that ran this card, consistent
+  // with the card detail page's usage chart denominator.
   const cardMap = new Map<string, {
     name: string; imageUrl: string | null; supertype: string;
     subtypes: string[]; webCardId?: string; _rarityRank: number;
     weeklyUsage: [number, number, number, number];
   }>();
+  // Parallel set tracking distinct deckIds per card per week
+  const cardDeckSets = new Map<string, [Set<string>, Set<string>, Set<string>, Set<string>]>();
+  // Total distinct decks per week (denominator) — counted for ALL decks, not filtered by category
+  const weeklyDeckSets: [Set<string>, Set<string>, Set<string>, Set<string>] = [new Set(), new Set(), new Set(), new Set()];
 
   for (const ref of deckRefs) {
     const deck = deckMap.get(ref.deckId);
     if (!deck) continue;
+    weeklyDeckSets[ref.weekIdx].add(ref.deckId);
     for (const dc of deck.cards ?? []) {
       const c = dc.card;
       if (!c?.name) continue;
@@ -240,6 +244,7 @@ async function buildWeeklyTopCards(
           weeklyUsage: [0, 0, 0, 0],
         };
         cardMap.set(mapKey, entry);
+        cardDeckSets.set(mapKey, [new Set(), new Set(), new Set(), new Set()]);
       } else {
         // Use image from the highest-rarity version seen (best card art)
         if (c.imageUrl && incomingRarityRank > entry._rarityRank) {
@@ -255,15 +260,20 @@ async function buildWeeklyTopCards(
           entry.webCardId = c.webCardId;
         }
       }
-      entry.weeklyUsage[ref.weekIdx] += dc.quantity ?? 0;
+      cardDeckSets.get(mapKey)![ref.weekIdx].add(ref.deckId);
     }
   }
 
-  // 5. Compute per-week totals (denominator for % view)
-  const weeklyTotals: [number, number, number, number] = [0, 0, 0, 0];
-  for (const e of cardMap.values()) {
-    for (let i = 0; i < 4; i++) weeklyTotals[i] += e.weeklyUsage[i];
+  // Convert deck sets → weekly usage counts (distinct decks per card per week)
+  for (const [key, sets] of cardDeckSets.entries()) {
+    const entry = cardMap.get(key);
+    if (entry) {
+      for (let i = 0; i < 4; i++) entry.weeklyUsage[i] = sets[i].size;
+    }
   }
+
+  // 5. Per-week totals = total distinct decks per week (consistent with card detail % denominator)
+  const weeklyTotals: [number, number, number, number] = weeklyDeckSets.map(s => s.size) as [number, number, number, number];
   const overallTotal = weeklyTotals.reduce((s, v) => s + v, 0);
 
   // 6. Build top-30 with pre-computed percentage values, rank change vs prior 3-week period
@@ -339,7 +349,7 @@ function MiniTrendBar({
           key={i}
           className={`w-2.5 rounded-sm ${WEEK_BAR_COLORS[i]}`}
           style={{ height: `${Math.max(10, (v / max) * 100)}%` }}
-          title={viewMode === 'pct' ? `W${i + 1}: ${v}%` : `W${i + 1}: ${v} uses`}
+          title={viewMode === 'pct' ? `W${i + 1}: ${v}%` : `W${i + 1}: ${v} 個牌組`}
         />
       ))}
     </div>
@@ -370,7 +380,7 @@ function TrendChart({
   return (
     <div>
       <p className="text-slate-400 text-[10px] uppercase tracking-wider mb-2">
-        4-week trend {viewMode === 'pct' ? '(% of total)' : '(raw count)'}
+        4-week trend {viewMode === 'pct' ? '(使用率 % of decks)' : '(牌組數 deck count)'}
       </p>
       <div className="flex items-end gap-2" style={{ height: 80 }}>
         {values.map((v, i) => (
@@ -495,7 +505,7 @@ function CardModal({
             <div className="bg-slate-700/50 rounded-lg px-3 py-2">
               <p className="text-slate-400 text-[10px] uppercase tracking-wider">Total (4 wks)</p>
               <p className="text-white text-xl font-bold">{card.totalUsage.toLocaleString()}</p>
-              <p className="text-slate-400 text-[10px]">{card.totalPct}% of total usage · 4 wks</p>
+              <p className="text-slate-400 text-[10px]">{card.totalPct}% 使用率 · 4 wks (avg)</p>
               {card.priorRank !== null ? (
                 <p className="text-slate-400 text-[10px] mt-1">
                   Prior 3-wk rank: <span className="text-slate-200 font-semibold">#{card.priorRank}</span>
@@ -779,7 +789,7 @@ export default function TopCardsPage() {
             ))}
             {viewMode === 'pct' && (
               <span className="ml-auto text-xs text-purple-600 font-medium bg-purple-50 px-2 py-0.5 rounded-full">
-                % of total category usage that week
+                使用率 (% of decks that ran this card)
               </span>
             )}
           </div>
@@ -870,7 +880,7 @@ export default function TopCardsPage() {
                   {/* Stats: always show both % and total count */}
                   <div className="flex items-baseline justify-between gap-1 px-0.5">
                     <span className="font-bold text-purple-600 text-sm leading-none">{card.totalPct}%</span>
-                    <span className="text-[10px] text-gray-400">{card.totalUsage.toLocaleString()} uses</span>
+                    <span className="text-[10px] text-gray-400">{card.totalUsage.toLocaleString()} 個牌組</span>
                   </div>
 
                   {/* 4-week trend sparkline — per-card scale so trend shape is always visible */}
