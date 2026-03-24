@@ -518,17 +518,8 @@ export class CardsService {
     if (regulationMark) {
       where.regulationMark = regulationMark;
     }
+    // Note: expansionCode is handled directly in the raw SQL path below (jsonFieldConditions)
     // Note: evolvesTo filter handled via raw SQL WHERE clause below for exact CSV matching
-    if (expansionCode) {
-      where.regionalExpansion = {
-        code: {
-          equals: expansionCode,
-          mode: 'insensitive',
-        },
-      };
-    }
-    // Note: hasAbilities and hasAttackText filters are handled via raw SQL below due to Prisma JSON limitations
-    // If hasAttackText is used, it will be added to the raw SQL WHERE clause
 
     // Dynamic sorting
     let actualSortBy = sortBy;
@@ -583,6 +574,16 @@ export class CardsService {
     // expansionReleaseDate requires raw SQL because Prisma does not support two-level nested orderBy
     if (hasAbilities !== undefined || hasAttackText !== undefined || evolvesTo || attackName || actualSortBy === 'expansionReleaseDate' || actualSortBy === 'expansionCode' || expansionCode) {
       const jsonFieldConditions: string[] = [];
+
+      // Expansion codes: directly inject as raw SQL OR condition
+      if (expansionCode) {
+        const codes = expansionCode.split(',').map((c: string) => c.trim()).filter(Boolean);
+        if (codes.length === 1) {
+          jsonFieldConditions.push(`re.code ILIKE '${codes[0].replace(/'/g, "''")}'`);
+        } else if (codes.length > 1) {
+          jsonFieldConditions.push(`(${codes.map((c: string) => `re.code ILIKE '${c.replace(/'/g, "''")}'`).join(' OR ')})`);
+        }
+      }
       
       // For JSON fields: null (JSON null) is different from NULL (SQL null)
       // Cards without abilities have abilities = null (JSON value)

@@ -2,6 +2,28 @@ import { Search, SlidersHorizontal, X } from 'lucide-react';
 import { useState } from 'react';
 
 const DEFAULT_EXPANSION_CODES = 'm4,m3,m2a,m1l,m1s,sv11w,sv11b,sv10';
+
+const LANG_LABEL: Record<string, string> = {
+  JA_JP: '🇯🇵 日文',
+  ZH_HK: '🇭🇰 港版',
+  EN_US: '🇺🇸 英文',
+  ZH_TW: '🇹🇼 繁中',
+};
+const SUPERTYPE_ZH: Record<string, string> = {
+  POKEMON: '寶可夢',
+  TRAINER: '訓練師',
+  ENERGY: '能量',
+};
+const SUPERTYPE_INACTIVE: Record<string, string> = {
+  POKEMON: 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100',
+  TRAINER: 'bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100',
+  ENERGY: 'bg-orange-50 text-orange-700 border-orange-300 hover:bg-orange-100',
+};
+const SUPERTYPE_ACTIVE: Record<string, string> = {
+  POKEMON: 'bg-emerald-600 text-white border-emerald-600',
+  TRAINER: 'bg-blue-600 text-white border-blue-600',
+  ENERGY: 'bg-orange-500 text-white border-orange-500',
+};
 const QUICK_EXPANSIONS = [
   { code: 'm4',    label: 'M4' },
   { code: 'm3',    label: 'M3' },
@@ -39,9 +61,15 @@ interface FilterPanelProps {
     hasAttackText?: string;
   };
   onFilterChange: (filters: any) => void;
+  stats?: {
+    total: number;
+    byLanguage: Array<{ language: string; count: number }>;
+    bySupertype: Array<{ supertype: string; count: number }>;
+    byExpansion?: Array<{ code: string; nameEn: string; count: number }>;
+  } | null;
 }
 
-export function FilterPanel({ filters, onFilterChange }: FilterPanelProps) {
+export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   
   const updateFilter = (key: string, value: string) => {
@@ -55,7 +83,7 @@ export function FilterPanel({ filters, onFilterChange }: FilterPanelProps) {
       types: '',
       rarity: '',
       language: '',
-      sortBy: 'expansionReleaseDate',
+      sortBy: 'webCardId',
       sortOrder: 'desc',
       webCardId: '',
       subtypes: '',
@@ -88,13 +116,18 @@ export function FilterPanel({ filters, onFilterChange }: FilterPanelProps) {
   return (
     <div className="bg-white rounded-lg shadow-md p-4 mb-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <SlidersHorizontal className="w-5 h-5 text-gray-600" />
-          <h2 className="font-semibold text-gray-900">篩選條件</h2>
+          <h2 className="font-semibold text-gray-900">🃏 卡牌資料庫</h2>
+          {stats && (
+            <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-0.5 rounded-full">
+              {stats.total.toLocaleString()} 張
+            </span>
+          )}
           {hasActiveFilters && (
-            <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-1 rounded">
-              已套用
+            <span className="bg-amber-100 text-amber-800 text-xs font-medium px-2 py-0.5 rounded">
+              篩選中
             </span>
           )}
         </div>
@@ -112,10 +145,49 @@ export function FilterPanel({ filters, onFilterChange }: FilterPanelProps) {
             onClick={() => setIsExpanded(!isExpanded)}
             className="text-sm text-blue-600 hover:text-blue-800"
           >
-            {isExpanded ? '收起' : '展開更多'}
+            {isExpanded ? '收起' : '進階篩選'}
           </button>
         </div>
       </div>
+
+      {/* Stats: Language + Supertype quick chips */}
+      {stats && (
+        <div className="flex flex-wrap items-center gap-3 mb-4 pb-3 border-b border-gray-100">
+          <div className="flex flex-wrap gap-1.5">
+            {stats.byLanguage.map(({ language, count }) => (
+              <button
+                key={language}
+                onClick={() => updateFilter('language', filters.language === language ? '' : language)}
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs border transition ${
+                  filters.language === language
+                    ? 'bg-blue-600 text-white border-blue-600 shadow'
+                    : 'bg-gray-50 text-gray-800 border-gray-300 hover:border-blue-400'
+                }`}
+              >
+                {LANG_LABEL[language] ?? language}
+                <span className="opacity-60">{count.toLocaleString()}</span>
+              </button>
+            ))}
+          </div>
+          <div className="w-px bg-gray-200 self-stretch hidden sm:block" />
+          <div className="flex flex-wrap gap-1.5">
+            {stats.bySupertype.map(({ supertype, count }) => (
+              <button
+                key={supertype}
+                onClick={() => updateFilter('supertype', filters.supertype === supertype ? '' : supertype)}
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs border transition ${
+                  filters.supertype === supertype
+                    ? (SUPERTYPE_ACTIVE[supertype] ?? 'bg-gray-700 text-white border-gray-700')
+                    : (SUPERTYPE_INACTIVE[supertype] ?? 'bg-gray-50 text-gray-800 border-gray-300 hover:border-gray-400')
+                }`}
+              >
+                {SUPERTYPE_ZH[supertype] ?? supertype}
+                <span className="opacity-70">{count.toLocaleString()}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       
       {/* Search Bar (Always Visible) */}
       <div className="relative mb-4">
@@ -139,8 +211,7 @@ export function FilterPanel({ filters, onFilterChange }: FilterPanelProps) {
             value={filters.sortBy}
             onChange={(e) => updateFilter('sortBy', e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900"
-          >
-            <option value="expansionReleaseDate" className="text-gray-900">發行日期</option>
+          >            <option value="webCardId" className="text-gray-900">收藏編號</option>            <option value="expansionReleaseDate" className="text-gray-900">發行日期</option>
             <option value="expansionCode" className="text-gray-900">擴展包代碼</option>
             <option value="createdAt" className="text-gray-900">匯入日期</option>
             <option value="name" className="text-gray-900">名稱</option>
@@ -246,11 +317,11 @@ export function FilterPanel({ filters, onFilterChange }: FilterPanelProps) {
       {/* Expansion Quick-Select (Always Visible) */}
       <div className="mt-3 pt-3 border-t border-gray-100">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-xs font-medium text-gray-500 shrink-0">擴展包:</span>
+          <span className="text-xs font-medium text-gray-600 shrink-0">擴展包:</span>
           {QUICK_EXPANSIONS.map(({ code, label }, idx) => (
             <>
               {idx > 0 && activeExpansions.has(QUICK_EXPANSIONS[idx - 1].code) && activeExpansions.has(code) && (
-                <span key={`or-${code}`} className="text-[10px] font-bold text-purple-400 shrink-0">OR</span>
+                <span key={`or-${code}`} className="text-[10px] font-bold text-purple-600 shrink-0">OR</span>
               )}
               <button
                 key={code}
@@ -258,7 +329,7 @@ export function FilterPanel({ filters, onFilterChange }: FilterPanelProps) {
                 className={`px-2.5 py-1 rounded-full text-xs border transition ${
                   activeExpansions.has(code)
                     ? 'bg-purple-600 text-white border-purple-600 shadow'
-                    : 'bg-gray-50 text-gray-700 border-gray-300 hover:border-purple-400'
+                    : 'bg-gray-50 text-gray-800 border-gray-300 hover:border-purple-400'
                 }`}
               >
                 {label}
