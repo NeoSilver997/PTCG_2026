@@ -9,6 +9,8 @@ import apiClient from '@/lib/api-client';
 // ── Types ──────────────────────────────────────────────────────────────────────
 type CategoryKey = 'all' | 'pokemon' | 'supporter' | 'item' | 'stadium' | 'tool' | 'energy';
 type ViewMode = 'count' | 'pct';
+/** H=top 20, M=21–50, L=51–100 by 2-week deck usage; S=used historically but not in last 2 wks */
+type TierKey = 'H' | 'M' | 'L' | 'S';
 
 interface WeeklyTopCard {
   name: string;
@@ -22,6 +24,10 @@ interface WeeklyTopCard {
   weeklyPct: [number, number, number, number];
   totalUsage: number;
   totalPct: number;
+  /** Sum of deck usage for the last 2 weeks (weeklyUsage[2]+weeklyUsage[3]) */
+  twoWeekUsage: number;
+  /** Tier based on 2-week rank: H=top20, M=21-50, L=51-100, S=used but not recent */
+  tier: TierKey;
   /** True when prior-week data is sufficient AND card had zero usage last week but has usage this week */
   isNew: boolean;
   /** Positive = moved up, negative = moved down, null = debut (no prior week data) */
@@ -301,26 +307,36 @@ async function buildWeeklyTopCards(
   // Only shown when prior data is meaningful (>0 total across 3 weeks).
   const priorDataReliable = priorTotal3Weeks > 0;
 
+  // Sort by 2-week usage (weeks[2]+weeks[3] = last 2 weeks) for tier ranking.
+  // Secondary sort by 4-week total to break ties consistently.
   const baseCards = Array.from(cardMap.values())
     .map((c) => {
       const totalUsage = c.weeklyUsage.reduce((s, v) => s + v, 0);
+      const twoWeekUsage = c.weeklyUsage[2] + c.weeklyUsage[3];
       const weeklyPct = c.weeklyUsage.map((v, i) =>
         weeklyTotals[i] > 0 ? Math.round((v / weeklyTotals[i]) * 1000) / 10 : 0,
       ) as [number, number, number, number];
       const totalPct = overallTotal > 0 ? Math.round((totalUsage / overallTotal) * 1000) / 10 : 0;
-      return { ...c, totalUsage, weeklyPct, totalPct };
+      return { ...c, totalUsage, twoWeekUsage, weeklyPct, totalPct };
     })
-    .sort((a, b) => b.totalUsage - a.totalUsage);
+    .filter(c => c.totalUsage > 0)
+    .sort((a, b) => b.twoWeekUsage - a.twoWeekUsage || b.totalUsage - a.totalUsage);
 
-  const cards: WeeklyTopCard[] = baseCards.slice(0, 50).map((c, i) => {
+  const cards: WeeklyTopCard[] = baseCards.slice(0, 100).map((c, i) => {
     const cardKey = c.webCardId ?? c.name;
     const priorUsage3w = c.weeklyUsage[0] + c.weeklyUsage[1] + c.weeklyUsage[2];
     const priorRank = priorRankMap.get(cardKey) ?? null;
-    // rankChange: positive = moved UP in rank (smaller number = better)
+    // rankChange: positive = moved UP in 2-week rank vs prior 3-week rank
     const rankChange = priorRank !== null ? priorRank - (i + 1) : null;
     // "NEW" = had no usage in the prior 3-week period at all
     const isNew = priorDataReliable && c.weeklyUsage[3] > 0 && priorUsage3w === 0;
-    return { ...c, isNew, rankChange, priorRank };
+    // Tier based on 2-week rank position: H=1-20, M=21-50, L=51-100, S=101+ or no recent usage
+    const rank2w = i + 1;
+    const tier: TierKey = c.twoWeekUsage === 0 ? 'S'
+      : rank2w <= 20 ? 'H'
+      : rank2w <= 50 ? 'M'
+      : 'L';
+    return { ...c, isNew, rankChange, priorRank, tier };
   });
 
   return { cards, weekLabels, weeklyTotals, periodStart: periodStart.toISOString(), periodEnd: periodEnd.toISOString() };
@@ -444,6 +460,7 @@ function CardModal({
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-white font-bold text-lg leading-tight">{card.name}</h3>
+              <TierBadge tier={card.tier} size="lg" />
               {card.isNew && (
                 <span className="bg-emerald-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wide leading-none">
                   NEW
@@ -505,7 +522,12 @@ function CardModal({
             <div className="bg-slate-700/50 rounded-lg px-3 py-2">
               <p className="text-slate-400 text-[10px] uppercase tracking-wider">Total (4 wks)</p>
               <p className="text-white text-xl font-bold">{card.totalUsage.toLocaleString()}</p>
-              <p className="text-slate-400 text-[10px]">{card.totalPct}% 使用率 · 4 wks (avg)</p>
+              <p className="text-slate-400 text-[10px]">{card.totalPct}% 使用率 · 4 wks</p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <TierBadge tier={card.tier} size="lg" />
+                <span className="text-slate-300 text-[10px] font-semibold">{TIER_CONFIG[card.tier].label}</span>
+                <span className="text-slate-500 text-[10px]">— {TIER_CONFIG[card.tier].desc}</span>
+              </div>
               {card.priorRank !== null ? (
                 <p className="text-slate-400 text-[10px] mt-1">
                   Prior 3-wk rank: <span className="text-slate-200 font-semibold">#{card.priorRank}</span>
@@ -572,6 +594,28 @@ function CardModal({
   );
 }
 
+// ── Tier config + badge ──────────────────────────────────────────────────────
+const TIER_CONFIG: Record<TierKey, { label: string; desc: string; headerCls: string; badgeCls: string }> = {
+  H: { label: 'H · 高使用率',  desc: 'Top 20 · last 2 wks',      headerCls: 'border-red-300 bg-red-50',     badgeCls: 'bg-red-500 text-white'    },
+  M: { label: 'M · 中使用率',  desc: 'Rank 21–50 · last 2 wks',  headerCls: 'border-amber-300 bg-amber-50',  badgeCls: 'bg-amber-400 text-white'  },
+  L: { label: 'L · 低使用率',  desc: 'Rank 51–100 · last 2 wks', headerCls: 'border-sky-300 bg-sky-50',     badgeCls: 'bg-sky-500 text-white'    },
+  S: { label: 'S · Situational', desc: '近2週未使用 · 有歷史紀錄', headerCls: 'border-purple-200 bg-purple-50', badgeCls: 'bg-purple-500 text-white' },
+};
+
+function TierBadge({ tier, size = 'sm' }: { tier: TierKey; size?: 'sm' | 'lg' }) {
+  const { badgeCls } = TIER_CONFIG[tier];
+  return (
+    <span
+      className={`inline-block rounded font-black leading-none ${badgeCls} ${
+        size === 'lg' ? 'px-2 py-1 text-xs' : 'px-1.5 py-0.5 text-[9px]'
+      }`}
+      title={`${TIER_CONFIG[tier].label} — ${TIER_CONFIG[tier].desc}`}
+    >
+      {tier}
+    </span>
+  );
+}
+
 // ── Rank badge ────────────────────────────────────────────────────────────────
 function RankBadge({ rank }: { rank: number }) {
   if (rank === 1) return <span className="text-[11px] font-black text-yellow-500">🥇</span>;
@@ -590,8 +634,8 @@ function RankChangeIndicator({ rankChange, priorRank }: { rankChange: number | n
 }
 
 // ── Weekly top-10 local cache ─────────────────────────────────────────────────
-// v7: correct RARITY_RANK keys (SAR>SR>AR, ACE_SPEC not ACE_SPEC_RARE), per-card chart scale, topN toggle
-const CACHE_VER = 'v7';
+// v8: deck inclusion rate %, tier H/M/L/S by 2-week rank, 100 cards
+const CACHE_VER = 'v8';
 function getCacheKey(region: string, cat: CategoryKey, weekKey: string) {
   return `ptcg-topcards-${CACHE_VER}-${region || 'all'}-${cat}-${weekKey}`;
 }
@@ -610,7 +654,7 @@ function saveCache(key: string, data: TopCardsPeriodData): void {
   try {
     localStorage.setItem(key, JSON.stringify({
       ...data,
-      cards: data.cards.slice(0, 50),
+      cards: data.cards.slice(0, 100),
       _cachedAt: Date.now(),
     }));
   } catch { /* storage full – ignore */ }
@@ -623,7 +667,7 @@ export default function TopCardsPage() {
   const [category, setCategory] = useState<CategoryKey>('pokemon');
   const [periodEnd, setPeriodEnd] = useState(today);
   const [viewMode, setViewMode] = useState<ViewMode>('pct');
-  const [topN, setTopN] = useState<number>(50);
+  const [topN, setTopN] = useState<number>(100);
   const [selectedCard, setSelectedCard] = useState<WeeklyTopCard | null>(null);
 
   // ── Per-week localStorage cache ──
@@ -670,7 +714,7 @@ export default function TopCardsPage() {
           </Link>
           <h1 className="text-3xl font-bold">⚡ Top Cards · Meta Trend</h1>
           <p className="text-purple-200 mt-1">
-            Top 50 tournament-used cards with 4-week usage trends
+            卡牌分級 H/M/L/S · 最近2週使用率排名 · 4週趨勢圖
             {periodRange && <> · <span className="text-white font-medium">{periodRange}</span></>}
           </p>
         </div>
@@ -699,7 +743,7 @@ export default function TopCardsPage() {
             <div className="ml-auto flex items-center gap-2">
               {/* List size toggle */}
               <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs font-semibold">
-                {[25, 50].map((n) => (
+                {[25, 50, 100].map((n) => (
                   <button
                     key={n}
                     onClick={() => setTopN(n)}
@@ -824,83 +868,104 @@ export default function TopCardsPage() {
           </div>
         )}
 
-        {/* Top 50 grid */}
+        {/* Tiered card grid — H / M / L / S sections */}
         {!isLoading && !isFetching && !error && data && data.cards.length > 0 && (
           <>
-            <p className="text-xs text-gray-400 mb-3 px-0.5">
-              Showing top {Math.min(data.cards.length, topN)} of {data.cards.length} cards · click any card for details
+            <p className="text-xs text-gray-400 mb-4 px-0.5">
+              {data.cards.slice(0, topN).length} 張卡牌 · 依最近2週使用率分級 · 點擊查看詳情
             </p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-              {data.cards.slice(0, topN).map((card, idx) => (
-                <button
-                  key={card.webCardId ?? `${card.name}-${idx}`}
-                  onClick={() => setSelectedCard(card)}
-                  className="bg-white rounded-xl shadow-sm border border-gray-100 hover:border-purple-300 hover:shadow-md transition-all text-left p-2.5 group flex flex-col gap-2"
-                >
-                  {/* Rank + name */}
-                  <div className="flex items-start gap-1.5">
-                    <div className="shrink-0 w-5 flex flex-col items-center pt-0.5 gap-0.5">
-                      <RankBadge rank={idx + 1} />
-                      <RankChangeIndicator rankChange={card.rankChange} priorRank={card.priorRank} />
-                    </div>
-                    <p className="text-[11px] font-semibold text-gray-800 leading-tight group-hover:text-purple-700 transition-colors line-clamp-2 flex-1">
-                      {card.name}
-                    </p>
-                    {card.isNew && (
-                      <span className="shrink-0 bg-emerald-500 text-white text-[8px] font-black px-1 py-0.5 rounded uppercase tracking-wide leading-none mt-0.5">
-                        NEW
-                      </span>
-                    )}
+            {(['H', 'M', 'L', 'S'] as TierKey[]).map(tier => {
+              const tierEntries = data.cards
+                .slice(0, topN)
+                .map((card, idx) => ({ card, rank: idx + 1 }))
+                .filter(({ card }) => card.tier === tier);
+              if (!tierEntries.length) return null;
+              const { label, desc, headerCls } = TIER_CONFIG[tier];
+              return (
+                <div key={tier} className="mb-7">
+                  <div className={`flex items-center gap-2.5 mb-3 px-3 py-2 rounded-lg border ${headerCls}`}>
+                    <TierBadge tier={tier} size="lg" />
+                    <span className="font-bold text-gray-800 text-sm">{label}</span>
+                    <span className="text-xs text-gray-500">{desc}</span>
+                    <span className="ml-auto text-xs text-gray-400 font-medium">{tierEntries.length} 張</span>
                   </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                    {tierEntries.map(({ card, rank }) => (
+                      <button
+                        key={card.webCardId ?? `${card.name}-${rank}`}
+                        onClick={() => setSelectedCard(card)}
+                        className="bg-white rounded-xl shadow-sm border border-gray-100 hover:border-purple-300 hover:shadow-md transition-all text-left p-2.5 group flex flex-col gap-2"
+                      >
+                        {/* Rank + name */}
+                        <div className="flex items-start gap-1.5">
+                          <div className="shrink-0 w-5 flex flex-col items-center pt-0.5 gap-0.5">
+                            <RankBadge rank={rank} />
+                            <RankChangeIndicator rankChange={card.rankChange} priorRank={card.priorRank} />
+                          </div>
+                          <p className="text-[11px] font-semibold text-gray-800 leading-tight group-hover:text-purple-700 transition-colors line-clamp-2 flex-1">
+                            {card.name}
+                          </p>
+                          {card.isNew && (
+                            <span className="shrink-0 bg-emerald-500 text-white text-[8px] font-black px-1 py-0.5 rounded uppercase tracking-wide leading-none mt-0.5">
+                              NEW
+                            </span>
+                          )}
+                        </div>
 
-                  {/* Card image — full-width, best-rarity art */}
-                  {card.imageUrl ? (
-                    <div
-                      className="relative w-full rounded-lg overflow-hidden bg-gray-100 border border-gray-200 group-hover:shadow-md transition-shadow"
-                      style={{ aspectRatio: '2.5/3.5' }}
-                    >
-                      <Image
-                        src={card.imageUrl}
-                        alt={card.name}
-                        fill
-                        sizes="160px"
-                        className="object-cover"
-                        unoptimized
-                      />
-                    </div>
-                  ) : (
-                    <div
-                      className="w-full rounded-lg bg-gray-100 flex items-center justify-center border border-gray-200"
-                      style={{ aspectRatio: '2.5/3.5' }}
-                    >
-                      <span className="text-gray-400 text-sm">?</span>
-                    </div>
-                  )}
+                        {/* Card image — full-width, best-rarity art */}
+                        {card.imageUrl ? (
+                          <div
+                            className="relative w-full rounded-lg overflow-hidden bg-gray-100 border border-gray-200 group-hover:shadow-md transition-shadow"
+                            style={{ aspectRatio: '2.5/3.5' }}
+                          >
+                            <Image
+                              src={card.imageUrl}
+                              alt={card.name}
+                              fill
+                              sizes="160px"
+                              className="object-cover"
+                              unoptimized
+                            />
+                          </div>
+                        ) : (
+                          <div
+                            className="w-full rounded-lg bg-gray-100 flex items-center justify-center border border-gray-200"
+                            style={{ aspectRatio: '2.5/3.5' }}
+                          >
+                            <span className="text-gray-400 text-sm">?</span>
+                          </div>
+                        )}
 
-                  {/* Stats: always show both % and total count */}
-                  <div className="flex items-baseline justify-between gap-1 px-0.5">
-                    <span className="font-bold text-purple-600 text-sm leading-none">{card.totalPct}%</span>
-                    <span className="text-[10px] text-gray-400">{card.totalUsage.toLocaleString()} 個牌組</span>
+                        {/* Stats: % + tier badge + deck count */}
+                        <div className="flex items-center justify-between gap-1 px-0.5">
+                          <span className="font-bold text-purple-600 text-sm leading-none">{card.totalPct}%</span>
+                          <div className="flex items-center gap-1">
+                            <TierBadge tier={card.tier} />
+                            <span className="text-[10px] text-gray-400">{card.totalUsage.toLocaleString()} 個</span>
+                          </div>
+                        </div>
+
+                        {/* 4-week trend sparkline — per-card scale so trend shape is always visible */}
+                        <div className="flex items-end gap-0.5 h-7 w-full px-0.5">
+                          {(() => {
+                            const vals = viewMode === 'pct' ? card.weeklyPct : card.weeklyUsage;
+                            const cardMax = Math.max(...vals) || 1;
+                            return vals.map((v, i) => (
+                              <div
+                                key={i}
+                                className={`flex-1 rounded-sm ${WEEK_BAR_COLORS[i]}`}
+                                style={{ height: v > 0 ? `${(v / cardMax) * 100}%` : '2px', opacity: v > 0 ? 1 : 0.3 }}
+                                title={viewMode === 'pct' ? `W${i + 1}: ${v}%` : `W${i + 1}: ${v}`}
+                              />
+                            ));
+                          })()}
+                        </div>
+                      </button>
+                    ))}
                   </div>
-
-                  {/* 4-week trend sparkline — per-card scale so trend shape is always visible */}
-                  <div className="flex items-end gap-0.5 h-7 w-full px-0.5">
-                    {(() => {
-                      const vals = viewMode === 'pct' ? card.weeklyPct : card.weeklyUsage;
-                      const cardMax = Math.max(...vals) || 1;
-                      return vals.map((v, i) => (
-                        <div
-                          key={i}
-                          className={`flex-1 rounded-sm ${WEEK_BAR_COLORS[i]}`}
-                          style={{ height: v > 0 ? `${(v / cardMax) * 100}%` : '2px', opacity: v > 0 ? 1 : 0.3 }}
-                          title={viewMode === 'pct' ? `W${i + 1}: ${v}%` : `W${i + 1}: ${v}`}
-                        />
-                      ));
-                    })()}
-                  </div>
-                </button>
-              ))}
-            </div>
+                </div>
+              );
+            })}
           </>
         )}
       </div>
