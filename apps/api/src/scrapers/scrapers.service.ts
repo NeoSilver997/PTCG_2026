@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, Logger, OnModuleDestroy } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
-import { CreateScraperJobDto } from './dto/create-scraper-job.dto';
+import { CreateScraperJobDto, JobType } from './dto/create-scraper-job.dto';
 import { spawn, ChildProcess } from 'child_process';
 import * as path from 'path';
 import { EventEmitter } from 'events';
@@ -46,9 +46,12 @@ export class ScrapersService implements OnModuleDestroy {
   }
 
   async startJob(dto: CreateScraperJobDto): Promise<Record<string, unknown>> {
+    const jobType = dto.jobType ?? JobType.TOURNAMENT_EVENTS;
+    const jobLabel = jobType === JobType.TOURNAMENT_EVENTS ? (dto.source ?? 'JP') : jobType;
+
     const job = await this.prisma.scraperJob.create({
       data: {
-        source: dto.source as any,
+        source: jobLabel as any,
         status: 'RUNNING',
         startedAt: new Date(),
       },
@@ -58,27 +61,145 @@ export class ScrapersService implements OnModuleDestroy {
     const emitter = new EventEmitter();
     this.logEmitters.set(job.id, emitter);
 
-    this.logger.log(`Starting scraper job ${job.id} for region ${dto.source}`);
+    this.logger.log(`Starting ${jobType} job ${job.id}`);
 
-    // Resolve Python scraper path relative to workspace root
-    const scraperPath = path.resolve(
-      __dirname,
-      '../../../../scrapers/src/jpevents_scraper.py',
-    );
+    // Resolve base paths
+    const workspaceRoot = path.resolve(__dirname, '../../../..');
+    const scrapersDir   = path.resolve(workspaceRoot, 'scrapers');
+    const srcDir        = path.resolve(scrapersDir, 'src');
 
-    const args = [
-      scraperPath,
-      '--skip-recent',
-      String(dto.skipRecentCount ?? 50),
-      '--region',
-      dto.source,
-    ];
+    let command: string;
+    let args: string[];
+    let cwd = workspaceRoot;
 
-    if (dto.forceReimport) {
-      args.push('--force-reimport');
+    switch (jobType) {
+
+      case JobType.TOURNAMENT_EVENTS:
+        command = 'python';
+        args = [
+          path.resolve(srcDir, 'jpevents_scraper.py'),
+          '--skip-recent', String(dto.skipRecentCount ?? 50),
+          '--region', dto.source ?? 'JP',
+          '--max-events', String(dto.maxEvents ?? 50),
+        ];
+        if (dto.forceReimport) args.push('--force-reimport');
+        if (dto.reloadInfo)    args.push('--reload-info');
+        cwd = scrapersDir;
+        break;
+
+      case JobType.JP_CARDS:
+        command = 'python';
+        args = [path.resolve(srcDir, 'japanese_card_scraper.py')];
+        if (dto.idRangeStart != null && dto.idRangeCount != null)
+          args.push('--id-range', String(dto.idRangeStart), String(dto.idRangeCount));
+        if (dto.cardIds)            args.push('--ids', dto.cardIds);
+        if (dto.cacheHtml)          args.push('--cache-html');
+        if (dto.cacheOnly)          args.push('--cache-only');
+        if (dto.refreshCache)       args.push('--refresh-cache');
+        if (dto.threads && dto.threads > 1) args.push('--threads', String(dto.threads));
+        if (dto.minRequestInterval != null) args.push('--min-request-interval', String(dto.minRequestInterval));
+        if (dto.expansions)         args.push('--expansions', dto.expansions);
+        if (dto.compactJson)        args.push('--compact-json');
+        if (dto.quiet)              args.push('--quiet');
+        if (dto.outputFile)         args.push('--output', dto.outputFile);
+        cwd = scrapersDir;
+        break;
+
+      case JobType.HK_CARDS:
+        command = 'python';
+        args = [path.resolve(srcDir, 'hk_card_scraper.py')];
+        if (dto.idRangeStart != null && dto.idRangeCount != null)
+          args.push('--id-range', String(dto.idRangeStart), String(dto.idRangeCount));
+        if (dto.cardIds)       args.push('--ids', dto.cardIds);
+        if (dto.cacheHtml)     args.push('--cache-html');
+        if (dto.cacheOnly)     args.push('--cache-only');
+        if (dto.refreshCache)  args.push('--refresh-cache');
+        if (dto.threads && dto.threads > 1) args.push('--threads', String(dto.threads));
+        if (dto.quiet)         args.push('--quiet');
+        if (dto.htmlCacheDir)  args.push('--html-cache-dir', dto.htmlCacheDir);
+        if (dto.outputFile)    args.push('--output', dto.outputFile);
+        cwd = scrapersDir;
+        break;
+
+      case JobType.EN_CARDS:
+        command = 'python';
+        args = [path.resolve(srcDir, 'english_card_scraper.py')];
+        if (dto.idRangeStart != null && dto.idRangeCount != null)
+          args.push('--id-range', String(dto.idRangeStart), String(dto.idRangeCount));
+        if (dto.cardIds)      args.push('--ids', dto.cardIds);
+        if (dto.cacheHtml)    args.push('--cache-html');
+        if (dto.cacheOnly)    args.push('--cache-only');
+        if (dto.refreshCache) args.push('--refresh-cache');
+        if (dto.threads && dto.threads > 1) args.push('--threads', String(dto.threads));
+        if (dto.quiet)        args.push('--quiet');
+        if (dto.outputFile)   args.push('--output', dto.outputFile);
+        cwd = scrapersDir;
+        break;
+
+      case JobType.CARD_IMPORT:
+        command = 'npx';
+        args = ['tsx', 'scrapers/import-cards-direct.ts'];
+        if (dto.baseDir)          args.push(dto.baseDir);
+        if (dto.regionOrPattern)  args.push(dto.regionOrPattern);
+        break;
+
+      case JobType.MARKET_PRICES:
+        command = 'npx';
+        args = ['tsx', 'scrapers/import-market-prices.ts'];
+        if (dto.dryRun)       args.push('--dry-run');
+        if (dto.verbose)      args.push('--verbose');
+        if (dto.marketFile)   args.push(`--file=${dto.marketFile}`);
+        break;
+
+      case JobType.SEED_TOURNAMENTS:
+        command = 'npx';
+        args = ['tsx', 'scrapers/seed-tournaments.ts'];
+        if (dto.seedAll)         args.push('--all');
+        else if (dto.seedLimit)  args.push(`--limit=${dto.seedLimit}`);
+        if (dto.eventId)         args.push(`--event-id=${dto.eventId}`);
+        if (dto.refreshExisting) args.push('--refresh-existing');
+        if (dto.sourceRoot)      args.push(`--source-root=${dto.sourceRoot}`);
+        if (dto.dryRun)          args.push('--dry-run');
+        if (dto.verbose)         args.push('--verbose');
+        break;
+
+      case JobType.RESYNC_DECKS:
+        command = 'npx';
+        args = ['tsx', 'scrapers/resync-deck-cards.ts'];
+        if (dto.dryRun)         args.push('--dry-run');
+        if (dto.processLimit)   args.push(`--limit=${dto.processLimit}`);
+        if (dto.reportFile)     args.push(`--report-file=${dto.reportFile}`);
+        break;
+
+      case JobType.REMAP_DECKS:
+        command = 'npx';
+        args = ['tsx', 'scrapers/remap-deck-cards.ts'];
+        if (dto.dryRun)   args.push('--dry-run');
+        if (dto.verbose)  args.push('--verbose');
+        if (dto.deckId)   args.push(`--deck-id=${dto.deckId}`);
+        break;
+
+      case JobType.REMOVE_DUPLICATES:
+        command = 'npx';
+        args = ['tsx', 'scrapers/remove-duplicates.ts'];
+        if (dto.dryRun) args.push('--dry-run');
+        break;
+
+      default:
+        command = 'python';
+        args = [
+          path.resolve(srcDir, 'jpevents_scraper.py'),
+          '--skip-recent', String(dto.skipRecentCount ?? 50),
+          '--region', dto.source ?? 'JP',
+          '--max-events', String(dto.maxEvents ?? 50),
+        ];
+        cwd = scrapersDir;
     }
 
-    const proc = spawn('python', args, {
+    this.logger.log(`Spawning: ${command} ${args.join(' ')}`);
+
+    const proc = spawn(command, args, {
+      cwd,
       env: {
         ...process.env,
         PYTHONUNBUFFERED: '1',

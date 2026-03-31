@@ -92,12 +92,14 @@ def get_event_ids_from_list(max_events=5, start_offset=0):
     print(f"Total event IDs collected: {len(event_data_list)}")
     return event_data_list
 
-def main(start_offset=0, reload_info=False):
+def main(start_offset=0, reload_info=False, force_reimport=False, max_events=50):
     """Main function with optional start offset
     
     Args:
         start_offset: Offset to start from (e.g., 100 to skip first 100 events)
         reload_info: If True, re-scrape event info even if folder exists (skips deck download if present)
+        force_reimport: If True, re-download decks even if already present
+        max_events: Maximum number of new events to scrape (default 50)
     """
     scraper = EventDeckScraper(output_dir="event_data")
     
@@ -112,8 +114,10 @@ def main(start_offset=0, reload_info=False):
     print(f"Found {len(events_to_scrape)} event IDs from list page")
     if reload_info:
         print(f"Mode: RELOAD INFO ONLY (Updating event metadata, skipping deck downloads)")
+    elif force_reimport:
+        print(f"Mode: FORCE RE-IMPORT (re-downloading all events including already downloaded)")
     else:
-        print(f"Will scrape up to 50 NEW events (skipping already downloaded)")
+        print(f"Will scrape up to {max_events} NEW events (skipping already downloaded)")
     print()
     
     for idx, event_info in enumerate(events_to_scrape, 1):
@@ -169,9 +173,9 @@ def main(start_offset=0, reload_info=False):
                     expected_decks = len(event_data.get('results', []))
                     actual_decks = len(deck_files)
                     
-                    if actual_decks >= expected_decks and actual_decks > 0:
+                    if actual_decks >= expected_decks and actual_decks > 0 and not force_reimport:
                         print(f"⊙ Event {event_id}: Already downloaded with {actual_decks} decks, skipping...")
-                        # Don't count already downloaded events toward the 50 target
+                        # Don't count already downloaded events toward the target
                         continue
                     else:
                         print(f"⊙ Event {event_id}: Found but missing decks ({actual_decks}/{expected_decks}), re-downloading decks...")
@@ -238,11 +242,11 @@ def main(start_offset=0, reload_info=False):
                     continue
             
             successful_events.append(event_id)
-            print(f"✓ Downloaded event {event_id} ({len(successful_events)}/50 new events)")
+            print(f"✓ Downloaded event {event_id} ({len(successful_events)}/{max_events} new events)")
             
-            # Stop after 50 NEW successful events
-            if len(successful_events) >= 50:
-                print(f"\n✓ Reached target of 50 NEW events!")
+            # Stop after max_events NEW successful events
+            if len(successful_events) >= max_events:
+                print(f"\n✓ Reached target of {max_events} NEW events!")
                 break
             
             # Be respectful to server
@@ -261,19 +265,39 @@ def main(start_offset=0, reload_info=False):
     print()
 
 if __name__ == "__main__":
-    import sys
-    
-    # Check for command line arguments
-    start_offset = 0
-    reload_info = False
-    
-    for arg in sys.argv[1:]:
-        if arg == "--reload-info":
-            reload_info = True
-        elif arg.isdigit():
-            start_offset = int(arg)
-            
-    if reload_info:
-        print("Mode: Reloading event info (skipping deck downloads if present)")
-        
-    main(start_offset, reload_info)
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description='Batch scrape PTCG tournament events from players.pokemon-card.com'
+    )
+    parser.add_argument(
+        'start_offset', nargs='?', type=int, default=0,
+        help='Number of most-recent events to skip (positional, default: 0)'
+    )
+    parser.add_argument(
+        '--skip-recent', type=int, dest='skip_recent', default=None,
+        help='Alias for start_offset used by the API server'
+    )
+    parser.add_argument(
+        '--region', default='JP', choices=['JP', 'HK', 'EN'],
+        help='Region identifier (informational; only JP scraping supported, default: JP)'
+    )
+    parser.add_argument(
+        '--reload-info', action='store_true', dest='reload_info',
+        help='Re-scrape event info even if folder already exists (skips deck downloads)'
+    )
+    parser.add_argument(
+        '--force-reimport', action='store_true', dest='force_reimport',
+        help='Re-download decks even if they already exist locally'
+    )
+    parser.add_argument(
+        '--max-events', type=int, default=50, dest='max_events',
+        help='Maximum number of new events to scrape (default: 50)'
+    )
+
+    args = parser.parse_args()
+
+    # --skip-recent overrides the positional start_offset when provided
+    offset = args.skip_recent if args.skip_recent is not None else args.start_offset
+
+    main(offset, args.reload_info, args.force_reimport, args.max_events)

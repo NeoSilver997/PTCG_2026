@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/api-client';
 
@@ -10,13 +10,22 @@ const STATUS_COLORS: Record<string, string> = {
   PENDING: 'bg-yellow-100 text-yellow-700',
   RUNNING: 'bg-blue-100 text-blue-700 animate-pulse',
   SUCCESS: 'bg-green-100 text-green-700',
-  FAILED: 'bg-red-100 text-red-700',
+  FAILED:  'bg-red-100 text-red-700',
 };
 
-const REGION_LABELS: Record<string, string> = {
-  HK: '🇭🇰 Hong Kong',
-  JP: '🇯🇵 Japan',
-  EN: '🇺🇸 English',
+const JOB_TYPE_LABELS: Record<string, string> = {
+  JP:                '🇯🇵 Japan Events',
+  HK:                '🇭🇰 HK Events',
+  EN:                '🇺🇸 EN Events',
+  JP_CARDS:          '🇯🇵 JP Cards',
+  HK_CARDS:          '🇭🇰 HK Cards',
+  EN_CARDS:          '🇺🇸 EN Cards',
+  CARD_IMPORT:       '📦 Card Import',
+  MARKET_PRICES:     '💰 Market Prices',
+  SEED_TOURNAMENTS:  '🌱 Seed Tournaments',
+  RESYNC_DECKS:      '🔄 Resync Decks',
+  REMAP_DECKS:       '🗺️ Remap Decks',
+  REMOVE_DUPLICATES: '🧹 Remove Dupes',
 };
 
 interface ScraperJob {
@@ -31,23 +40,318 @@ interface ScraperJob {
   logs?: Array<{ ts: string; line: string }>;
 }
 
-interface LogEntry {
-  ts: string;
-  line: string;
+interface LogEntry { ts: string; line: string; }
+
+type TabKey = 'events' | 'cards' | 'import' | 'maintenance';
+
+// ── Shared tiny components ──────────────────────────────────────────────────
+
+function Field({ label, hint, children }: {
+  label: string; hint?: string; children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label className="block text-xs text-gray-500 mb-1">{label}</label>
+      {children}
+      {hint && <p className="text-xs text-gray-400 mt-1 font-mono">{hint}</p>}
+    </div>
+  );
+}
+
+function Check({ id, label, hint, checked, onChange }: {
+  id: string; label: string; hint: string; checked: boolean; onChange: (v: boolean) => void;
+}) {
+  return (
+    <div className="flex items-start gap-2">
+      <input type="checkbox" id={id} checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="rounded mt-0.5 shrink-0" />
+      <label htmlFor={id} className="text-sm text-gray-600 leading-tight cursor-pointer">
+        <span className="font-medium">{label}</span>
+        <p className="text-xs text-gray-400 mt-0.5 font-mono">{hint}</p>
+      </label>
+    </div>
+  );
+}
+
+function Num({ value, min, max, onChange }: {
+  value: number; min: number; max: number; onChange: (v: number) => void;
+}) {
+  return (
+    <input type="number" value={value} min={min} max={max}
+      onChange={(e) => onChange(parseInt(e.target.value) || min)}
+      className="w-full border rounded-md px-3 py-2 text-sm" />
+  );
+}
+
+function Text({ value, placeholder, onChange }: {
+  value: string; placeholder?: string; onChange: (v: string) => void;
+}) {
+  return (
+    <input type="text" value={value} placeholder={placeholder}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full border rounded-md px-3 py-2 text-sm" />
+  );
+}
+
+function SectionDivider({ label }: { label: string }) {
+  return <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider border-t pt-2 mt-1">{label}</p>;
+}
+
+// ── Tab: Events ────────────────────────────────────────────────────────────
+
+interface EventsState {
+  source: string; skipRecent: number; maxEvents: number;
+  forceReimport: boolean; reloadInfo: boolean;
+}
+
+function EventsForm({ s, set }: { s: EventsState; set: (p: Partial<EventsState>) => void }) {
+  return (
+    <div className="space-y-3">
+      <Field label="Region">
+        <select value={s.source} onChange={(e) => set({ source: e.target.value })}
+          className="w-full border rounded-md px-3 py-2 text-sm">
+          <option value="JP">🇯🇵 Japan</option>
+          <option value="HK">🇭🇰 Hong Kong</option>
+          <option value="EN">🇺🇸 English</option>
+        </select>
+      </Field>
+      <Field label="Skip Recent Events" hint="--skip-recent N">
+        <Num value={s.skipRecent} min={0} max={500} onChange={(v) => set({ skipRecent: v })} />
+      </Field>
+      <Field label="Max Events to Scrape" hint="--max-events N (default 50)">
+        <Num value={s.maxEvents} min={1} max={200} onChange={(v) => set({ maxEvents: v })} />
+      </Field>
+      <SectionDivider label="Options" />
+      <Check id="ev-force"  label="Force re-import"   hint="--force-reimport: re-download even if on disk"         checked={s.forceReimport} onChange={(v) => set({ forceReimport: v })} />
+      <Check id="ev-reload" label="Reload event info" hint="--reload-info: re-scrape metadata; skip deck downloads" checked={s.reloadInfo}    onChange={(v) => set({ reloadInfo: v })} />
+    </div>
+  );
+}
+
+// ── Tab: Cards ─────────────────────────────────────────────────────────────
+
+interface CardsState {
+  region: 'JP' | 'HK' | 'EN';
+  idRangeStart: string; idRangeCount: string; cardIds: string;
+  cacheHtml: boolean; cacheOnly: boolean; refreshCache: boolean;
+  threads: number; minRequestInterval: number;
+  expansions: string; compactJson: boolean;
+  quiet: boolean; htmlCacheDir: string; outputFile: string;
+}
+
+function CardsForm({ s, set }: { s: CardsState; set: (p: Partial<CardsState>) => void }) {
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-1">
+        {(['JP', 'HK', 'EN'] as const).map((r) => (
+          <button key={r} onClick={() => set({ region: r })}
+            className={`flex-1 py-1 text-xs rounded border font-medium ${
+              s.region === r ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-gray-600 hover:bg-gray-50'}` }>
+            {r === 'JP' ? '🇯🇵 JP' : r === 'HK' ? '🇭🇰 HK' : '🇺🇸 EN'}
+          </button>
+        ))}
+      </div>
+      <Field label="ID Range" hint="--id-range &lt;start&gt; &lt;count&gt;">
+        <div className="flex gap-2">
+          <input type="number" placeholder="Start ID" value={s.idRangeStart}
+            onChange={(e) => set({ idRangeStart: e.target.value })}
+            className="w-full border rounded-md px-3 py-2 text-sm" />
+          <input type="number" placeholder="Count" value={s.idRangeCount}
+            onChange={(e) => set({ idRangeCount: e.target.value })}
+            className="w-full border rounded-md px-3 py-2 text-sm" />
+        </div>
+      </Field>
+      <Field label="Specific IDs (comma-separated)" hint="--ids 48717,48879">
+        <Text value={s.cardIds} placeholder="e.g. 48717,48879,49536" onChange={(v) => set({ cardIds: v })} />
+      </Field>
+      <Field label="Threads" hint="--threads 1-20">
+        <Num value={s.threads} min={1} max={20} onChange={(v) => set({ threads: v })} />
+      </Field>
+      {s.region === 'JP' && <>
+        <Field label="Min Request Interval (s)" hint="--min-request-interval (default 2.0)">
+          <input type="number" step="0.5" min={0.5} max={10} value={s.minRequestInterval}
+            onChange={(e) => set({ minRequestInterval: parseFloat(e.target.value) || 2.0 })}
+            className="w-full border rounded-md px-3 py-2 text-sm" />
+        </Field>
+        <Field label="Expansions filter" hint="--expansions sv8,sv9">
+          <Text value={s.expansions} placeholder="e.g. sv8,sv9" onChange={(v) => set({ expansions: v })} />
+        </Field>
+      </>}
+      {s.region === 'HK' && (
+        <Field label="HTML Cache Dir" hint="--html-cache-dir">
+          <Text value={s.htmlCacheDir} placeholder="D:/ptcg_cache/hk" onChange={(v) => set({ htmlCacheDir: v })} />
+        </Field>
+      )}
+      <Field label="Output File" hint="--output (optional)">
+        <Text value={s.outputFile} placeholder="Leave blank for auto" onChange={(v) => set({ outputFile: v })} />
+      </Field>
+      <SectionDivider label="Options" />
+      <Check id="c-html"   label="Cache HTML"    hint="--cache-html: save raw HTML to disk"       checked={s.cacheHtml}    onChange={(v) => set({ cacheHtml: v })} />
+      <Check id="c-only"   label="Cache only"     hint="--cache-only: parse from cache, no HTTP" checked={s.cacheOnly}    onChange={(v) => set({ cacheOnly: v })} />
+      <Check id="c-ref"    label="Refresh cache"  hint="--refresh-cache: force re-fetch HTML"    checked={s.refreshCache} onChange={(v) => set({ refreshCache: v })} />
+      {s.region === 'JP' && (
+        <Check id="c-compact" label="Compact JSON" hint="--compact-json"                          checked={s.compactJson} onChange={(v) => set({ compactJson: v })} />
+      )}
+      <Check id="c-quiet"  label="Quiet mode"     hint="--quiet: suppress per-card logging"     checked={s.quiet}        onChange={(v) => set({ quiet: v })} />
+    </div>
+  );
+}
+
+// ── Tab: Import ────────────────────────────────────────────────────────────
+
+interface ImportState {
+  tool: 'card_import' | 'market_prices';
+  baseDir: string; regionOrPattern: string;
+  marketFile: string; dryRun: boolean; verbose: boolean;
+}
+
+function ImportForm({ s, set }: { s: ImportState; set: (p: Partial<ImportState>) => void }) {
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-1">
+        {([['card_import', '📦 Card Import'], ['market_prices', '💰 Market Prices']] as const).map(([k, lbl]) => (
+          <button key={k} onClick={() => set({ tool: k })}
+            className={`flex-1 py-1 text-xs rounded border font-medium ${
+              s.tool === k ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+            {lbl}
+          </button>
+        ))}
+      </div>
+      {s.tool === 'card_import' && <>
+        <p className="text-xs text-gray-500">Runs <code className="bg-gray-100 px-1 rounded">import-cards-direct.ts</code> — writes directly to DB via Prisma</p>
+        <Field label="Base Dir" hint="1st arg (default: data/cards)">
+          <Text value={s.baseDir} placeholder="data/cards" onChange={(v) => set({ baseDir: v })} />
+        </Field>
+        <Field label="Region / Pattern" hint="2nd arg: japan · english · hongkong · china">
+          <Text value={s.regionOrPattern} placeholder="japan" onChange={(v) => set({ regionOrPattern: v })} />
+        </Field>
+      </>}
+      {s.tool === 'market_prices' && <>
+        <p className="text-xs text-gray-500">Runs <code className="bg-gray-100 px-1 rounded">import-market-prices.ts</code></p>
+        <Field label="Market Prices File" hint="--file= (blank = auto-detect from PTCG_CardDB_Tc/)">
+          <Text value={s.marketFile} placeholder="Auto-detect" onChange={(v) => set({ marketFile: v })} />
+        </Field>
+      </>}
+      <SectionDivider label="Options" />
+      <Check id="i-dry"  label="Dry run" hint="--dry-run: preview without writing" checked={s.dryRun}   onChange={(v) => set({ dryRun: v })} />
+      <Check id="i-verb" label="Verbose" hint="--verbose: extra logging"           checked={s.verbose} onChange={(v) => set({ verbose: v })} />
+    </div>
+  );
+}
+
+// ── Tab: Maintenance ───────────────────────────────────────────────────────
+
+type MaintenanceTool = 'seed_tournaments' | 'resync_decks' | 'remap_decks' | 'remove_duplicates';
+
+interface MaintenanceState {
+  tool: MaintenanceTool;
+  seedAll: boolean; seedLimit: string; eventId: string;
+  refreshExisting: boolean; sourceRoot: string;
+  processLimit: string; reportFile: string; deckId: string;
+  dryRun: boolean; verbose: boolean;
+}
+
+function MaintenanceForm({ s, set }: { s: MaintenanceState; set: (p: Partial<MaintenanceState>) => void }) {
+  const tools: [MaintenanceTool, string][] = [
+    ['seed_tournaments',  '🌱 Seed'],
+    ['resync_decks',      '🔄 Resync'],
+    ['remap_decks',       '🗺️ Remap'],
+    ['remove_duplicates', '🧹 Dupes'],
+  ];
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-1">
+        {tools.map(([k, lbl]) => (
+          <button key={k} onClick={() => set({ tool: k })}
+            className={`py-1 text-xs rounded border font-medium ${
+              s.tool === k ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+            {lbl}
+          </button>
+        ))}
+      </div>
+
+      {s.tool === 'seed_tournaments' && <>
+        <p className="text-xs text-gray-500">Runs <code className="bg-gray-100 px-1 rounded">seed-tournaments.ts</code></p>
+        <Field label="Event ID (single event)" hint="--event-id=952769">
+          <Text value={s.eventId} placeholder="Leave blank for batch" onChange={(v) => set({ eventId: v })} />
+        </Field>
+        <Field label="Limit" hint="--limit= (ignored when All events is on)">
+          <input type="number" value={s.seedLimit} min={1} max={500}
+            onChange={(e) => set({ seedLimit: e.target.value })}
+            className="w-full border rounded-md px-3 py-2 text-sm" />
+        </Field>
+        <Field label="Source Root" hint="--source-root= (auto-detect if blank)">
+          <Text value={s.sourceRoot} placeholder="C:/AI_Server/Coding/PTCG_CardDB/event_data" onChange={(v) => set({ sourceRoot: v })} />
+        </Field>
+        <SectionDivider label="Options" />
+        <Check id="m-all"  label="All events"       hint="--all: no limit"                    checked={s.seedAll}         onChange={(v) => set({ seedAll: v })} />
+        <Check id="m-re"   label="Refresh existing" hint="--refresh-existing"                  checked={s.refreshExisting} onChange={(v) => set({ refreshExisting: v })} />
+        <Check id="m-dry"  label="Dry run"           hint="--dry-run"                          checked={s.dryRun}          onChange={(v) => set({ dryRun: v })} />
+        <Check id="m-verb" label="Verbose"           hint="--verbose"                          checked={s.verbose}         onChange={(v) => set({ verbose: v })} />
+      </>}
+
+      {s.tool === 'resync_decks' && <>
+        <p className="text-xs text-gray-500">Runs <code className="bg-gray-100 px-1 rounded">resync-deck-cards.ts</code> — re-links deck card references</p>
+        <Field label="Limit (decks)" hint="--limit=N (blank = all)">
+          <input type="number" value={s.processLimit} min={1}
+            onChange={(e) => set({ processLimit: e.target.value })}
+            className="w-full border rounded-md px-3 py-2 text-sm" />
+        </Field>
+        <Field label="Report File" hint="--report-file=missing_cards.json">
+          <Text value={s.reportFile} placeholder="missing_cards.json" onChange={(v) => set({ reportFile: v })} />
+        </Field>
+        <SectionDivider label="Options" />
+        <Check id="r-dry" label="Dry run" hint="--dry-run: preview without writing" checked={s.dryRun} onChange={(v) => set({ dryRun: v })} />
+      </>}
+
+      {s.tool === 'remap_decks' && <>
+        <p className="text-xs text-gray-500">Runs <code className="bg-gray-100 px-1 rounded">remap-deck-cards.ts</code> — remaps card FK after merges</p>
+        <Field label="Deck ID (single deck)" hint="--deck-id=UUID">
+          <Text value={s.deckId} placeholder="Leave blank for all decks" onChange={(v) => set({ deckId: v })} />
+        </Field>
+        <SectionDivider label="Options" />
+        <Check id="rp-dry"  label="Dry run" hint="--dry-run"  checked={s.dryRun}   onChange={(v) => set({ dryRun: v })} />
+        <Check id="rp-verb" label="Verbose" hint="--verbose" checked={s.verbose} onChange={(v) => set({ verbose: v })} />
+      </>}
+
+      {s.tool === 'remove_duplicates' && <>
+        <p className="text-xs text-gray-500">Runs <code className="bg-gray-100 px-1 rounded">remove-duplicates.ts</code> — deletes duplicate card records</p>
+        <SectionDivider label="Options" />
+        <Check id="d-dry" label="Dry run" hint="--dry-run: show what would be deleted" checked={s.dryRun} onChange={(v) => set({ dryRun: v })} />
+      </>}
+    </div>
+  );
 }
 
 export default function ScraperJobsPage() {
-  const [source, setSource] = useState('JP');
-  const [skipRecent, setSkipRecent] = useState(50);
-  const [forceReimport, setForceReimport] = useState(false);
-  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
-  const [liveLogs, setLiveLogs] = useState<LogEntry[]>([]);
-  const [streamDone, setStreamDone] = useState(false);
-  const logsEndRef = useRef<HTMLDivElement>(null);
-  const eventSourceRef = useRef<EventSource | null>(null);
-  const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<TabKey>('events');
 
-  // Job list (auto-refresh every 5s)
+  const [eventsState, setEventsState] = useState<EventsState>({
+    source: 'JP', skipRecent: 50, maxEvents: 50, forceReimport: false, reloadInfo: false,
+  });
+  const [cardsState, setCardsState] = useState<CardsState>({
+    region: 'JP', idRangeStart: '', idRangeCount: '', cardIds: '',
+    cacheHtml: false, cacheOnly: false, refreshCache: false,
+    threads: 1, minRequestInterval: 2.0,
+    expansions: '', compactJson: false, quiet: false, htmlCacheDir: '', outputFile: '',
+  });
+  const [importState, setImportState] = useState<ImportState>({
+    tool: 'card_import', baseDir: '', regionOrPattern: '', marketFile: '', dryRun: false, verbose: false,
+  });
+  const [maintenanceState, setMaintenanceState] = useState<MaintenanceState>({
+    tool: 'seed_tournaments', seedAll: false, seedLimit: '50', eventId: '',
+    refreshExisting: false, sourceRoot: '', processLimit: '', reportFile: '',
+    deckId: '', dryRun: true, verbose: false,
+  });
+
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+  const [liveLogs, setLiveLogs]    = useState<LogEntry[]>([]);
+  const [streamDone, setStreamDone] = useState(false);
+  const logsEndRef     = useRef<HTMLDivElement>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const queryClient    = useQueryClient();
+
   const { data: jobsData, isLoading } = useQuery({
     queryKey: ['scraper-jobs'],
     queryFn: () => apiClient.get('/scraper-jobs'),
@@ -56,167 +360,143 @@ export default function ScraperJobsPage() {
 
   const jobs: ScraperJob[] = jobsData?.data ?? [];
 
-  // Start job mutation
+  const buildPayload = () => {
+    switch (activeTab) {
+      case 'events': {
+        const e = eventsState;
+        return { jobType: 'TOURNAMENT_EVENTS', source: e.source, skipRecentCount: e.skipRecent, maxEvents: e.maxEvents, forceReimport: e.forceReimport, reloadInfo: e.reloadInfo };
+      }
+      case 'cards': {
+        const c = cardsState;
+        return {
+          jobType: c.region === 'JP' ? 'JP_CARDS' : c.region === 'HK' ? 'HK_CARDS' : 'EN_CARDS',
+          ...(c.idRangeStart && c.idRangeCount ? { idRangeStart: Number(c.idRangeStart), idRangeCount: Number(c.idRangeCount) } : {}),
+          ...(c.cardIds ? { cardIds: c.cardIds } : {}),
+          cacheHtml: c.cacheHtml, cacheOnly: c.cacheOnly, refreshCache: c.refreshCache, threads: c.threads,
+          ...(c.region === 'JP' ? { minRequestInterval: c.minRequestInterval, ...(c.expansions ? { expansions: c.expansions } : {}), compactJson: c.compactJson } : {}),
+          ...(c.region === 'HK' && c.htmlCacheDir ? { htmlCacheDir: c.htmlCacheDir } : {}),
+          quiet: c.quiet,
+          ...(c.outputFile ? { outputFile: c.outputFile } : {}),
+        };
+      }
+      case 'import': {
+        const i = importState;
+        if (i.tool === 'card_import') return { jobType: 'CARD_IMPORT', ...(i.baseDir ? { baseDir: i.baseDir } : {}), ...(i.regionOrPattern ? { regionOrPattern: i.regionOrPattern } : {}), dryRun: i.dryRun, verbose: i.verbose };
+        return { jobType: 'MARKET_PRICES', ...(i.marketFile ? { marketFile: i.marketFile } : {}), dryRun: i.dryRun, verbose: i.verbose };
+      }
+      case 'maintenance': {
+        const m = maintenanceState;
+        const base = { dryRun: m.dryRun, verbose: m.verbose };
+        switch (m.tool) {
+          case 'seed_tournaments': return { jobType: 'SEED_TOURNAMENTS', ...base, seedAll: m.seedAll, ...(m.seedLimit && !m.seedAll ? { seedLimit: parseInt(m.seedLimit) } : {}), ...(m.eventId ? { eventId: m.eventId } : {}), refreshExisting: m.refreshExisting, ...(m.sourceRoot ? { sourceRoot: m.sourceRoot } : {}) };
+          case 'resync_decks':     return { jobType: 'RESYNC_DECKS',     ...base, ...(m.processLimit ? { processLimit: parseInt(m.processLimit) } : {}), ...(m.reportFile ? { reportFile: m.reportFile } : {}) };
+          case 'remap_decks':      return { jobType: 'REMAP_DECKS',      ...base, ...(m.deckId ? { deckId: m.deckId } : {}) };
+          case 'remove_duplicates':return { jobType: 'REMOVE_DUPLICATES', dryRun: m.dryRun };
+        }
+      }
+    }
+  };
+
   const startMutation = useMutation({
-    mutationFn: () =>
-      apiClient.post('/scraper-jobs', {
-        source,
-        skipRecentCount: skipRecent,
-        forceReimport,
-      }),
+    mutationFn: () => apiClient.post('/scraper-jobs', buildPayload()),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['scraper-jobs'] });
-      const jobId = res.data.id;
-      setSelectedJobId(jobId);
-      openSSEStream(jobId);
+      setSelectedJobId(res.data.id);
+      openSSEStream(res.data.id);
     },
   });
 
-  // Cancel job mutation
   const cancelMutation = useMutation({
     mutationFn: (id: string) => apiClient.delete(`/scraper-jobs/${id}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['scraper-jobs'] }),
   });
 
   const openSSEStream = useCallback((jobId: string) => {
-    // Close existing stream
     eventSourceRef.current?.close();
-
     setLiveLogs([]);
     setStreamDone(false);
-
     const es = new EventSource(`${BASE_URL}/scraper-jobs/${jobId}/stream`);
     eventSourceRef.current = es;
-
     es.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        if (data.log) {
-          setLiveLogs((prev) => [...prev, data.log]);
-          logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-        }
-        if (data.done) {
-          setStreamDone(true);
-          queryClient.invalidateQueries({ queryKey: ['scraper-jobs'] });
-          es.close();
-        }
-      } catch {
-        // ignore parse errors
-      }
+        if (data.log) { setLiveLogs((prev) => [...prev, data.log]); logsEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }
+        if (data.done) { setStreamDone(true); queryClient.invalidateQueries({ queryKey: ['scraper-jobs'] }); es.close(); }
+      } catch { /* ignore */ }
     };
-
-    es.onerror = () => {
-      setStreamDone(true);
-      es.close();
-    };
+    es.onerror = () => { setStreamDone(true); es.close(); };
   }, [queryClient]);
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => eventSourceRef.current?.close();
-  }, []);
+  useEffect(() => () => eventSourceRef.current?.close(), []);
 
   const selectedJob = jobs.find((j) => j.id === selectedJobId);
   const displayLogs = liveLogs.length > 0 ? liveLogs : selectedJob?.logs ?? [];
 
   const formatDuration = (start?: string, end?: string) => {
     if (!start) return '-';
-    const s = new Date(start);
-    const e = end ? new Date(end) : new Date();
-    const secs = Math.floor((e.getTime() - s.getTime()) / 1000);
-    if (secs < 60) return `${secs}s`;
-    return `${Math.floor(secs / 60)}m ${secs % 60}s`;
+    const secs = Math.floor((new Date(end ?? Date.now()).getTime() - new Date(start).getTime()) / 1000);
+    return secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${secs % 60}s`;
   };
+
+  const TABS: { key: TabKey; label: string }[] = [
+    { key: 'events',      label: '🏆 Events' },
+    { key: 'cards',       label: '🃏 Cards'  },
+    { key: 'import',      label: '📦 Import' },
+    { key: 'maintenance', label: '🔧 Tools'  },
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="bg-gradient-to-r from-slate-700 to-gray-600 text-white p-6">
         <h1 className="text-3xl font-bold">Scraper Jobs</h1>
-        <p className="text-slate-300 mt-1">Manage tournament data scraping jobs</p>
+        <p className="text-slate-300 mt-1">Manage all data pipeline jobs</p>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-6 flex gap-4">
-        {/* Left panel: start job + job list */}
+        {/* Left panel */}
         <div className="w-80 shrink-0 space-y-4">
-          {/* Start Job form */}
           <div className="bg-white rounded-lg shadow-sm p-4 space-y-3">
             <h2 className="font-semibold text-gray-800">Start New Job</h2>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Region</label>
-              <select
-                value={source}
-                onChange={(e) => setSource(e.target.value)}
-                className="w-full border rounded-md px-3 py-2 text-sm"
-              >
-                {Object.entries(REGION_LABELS).map(([k, v]) => (
-                  <option key={k} value={k}>{v}</option>
-                ))}
-              </select>
+
+            {/* Tab bar */}
+            <div className="flex gap-1">
+              {TABS.map(({ key, label }) => (
+                <button key={key} onClick={() => setActiveTab(key)}
+                  className={`flex-1 py-1 px-1 text-xs rounded border font-medium ${
+                    activeTab === key ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-gray-600 hover:bg-gray-50'}` }>
+                  {label}
+                </button>
+              ))}
             </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Skip Recent Events</label>
-              <input
-                type="number"
-                value={skipRecent}
-                min={0}
-                max={500}
-                onChange={(e) => setSkipRecent(parseInt(e.target.value) || 0)}
-                className="w-full border rounded-md px-3 py-2 text-sm"
-              />
-              <p className="text-xs text-gray-400 mt-1">Events already in DB to skip</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="force-reimport"
-                checked={forceReimport}
-                onChange={(e) => setForceReimport(e.target.checked)}
-                className="rounded"
-              />
-              <label htmlFor="force-reimport" className="text-sm text-gray-600">Force re-import</label>
-            </div>
-            <button
-              onClick={() => startMutation.mutate()}
-              disabled={startMutation.isPending}
-              className="w-full px-4 py-2 bg-slate-700 text-white rounded-md text-sm font-medium hover:bg-slate-800 disabled:opacity-40"
-            >
-              {startMutation.isPending ? 'Starting...' : '▶ Start Scraper'}
+
+            {activeTab === 'events'      && <EventsForm      s={eventsState}      set={(p) => setEventsState((prev) => ({ ...prev, ...p }))} />}
+            {activeTab === 'cards'       && <CardsForm        s={cardsState}       set={(p) => setCardsState((prev) => ({ ...prev, ...p }))} />}
+            {activeTab === 'import'      && <ImportForm       s={importState}      set={(p) => setImportState((prev) => ({ ...prev, ...p }))} />}
+            {activeTab === 'maintenance' && <MaintenanceForm  s={maintenanceState} set={(p) => setMaintenanceState((prev) => ({ ...prev, ...p }))} />}
+
+            <button onClick={() => startMutation.mutate()} disabled={startMutation.isPending}
+              className="w-full px-4 py-2 bg-slate-700 text-white rounded-md text-sm font-medium hover:bg-slate-800 disabled:opacity-40">
+              {startMutation.isPending ? 'Starting...' : '▶ Start Job'}
             </button>
           </div>
 
           {/* Job list */}
           <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="p-3 border-b">
-              <h3 className="font-medium text-gray-700 text-sm">Recent Jobs</h3>
-            </div>
+            <div className="p-3 border-b"><h3 className="font-medium text-gray-700 text-sm">Recent Jobs</h3></div>
             {isLoading && <p className="text-center py-4 text-gray-400 text-sm">Loading...</p>}
-            {jobs.length === 0 && !isLoading && (
-              <p className="text-center py-6 text-gray-400 text-sm">No jobs yet.</p>
-            )}
-            <div className="divide-y">
+            {jobs.length === 0 && !isLoading && <p className="text-center py-6 text-gray-400 text-sm">No jobs yet.</p>}
+            <div className="divide-y max-h-[50vh] overflow-y-auto">
               {jobs.map((job) => (
-                <div
-                  key={job.id}
+                <div key={job.id}
                   className={`px-3 py-2 cursor-pointer hover:bg-gray-50 ${selectedJobId === job.id ? 'bg-slate-50 border-l-2 border-slate-600' : ''}`}
-                  onClick={() => {
-                    setSelectedJobId(job.id);
-                    setLiveLogs([]);
-                    if (job.status === 'RUNNING') openSSEStream(job.id);
-                  }}
-                >
+                  onClick={() => { setSelectedJobId(job.id); setLiveLogs([]); if (job.status === 'RUNNING') openSSEStream(job.id); }}>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-medium text-gray-700">{REGION_LABELS[job.source] ?? job.source}</span>
-                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${STATUS_COLORS[job.status]}`}>
-                      {job.status}
-                    </span>
+                    <span className="text-xs font-medium text-gray-700 truncate">{JOB_TYPE_LABELS[job.source] ?? job.source}</span>
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium shrink-0 ${STATUS_COLORS[job.status]}`}>{job.status}</span>
                   </div>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    {new Date(job.createdAt).toLocaleString()}
-                  </p>
+                  <p className="text-xs text-gray-400 mt-0.5">{new Date(job.createdAt).toLocaleString()}</p>
                   {(job.successCount > 0 || job.failureCount > 0) && (
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      ✓{job.successCount} ✗{job.failureCount}
-                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">✓{job.successCount} ✗{job.failureCount}</p>
                   )}
                 </div>
               ))}
@@ -224,79 +504,48 @@ export default function ScraperJobsPage() {
           </div>
         </div>
 
-        {/* Right panel: job details + logs */}
+        {/* Right panel */}
         <div className="flex-1 space-y-4">
           {!selectedJobId && (
-            <div className="bg-white rounded-lg shadow-sm flex items-center justify-center h-64 text-gray-400">
-              Select a job to view details
-            </div>
+            <div className="bg-white rounded-lg shadow-sm flex items-center justify-center h-64 text-gray-400">Select a job to view details</div>
           )}
 
           {selectedJob && (
             <div className="bg-white rounded-lg shadow-sm p-4">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="font-semibold text-gray-800 text-lg">
-                    {REGION_LABELS[selectedJob.source] ?? selectedJob.source}
-                  </h2>
+                  <h2 className="font-semibold text-gray-800 text-lg">{JOB_TYPE_LABELS[selectedJob.source] ?? selectedJob.source}</h2>
                   <p className="text-xs text-gray-400 font-mono mt-0.5">{selectedJob.id}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className={`px-2 py-1 rounded-full text-sm font-medium ${STATUS_COLORS[selectedJob.status]}`}>
-                    {selectedJob.status}
-                  </span>
+                  <span className={`px-2 py-1 rounded-full text-sm font-medium ${STATUS_COLORS[selectedJob.status]}`}>{selectedJob.status}</span>
                   {selectedJob.status === 'RUNNING' && (
-                    <button
-                      onClick={() => cancelMutation.mutate(selectedJob.id)}
-                      className="px-3 py-1 bg-red-100 text-red-600 rounded text-sm hover:bg-red-200"
-                    >
-                      Cancel
-                    </button>
+                    <button onClick={() => cancelMutation.mutate(selectedJob.id)} className="px-3 py-1 bg-red-100 text-red-600 rounded text-sm hover:bg-red-200">Cancel</button>
                   )}
                 </div>
               </div>
-
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
-                <div className="bg-gray-50 rounded p-2 text-center">
-                  <p className="text-xs text-gray-500">Duration</p>
-                  <p className="font-semibold text-sm">{formatDuration(selectedJob.startedAt, selectedJob.completedAt)}</p>
-                </div>
-                <div className="bg-green-50 rounded p-2 text-center">
-                  <p className="text-xs text-gray-500">Imported</p>
-                  <p className="font-semibold text-sm text-green-700">{selectedJob.successCount}</p>
-                </div>
-                <div className="bg-red-50 rounded p-2 text-center">
-                  <p className="text-xs text-gray-500">Failed</p>
-                  <p className="font-semibold text-sm text-red-600">{selectedJob.failureCount}</p>
-                </div>
-                <div className="bg-gray-50 rounded p-2 text-center">
-                  <p className="text-xs text-gray-500">Started</p>
-                  <p className="font-semibold text-xs">{selectedJob.startedAt ? new Date(selectedJob.startedAt).toLocaleTimeString() : '-'}</p>
-                </div>
+                <div className="bg-gray-50 rounded p-2 text-center"><p className="text-xs text-gray-500">Duration</p><p className="font-semibold text-sm">{formatDuration(selectedJob.startedAt, selectedJob.completedAt)}</p></div>
+                <div className="bg-green-50 rounded p-2 text-center"><p className="text-xs text-gray-500">Imported</p><p className="font-semibold text-sm text-green-700">{selectedJob.successCount}</p></div>
+                <div className="bg-red-50 rounded p-2 text-center"><p className="text-xs text-gray-500">Failed</p><p className="font-semibold text-sm text-red-600">{selectedJob.failureCount}</p></div>
+                <div className="bg-gray-50 rounded p-2 text-center"><p className="text-xs text-gray-500">Started</p><p className="font-semibold text-xs">{selectedJob.startedAt ? new Date(selectedJob.startedAt).toLocaleTimeString() : '-'}</p></div>
               </div>
             </div>
           )}
 
-          {/* Log viewer */}
           {selectedJobId && (
             <div className="bg-gray-900 rounded-lg overflow-hidden">
               <div className="flex items-center justify-between px-4 py-2 bg-gray-800">
-                <h3 className="text-sm font-medium text-gray-300">
-                  Live Logs {selectedJob?.status === 'RUNNING' && !streamDone ? '⟳' : ''}
-                </h3>
+                <h3 className="text-sm font-medium text-gray-300">Live Logs {selectedJob?.status === 'RUNNING' && !streamDone ? '⟳' : ''}</h3>
                 <span className="text-xs text-gray-500">{displayLogs.length} lines</span>
               </div>
-              <div className="h-96 overflow-y-auto p-4 font-mono text-xs text-green-400 space-y-0.5">
+              <div className="h-96 overflow-y-auto p-4 font-mono text-xs space-y-0.5">
                 {displayLogs.length === 0 && (
-                  <p className="text-gray-500">
-                    {selectedJob?.status === 'RUNNING' ? 'Waiting for output...' : 'No logs available.'}
-                  </p>
+                  <p className="text-gray-500">{selectedJob?.status === 'RUNNING' ? 'Waiting for output...' : 'No logs available.'}</p>
                 )}
                 {displayLogs.map((entry, i) => (
                   <div key={i} className={`flex gap-2 ${entry.line.includes('[STDERR]') ? 'text-red-400' : 'text-green-400'}`}>
-                    <span className="text-gray-600 shrink-0">
-                      {new Date(entry.ts).toLocaleTimeString()}
-                    </span>
+                    <span className="text-gray-600 shrink-0">{new Date(entry.ts).toLocaleTimeString()}</span>
                     <span className="break-all">{entry.line}</span>
                   </div>
                 ))}
