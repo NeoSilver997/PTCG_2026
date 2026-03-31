@@ -197,7 +197,7 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
           placeholder="搜尋卡片名稱..."
           value={filters.name}
           onChange={(e) => updateFilter('name', e.target.value)}
-          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white placeholder:text-gray-400"
         />
       </div>
       
@@ -368,7 +368,7 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
                 }
               }
             }}
-            className="w-24 px-2 py-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-purple-500"
+            className="w-24 px-2 py-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-purple-500 text-gray-900 bg-white placeholder:text-gray-400"
           />
         </div>
       </div>
@@ -387,7 +387,7 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
                 placeholder="例: jp47009"
                 value={filters.webCardId || ''}
                 onChange={(e) => updateFilter('webCardId', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900 bg-white placeholder:text-gray-400"
               />
             </div>
 
@@ -443,7 +443,7 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
                 placeholder="繪師名稱"
                 value={filters.artist || ''}
                 onChange={(e) => updateFilter('artist', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900 bg-white placeholder:text-gray-400"
               />
             </div>
 
@@ -457,7 +457,7 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
                 placeholder="0"
                 value={filters.minHp || ''}
                 onChange={(e) => updateFilter('minHp', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900 bg-white placeholder:text-gray-400"
                 min="0"
               />
             </div>
@@ -472,7 +472,7 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
                 placeholder="340"
                 value={filters.maxHp || ''}
                 onChange={(e) => updateFilter('maxHp', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900 bg-white placeholder:text-gray-400"
                 min="0"
               />
             </div>
@@ -487,7 +487,7 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
                 placeholder="例: F, G, H"
                 value={filters.regulationMark || ''}
                 onChange={(e) => updateFilter('regulationMark', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900 bg-white placeholder:text-gray-400"
               />
             </div>
             {/* Has Abilities */}

@@ -80,7 +80,7 @@ function Num({ value, min, max, onChange }: {
   return (
     <input type="number" value={value} min={min} max={max}
       onChange={(e) => onChange(parseInt(e.target.value) || min)}
-      className="w-full border rounded-md px-3 py-2 text-sm" />
+      className="w-full border rounded-md px-3 py-2 text-sm text-gray-900 bg-white" />
   );
 }
 
@@ -90,7 +90,7 @@ function Text({ value, placeholder, onChange }: {
   return (
     <input type="text" value={value} placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full border rounded-md px-3 py-2 text-sm" />
+      className="w-full border rounded-md px-3 py-2 text-sm text-gray-900 bg-white placeholder:text-gray-400" />
   );
 }
 
@@ -110,7 +110,7 @@ function EventsForm({ s, set }: { s: EventsState; set: (p: Partial<EventsState>)
     <div className="space-y-3">
       <Field label="Region">
         <select value={s.source} onChange={(e) => set({ source: e.target.value })}
-          className="w-full border rounded-md px-3 py-2 text-sm">
+          className="w-full border rounded-md px-3 py-2 text-sm text-gray-900 bg-white">
           <option value="JP">🇯🇵 Japan</option>
           <option value="HK">🇭🇰 Hong Kong</option>
           <option value="EN">🇺🇸 English</option>
@@ -156,10 +156,10 @@ function CardsForm({ s, set }: { s: CardsState; set: (p: Partial<CardsState>) =>
         <div className="flex gap-2">
           <input type="number" placeholder="Start ID" value={s.idRangeStart}
             onChange={(e) => set({ idRangeStart: e.target.value })}
-            className="w-full border rounded-md px-3 py-2 text-sm" />
+            className="w-full border rounded-md px-3 py-2 text-sm text-gray-900 bg-white placeholder:text-gray-400" />
           <input type="number" placeholder="Count" value={s.idRangeCount}
             onChange={(e) => set({ idRangeCount: e.target.value })}
-            className="w-full border rounded-md px-3 py-2 text-sm" />
+            className="w-full border rounded-md px-3 py-2 text-sm text-gray-900 bg-white placeholder:text-gray-400" />
         </div>
       </Field>
       <Field label="Specific IDs (comma-separated)" hint="--ids 48717,48879">
@@ -172,7 +172,7 @@ function CardsForm({ s, set }: { s: CardsState; set: (p: Partial<CardsState>) =>
         <Field label="Min Request Interval (s)" hint="--min-request-interval (default 2.0)">
           <input type="number" step="0.5" min={0.5} max={10} value={s.minRequestInterval}
             onChange={(e) => set({ minRequestInterval: parseFloat(e.target.value) || 2.0 })}
-            className="w-full border rounded-md px-3 py-2 text-sm" />
+            className="w-full border rounded-md px-3 py-2 text-sm text-gray-900 bg-white" />
         </Field>
         <Field label="Expansions filter" hint="--expansions sv8,sv9">
           <Text value={s.expansions} placeholder="e.g. sv8,sv9" onChange={(v) => set({ expansions: v })} />
@@ -279,7 +279,7 @@ function MaintenanceForm({ s, set }: { s: MaintenanceState; set: (p: Partial<Mai
         <Field label="Limit" hint="--limit= (ignored when All events is on)">
           <input type="number" value={s.seedLimit} min={1} max={500}
             onChange={(e) => set({ seedLimit: e.target.value })}
-            className="w-full border rounded-md px-3 py-2 text-sm" />
+            className="w-full border rounded-md px-3 py-2 text-sm text-gray-900 bg-white" />
         </Field>
         <Field label="Source Root" hint="--source-root= (auto-detect if blank)">
           <Text value={s.sourceRoot} placeholder="C:/AI_Server/Coding/PTCG_CardDB/event_data" onChange={(v) => set({ sourceRoot: v })} />
@@ -296,7 +296,7 @@ function MaintenanceForm({ s, set }: { s: MaintenanceState; set: (p: Partial<Mai
         <Field label="Limit (decks)" hint="--limit=N (blank = all)">
           <input type="number" value={s.processLimit} min={1}
             onChange={(e) => set({ processLimit: e.target.value })}
-            className="w-full border rounded-md px-3 py-2 text-sm" />
+            className="w-full border rounded-md px-3 py-2 text-sm text-gray-900 bg-white" />
         </Field>
         <Field label="Report File" hint="--report-file=missing_cards.json">
           <Text value={s.reportFile} placeholder="missing_cards.json" onChange={(v) => set({ reportFile: v })} />
