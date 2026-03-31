@@ -30,9 +30,9 @@ export class CreateScraperJobDto {
   jobType?: JobType = JobType.TOURNAMENT_EVENTS;
 
   // ── Tournament Events (jpevents_scraper.py) ─────────────────────
-  @ApiPropertyOptional({ enum: ['HK', 'JP', 'EN'], default: 'JP' })
+  @ApiPropertyOptional({ default: 'JP', description: 'Region for events (JP/HK/EN) or job-type label for non-event jobs' })
   @IsOptional()
-  @IsEnum(['HK', 'JP', 'EN'])
+  @IsString()
   source?: string = 'JP';
 
   @ApiPropertyOptional({ default: 50, description: '--skip-recent' })

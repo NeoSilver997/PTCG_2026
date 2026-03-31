@@ -273,6 +273,24 @@ function MaintenanceForm({ s, set }: { s: MaintenanceState; set: (p: Partial<Mai
 
       {s.tool === 'seed_tournaments' && <>
         <p className="text-xs text-gray-500">Runs <code className="bg-gray-100 px-1 rounded">seed-tournaments.ts</code></p>
+
+        {/* Quick-source presets */}
+        <div>
+          <p className="text-xs text-gray-500 mb-1">Quick source:</p>
+          <div className="flex flex-col gap-1">
+            {[
+              { label: '📁 PTCG_CardDB (scraped)', path: 'C:/AI_Server/Coding/PTCG_CardDB/1_Webscraper/event_data' },
+              { label: '📁 PTCG_CardDB (root)',    path: 'C:/AI_Server/Coding/PTCG_CardDB/event_data' },
+            ].map(({ label, path }) => (
+              <button key={path} onClick={() => set({ sourceRoot: path })}
+                className={`text-left text-xs px-2 py-1 rounded border truncate ${
+                  s.sourceRoot === path ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <Field label="Event ID (single event)" hint="--event-id=952769">
           <Text value={s.eventId} placeholder="Leave blank for batch" onChange={(v) => set({ eventId: v })} />
         </Field>
@@ -324,22 +342,41 @@ function MaintenanceForm({ s, set }: { s: MaintenanceState; set: (p: Partial<Mai
   );
 }
 
-export default function ScraperJobsPage() {
-  const [activeTab, setActiveTab] = useState<TabKey>('events');
+function usePersistedState<T>(key: string, defaults: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+  const [state, setState] = useState<T>(() => {
+    if (typeof window === 'undefined') return defaults;
+    try {
+      const stored = localStorage.getItem(key);
+      return stored ? { ...defaults, ...JSON.parse(stored) } : defaults;
+    } catch { return defaults; }
+  });
+  const setAndPersist: React.Dispatch<React.SetStateAction<T>> = useCallback((action) => {
+    setState((prev) => {
+      const next = typeof action === 'function' ? (action as (p: T) => T)(prev) : action;
+      try { localStorage.setItem(key, JSON.stringify(next)); } catch { /* quota */ }
+      return next;
+    });
+  }, [key]);
+  return [state, setAndPersist];
+}
 
-  const [eventsState, setEventsState] = useState<EventsState>({
+export default function ScraperJobsPage() {
+  const [activeTab, setActiveTabRaw] = usePersistedState<TabKey>('scraper-jobs:tab', 'events');
+  const setActiveTab = useCallback((t: TabKey) => setActiveTabRaw(t), [setActiveTabRaw]);
+
+  const [eventsState, setEventsStateRaw] = usePersistedState<EventsState>('scraper-jobs:events', {
     source: 'JP', skipRecent: 50, maxEvents: 50, forceReimport: false, reloadInfo: false,
   });
-  const [cardsState, setCardsState] = useState<CardsState>({
+  const [cardsState, setCardsStateRaw] = usePersistedState<CardsState>('scraper-jobs:cards', {
     region: 'JP', idRangeStart: '', idRangeCount: '', cardIds: '',
     cacheHtml: false, cacheOnly: false, refreshCache: false,
     threads: 1, minRequestInterval: 2.0,
     expansions: '', compactJson: false, quiet: false, htmlCacheDir: '', outputFile: '',
   });
-  const [importState, setImportState] = useState<ImportState>({
+  const [importState, setImportStateRaw] = usePersistedState<ImportState>('scraper-jobs:import', {
     tool: 'card_import', baseDir: '', regionOrPattern: '', marketFile: '', dryRun: false, verbose: false,
   });
-  const [maintenanceState, setMaintenanceState] = useState<MaintenanceState>({
+  const [maintenanceState, setMaintenanceStateRaw] = usePersistedState<MaintenanceState>('scraper-jobs:maintenance', {
     tool: 'seed_tournaments', seedAll: false, seedLimit: '50', eventId: '',
     refreshExisting: false, sourceRoot: '', processLimit: '', reportFile: '',
     deckId: '', dryRun: true, verbose: false,
@@ -348,7 +385,8 @@ export default function ScraperJobsPage() {
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [liveLogs, setLiveLogs]    = useState<LogEntry[]>([]);
   const [streamDone, setStreamDone] = useState(false);
-  const logsEndRef     = useRef<HTMLDivElement>(null);
+  const logsEndRef      = useRef<HTMLDivElement>(null);
+  const logsContainerRef = useRef<HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const queryClient    = useQueryClient();
 
@@ -370,6 +408,7 @@ export default function ScraperJobsPage() {
         const c = cardsState;
         return {
           jobType: c.region === 'JP' ? 'JP_CARDS' : c.region === 'HK' ? 'HK_CARDS' : 'EN_CARDS',
+          source: 'JP',
           ...(c.idRangeStart && c.idRangeCount ? { idRangeStart: Number(c.idRangeStart), idRangeCount: Number(c.idRangeCount) } : {}),
           ...(c.cardIds ? { cardIds: c.cardIds } : {}),
           cacheHtml: c.cacheHtml, cacheOnly: c.cacheOnly, refreshCache: c.refreshCache, threads: c.threads,
@@ -381,17 +420,17 @@ export default function ScraperJobsPage() {
       }
       case 'import': {
         const i = importState;
-        if (i.tool === 'card_import') return { jobType: 'CARD_IMPORT', ...(i.baseDir ? { baseDir: i.baseDir } : {}), ...(i.regionOrPattern ? { regionOrPattern: i.regionOrPattern } : {}), dryRun: i.dryRun, verbose: i.verbose };
-        return { jobType: 'MARKET_PRICES', ...(i.marketFile ? { marketFile: i.marketFile } : {}), dryRun: i.dryRun, verbose: i.verbose };
+        if (i.tool === 'card_import') return { jobType: 'CARD_IMPORT', source: 'JP', ...(i.baseDir ? { baseDir: i.baseDir } : {}), ...(i.regionOrPattern ? { regionOrPattern: i.regionOrPattern } : {}), dryRun: i.dryRun, verbose: i.verbose };
+        return { jobType: 'MARKET_PRICES', source: 'JP', ...(i.marketFile ? { marketFile: i.marketFile } : {}), dryRun: i.dryRun, verbose: i.verbose };
       }
       case 'maintenance': {
         const m = maintenanceState;
         const base = { dryRun: m.dryRun, verbose: m.verbose };
         switch (m.tool) {
-          case 'seed_tournaments': return { jobType: 'SEED_TOURNAMENTS', ...base, seedAll: m.seedAll, ...(m.seedLimit && !m.seedAll ? { seedLimit: parseInt(m.seedLimit) } : {}), ...(m.eventId ? { eventId: m.eventId } : {}), refreshExisting: m.refreshExisting, ...(m.sourceRoot ? { sourceRoot: m.sourceRoot } : {}) };
-          case 'resync_decks':     return { jobType: 'RESYNC_DECKS',     ...base, ...(m.processLimit ? { processLimit: parseInt(m.processLimit) } : {}), ...(m.reportFile ? { reportFile: m.reportFile } : {}) };
-          case 'remap_decks':      return { jobType: 'REMAP_DECKS',      ...base, ...(m.deckId ? { deckId: m.deckId } : {}) };
-          case 'remove_duplicates':return { jobType: 'REMOVE_DUPLICATES', dryRun: m.dryRun };
+          case 'seed_tournaments': return { jobType: 'SEED_TOURNAMENTS', source: 'JP', ...base, seedAll: m.seedAll, ...(m.seedLimit && !m.seedAll ? { seedLimit: parseInt(m.seedLimit) } : {}), ...(m.eventId ? { eventId: m.eventId } : {}), refreshExisting: m.refreshExisting, ...(m.sourceRoot ? { sourceRoot: m.sourceRoot } : {}) };
+          case 'resync_decks':     return { jobType: 'RESYNC_DECKS',     source: 'JP',     ...base, ...(m.processLimit ? { processLimit: parseInt(m.processLimit) } : {}), ...(m.reportFile ? { reportFile: m.reportFile } : {}) };
+          case 'remap_decks':      return { jobType: 'REMAP_DECKS',      source: 'JP',      ...base, ...(m.deckId ? { deckId: m.deckId } : {}) };
+          case 'remove_duplicates':return { jobType: 'REMOVE_DUPLICATES', source: 'JP', dryRun: m.dryRun };
         }
       }
     }
@@ -420,7 +459,7 @@ export default function ScraperJobsPage() {
     es.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        if (data.log) { setLiveLogs((prev) => [...prev, data.log]); logsEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }
+        if (data.log) { setLiveLogs((prev) => [...prev, data.log]); }
         if (data.done) { setStreamDone(true); queryClient.invalidateQueries({ queryKey: ['scraper-jobs'] }); es.close(); }
       } catch { /* ignore */ }
     };
@@ -431,6 +470,24 @@ export default function ScraperJobsPage() {
 
   const selectedJob = jobs.find((j) => j.id === selectedJobId);
   const displayLogs = liveLogs.length > 0 ? liveLogs : selectedJob?.logs ?? [];
+
+  // Auto-scroll to bottom whenever new live log lines arrive
+  useEffect(() => {
+    const el = logsContainerRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [liveLogs.length]);
+
+  // ESC key cancels a running job
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && selectedJobId && selectedJob?.status === 'RUNNING') {
+        cancelMutation.mutate(selectedJobId);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedJobId, selectedJob, cancelMutation]);
 
   const formatDuration = (start?: string, end?: string) => {
     if (!start) return '-';
@@ -469,10 +526,10 @@ export default function ScraperJobsPage() {
               ))}
             </div>
 
-            {activeTab === 'events'      && <EventsForm      s={eventsState}      set={(p) => setEventsState((prev) => ({ ...prev, ...p }))} />}
-            {activeTab === 'cards'       && <CardsForm        s={cardsState}       set={(p) => setCardsState((prev) => ({ ...prev, ...p }))} />}
-            {activeTab === 'import'      && <ImportForm       s={importState}      set={(p) => setImportState((prev) => ({ ...prev, ...p }))} />}
-            {activeTab === 'maintenance' && <MaintenanceForm  s={maintenanceState} set={(p) => setMaintenanceState((prev) => ({ ...prev, ...p }))} />}
+            {activeTab === 'events'      && <EventsForm      s={eventsState}      set={(p) => setEventsStateRaw((prev) => ({ ...prev, ...p }))} />}
+            {activeTab === 'cards'       && <CardsForm        s={cardsState}       set={(p) => setCardsStateRaw((prev) => ({ ...prev, ...p }))} />}
+            {activeTab === 'import'      && <ImportForm       s={importState}      set={(p) => setImportStateRaw((prev) => ({ ...prev, ...p }))} />}
+            {activeTab === 'maintenance' && <MaintenanceForm  s={maintenanceState} set={(p) => setMaintenanceStateRaw((prev) => ({ ...prev, ...p }))} />}
 
             <button onClick={() => startMutation.mutate()} disabled={startMutation.isPending}
               className="w-full px-4 py-2 bg-slate-700 text-white rounded-md text-sm font-medium hover:bg-slate-800 disabled:opacity-40">
@@ -539,18 +596,29 @@ export default function ScraperJobsPage() {
                 <h3 className="text-sm font-medium text-gray-300">Live Logs {selectedJob?.status === 'RUNNING' && !streamDone ? '⟳' : ''}</h3>
                 <span className="text-xs text-gray-500">{displayLogs.length} lines</span>
               </div>
-              <div className="h-96 overflow-y-auto p-4 font-mono text-xs space-y-0.5">
+              <div ref={logsContainerRef} className="h-96 overflow-y-auto p-4 font-mono text-xs space-y-0.5" style={{ fontFamily: 'ui-monospace, "Cascadia Code", "Consolas", "Courier New", "Noto Sans CJK SC", "Microsoft JhengHei", sans-serif' }}>
                 {displayLogs.length === 0 && (
                   <p className="text-gray-500">{selectedJob?.status === 'RUNNING' ? 'Waiting for output...' : 'No logs available.'}</p>
                 )}
-                {displayLogs.map((entry, i) => (
+                {displayLogs
+                  .filter((entry) => !entry.line.includes('miss\\') && !entry.line.includes('miss/'))
+                  .map((entry, i) => (
                   <div key={i} className={`flex gap-2 ${entry.line.includes('[STDERR]') ? 'text-red-400' : 'text-green-400'}`}>
                     <span className="text-gray-600 shrink-0">{new Date(entry.ts).toLocaleTimeString()}</span>
-                    <span className="break-all">{entry.line}</span>
+                    <span className="break-words whitespace-pre-wrap">{entry.line}</span>
                   </div>
                 ))}
                 <div ref={logsEndRef} />
               </div>
+              {selectedJob?.status === 'RUNNING' && (
+                <div className="px-4 py-2 bg-gray-800 border-t border-gray-700 flex items-center justify-between">
+                  <span className="text-xs text-gray-500">Running… press <kbd className="bg-gray-700 text-gray-300 px-1 rounded text-xs">Esc</kbd> to cancel</span>
+                  <button onClick={() => cancelMutation.mutate(selectedJob.id)}
+                    className="px-3 py-1 bg-red-700 text-red-100 rounded text-xs font-medium hover:bg-red-600">
+                    ✕ Cancel Job
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

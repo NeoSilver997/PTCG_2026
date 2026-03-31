@@ -47,11 +47,17 @@ export class ScrapersService implements OnModuleDestroy {
 
   async startJob(dto: CreateScraperJobDto): Promise<Record<string, unknown>> {
     const jobType = dto.jobType ?? JobType.TOURNAMENT_EVENTS;
-    const jobLabel = jobType === JobType.TOURNAMENT_EVENTS ? (dto.source ?? 'JP') : jobType;
+
+    // ScraperJob.source is a Region enum (JP/HK/EN) — map jobType to the closest region
+    const jobRegion: 'JP' | 'HK' | 'EN' =
+      jobType === JobType.TOURNAMENT_EVENTS ? (dto.source as 'JP' | 'HK' | 'EN' ?? 'JP') :
+      jobType === JobType.HK_CARDS         ? 'HK' :
+      jobType === JobType.EN_CARDS         ? 'EN' :
+      'JP'; // JP_CARDS, CARD_IMPORT, MARKET_PRICES, SEED_TOURNAMENTS, etc.
 
     const job = await this.prisma.scraperJob.create({
       data: {
-        source: jobLabel as any,
+        source: jobRegion as any,
         status: 'RUNNING',
         startedAt: new Date(),
       },
@@ -217,6 +223,10 @@ export class ScrapersService implements OnModuleDestroy {
       if (buf && buf.length > 1000) buf.splice(0, buf.length - 1000);
       emitter.emit('log', entry);
     };
+
+    // Emit the full command as first log line so it appears in the UI
+    appendLog(`$ ${command} ${args.join(' ')}`);
+    appendLog(`cwd: ${cwd}`);
 
     proc.stdout?.on('data', (chunk: Buffer) => {
       chunk

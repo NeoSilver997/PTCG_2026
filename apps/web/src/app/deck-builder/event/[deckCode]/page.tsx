@@ -194,12 +194,37 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
   // Extract numeric suffix from webCardId (e.g. "jp48778" → "48778", "hk00014744" → "00014744")
   const normalizeId = (id: string) => id.replace(/^[a-z]+0*/i, '') || id;
   const dbNormalizedIds = new Set(dbCards.map((e) => normalizeId(e.card.webCardId)));
+  // Also dedupe by name — handles cases where deckData uses a different set's cardId for the same card
+  const dbCardNames = new Set(dbCards.map((e) => e.card.name?.trim().toLowerCase()).filter(Boolean));
   const deckDataFallback: DeckCardEntry[] = (data.deckData ?? [])
-    .filter((c: any) => !dbNormalizedIds.has(normalizeId(String(c.cardId))))
-    .map((c: any) => ({
-      quantity: c.quantity,
-      card: { webCardId: c.cardId, name: c.cardName, imageUrl: c.imageUrl ?? null },
-    }));
+    .filter((c: any) =>
+      !dbNormalizedIds.has(normalizeId(String(c.cardId))) &&
+      !dbCardNames.has((c.cardName ?? '').trim().toLowerCase())
+    )
+    .map((c: any) => {
+      // Infer supertype from imageUrl suffix: _P_ = POKEMON, _T_ = TRAINER, _E_ = ENERGY
+      const img: string = c.imageUrl ?? '';
+      const supertype = img.includes('_P_') ? 'POKEMON'
+                      : img.includes('_E_') ? 'ENERGY'
+                      : img.includes('_T_') ? 'TRAINER'
+                      : undefined;
+      // Infer rarity for ACE SPEC trainers (card code literally contains "ACE SPEC")
+      const isAceSpec = String(c.cardCode ?? '').toUpperCase().includes('ACE SPEC');
+      const subtypes: string[] = supertype === 'ENERGY'
+        ? (c.cardName?.includes('エネルギー') && !c.cardName?.includes('特殊') ? ['BASIC_ENERGY'] : ['SPECIAL_ENERGY'])
+        : [];
+      return {
+        quantity: c.quantity,
+        card: {
+          webCardId: c.cardId,
+          name: c.cardName,
+          imageUrl: c.imageUrl ?? null,
+          supertype,
+          subtypes,
+          rarity: isAceSpec ? 'ACE_SPEC_RARE' : undefined,
+        },
+      };
+    });
   const deckEntries: DeckCardEntry[] = [
     ...(dbCards.length > 0 ? dbCards : []),
     ...deckDataFallback,

@@ -318,7 +318,7 @@ model PriceHistory {
 
 model ScraperJob {
   id           String        @id @default(cuid())
-  source       Region
+  source       String
   status       ScraperStatus @default(PENDING)
   startedAt    DateTime?
   completedAt  DateTime?

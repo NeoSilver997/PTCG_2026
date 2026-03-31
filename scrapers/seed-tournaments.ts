@@ -138,26 +138,39 @@ async function resolveImportedCardId(card: DeckCard): Promise<string | null> {
     return cardIdCache.get(cacheKey) ?? null;
   }
 
-  const match = await prisma.card.findFirst({
+  // Priority 1: exact webCardId match (most precise — correct print)
+  const byWebId = await prisma.card.findFirst({
+    where: { webCardId: `jp${card.card_id}` },
+    select: { id: true },
+  });
+  if (byWebId) {
+    cardIdCache.set(cacheKey, byWebId.id);
+    return byWebId.id;
+  }
+
+  // Priority 2: exact imageUrl match
+  if (card.image_url) {
+    const byImage = await prisma.card.findFirst({
+      where: { imageUrl: card.image_url },
+      select: { id: true },
+    });
+    if (byImage) {
+      cardIdCache.set(cacheKey, byImage.id);
+      return byImage.id;
+    }
+  }
+
+  // Priority 3: name + language fallback (may match wrong print — use only as last resort)
+  const byName = await prisma.card.findFirst({
     where: {
-      OR: [
-        { webCardId: `jp${card.card_id}` },
-        ...(card.image_url ? [{ imageUrl: card.image_url }] : []),
-        {
-          AND: [
-            { name: card.card_name },
-            { language: "JA_JP" as any },
-          ],
-        },
-      ],
+      name: card.card_name,
+      language: "JA_JP" as any,
     },
-    orderBy: {
-      updatedAt: "desc",
-    },
+    orderBy: { webCardId: "asc" }, // deterministic ordering; lowest webCardId = oldest/base print
     select: { id: true },
   });
 
-  const resolvedId = match?.id ?? null;
+  const resolvedId = byName?.id ?? null;
   cardIdCache.set(cacheKey, resolvedId);
   return resolvedId;
 }
