@@ -1326,7 +1326,8 @@ export class CardsService {
           CASE c.language::text WHEN 'JA_JP' THEN 1 WHEN 'ZH_TW' THEN 2 ELSE 3 END
       `,
 
-      // 5. evolutionStage per species (from most-recent JA card)
+      // 5. evolutionStage per species — pick highest biological stage
+      //    (V/ex/GX cards are BASIC even for evolved Pokémon; prefer STAGE_2 > STAGE_1 > BASIC)
       this.prisma.$queryRaw<Array<{ speciesId: string; evolutionStage: string }>>`
         SELECT DISTINCT ON (pc."pokemonSpeciesId")
           pc."pokemonSpeciesId" as "speciesId",
@@ -1336,7 +1337,16 @@ export class CardsService {
         WHERE pc."pokemonSpeciesId" IS NOT NULL
           AND c."evolutionStage" IS NOT NULL
           AND c.language = 'JA_JP'
-        ORDER BY pc."pokemonSpeciesId", c."createdAt" DESC
+        ORDER BY pc."pokemonSpeciesId",
+          CASE c."evolutionStage"::text
+            WHEN 'STAGE_3'   THEN 0
+            WHEN 'STAGE_2'   THEN 1
+            WHEN 'STAGE_1'   THEN 2
+            WHEN 'RESTORED'  THEN 3
+            WHEN 'BABY'      THEN 4
+            WHEN 'BASIC'     THEN 5
+            ELSE 6
+          END
       `,
     ]);
 
