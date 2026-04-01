@@ -86,6 +86,13 @@ export class CardsController {
     return await this.cardsService.getCardStats();
   }
 
+  @Get('species-summary')
+  @ApiOperation({ summary: 'Get all Pokémon species with latest ZH card image, card counts by language, and evolution chain info' })
+  @ApiResponse({ status: 200, description: 'Species summary data' })
+  async getSpeciesSummary() {
+    return await this.cardsService.getSpeciesSummary();
+  }
+
   @Get()
   @ApiOperation({ summary: 'Get cards with pagination, filters, and sorting' })
   @ApiResponse({ status: 200, description: 'Returns paginated cards' })

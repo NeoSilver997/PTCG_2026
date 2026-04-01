@@ -6,15 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 import Link from 'next/link';
-
-interface PokemonEntry {
-  number: string;
-  name_zh_hans: string;
-  name_zh_hant: string;
-  name_ja: string;
-  name_en: string;
-  form: string | null;
-}
+import { type SpeciesSummary } from '../page';
 
 interface CardItem {
   id: string;
@@ -26,15 +18,16 @@ interface CardItem {
   hp: number | null;
   language: string;
   variantType: string;
+  evolutionStage: string | null;
   primaryCard?: {
     cardNumber?: string | null;
-    primaryExpansion?: { code: string; nameEn: string } | null;
+    primaryExpansion?: { code: string; nameEn: string; releaseDate?: string | null } | null;
   };
   regionalExpansion?: {
     code: string;
     name: string;
     region: string;
-    primaryExpansion?: { code: string; nameEn: string };
+    primaryExpansion?: { code: string; nameEn: string; releaseDate?: string | null };
   } | null;
 }
 
@@ -72,6 +65,8 @@ const LANG_FLAG: Record<string, string> = {
   ZH_TW: '🇹🇼',
 };
 
+const LANG_ORDER: Record<string, number> = { ZH_TW: 0, EN_US: 1, JA_JP: 2, ZH_HK: 3 };
+
 const TYPE_COLORS: Record<string, string> = {
   COLORLESS: 'bg-gray-300 text-gray-700',
   DARKNESS: 'bg-gray-800 text-white',
@@ -86,6 +81,95 @@ const TYPE_COLORS: Record<string, string> = {
   WATER: 'bg-blue-500 text-white',
 };
 
+const STAGE_LABEL: Record<string, { label: string; color: string }> = {
+  BASIC:    { label: 'たね',    color: 'bg-green-100 text-green-700 border-green-300' },
+  STAGE_1:  { label: '1進化',  color: 'bg-blue-100 text-blue-700 border-blue-300' },
+  STAGE_2:  { label: '2進化',  color: 'bg-purple-100 text-purple-700 border-purple-300' },
+  STAGE_3:  { label: '3進化',  color: 'bg-red-100 text-red-700 border-red-300' },
+  BABY:     { label: 'よちよち', color: 'bg-yellow-100 text-yellow-700 border-yellow-300' },
+  RESTORED: { label: '化石',   color: 'bg-amber-100 text-amber-700 border-amber-300' },
+};
+
+// Build the chain starting from the root species through evolvesFrom links
+function buildChainFor(target: SpeciesSummary, all: SpeciesSummary[]): SpeciesSummary[] {
+  // Build lookups by all name fields so evolvesFrom works regardless of stored language
+  const byJaName  = new Map(all.map((s) => [s.nameJa,      s]));
+  const byZhHant  = new Map(all.map((s) => [s.nameZhHant,  s]));
+  const byZhHans  = new Map(all.map((s) => [s.nameZhHans,  s]));
+  const byEnName  = new Map(all.map((s) => [s.nameEn,      s]));
+  const byId      = new Map(all.map((s) => [s.id,          s]));
+
+  const resolve = (name: string | null): SpeciesSummary | undefined => {
+    if (!name) return undefined;
+    return byJaName.get(name) ?? byZhHant.get(name) ?? byZhHans.get(name) ?? byEnName.get(name);
+  };
+
+  // walk up to root
+  const chain: SpeciesSummary[] = [];
+  const visited = new Set<string>();
+  let cur: SpeciesSummary | undefined = target;
+  while (cur && !visited.has(cur.id)) {
+    chain.unshift(cur);
+    visited.add(cur.id);
+    cur = cur.evolvesFrom ? resolve(cur.evolvesFrom) : undefined;
+  }
+  // walk down from target (children whose evolvesFrom resolves back to this species)
+  const addChildren = (parent: SpeciesSummary) => {
+    const children = all.filter((s) => {
+      if (!s.evolvesFrom || visited.has(s.id)) return false;
+      const pre = resolve(s.evolvesFrom);
+      return pre?.id === parent.id;
+    });
+    for (const child of children) {
+      visited.add(child.id);
+      chain.push(child);
+      addChildren(child);
+    }
+  };
+  addChildren(target);
+  return chain;
+}
+
+/** Mini chain thumbnail shown in the header */
+function ChainThumb({
+  s,
+  isCurrent,
+}: {
+  s: SpeciesSummary;
+  isCurrent: boolean;
+}) {
+  const stageInfo = s.evolutionStage ? STAGE_LABEL[s.evolutionStage] : null;
+  return (
+    <Link
+      href={`/pokemon/${s.dexNumber}${s.form ? `?form=${encodeURIComponent(s.form)}` : ''}`}
+      className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-all ${
+        isCurrent
+          ? 'ring-2 ring-blue-500 bg-blue-50'
+          : 'hover:bg-gray-100'
+      }`}
+    >
+      <div className="w-16 h-20 bg-gray-100 rounded overflow-hidden flex-shrink-0">
+        {s.latestZhImage ? (
+          <img src={s.latestZhImage} alt={s.nameZhHant} className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 gap-0.5">
+            <span className="text-xl opacity-25">⚪</span>
+            <span className="text-[8px] font-mono text-gray-400">#{s.dexNumber}</span>
+          </div>
+        )}
+      </div>
+      <span className="text-[10px] font-medium text-gray-700 text-center leading-tight">
+        {s.nameZhHant}
+      </span>
+      {stageInfo && (
+        <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded border ${stageInfo.color}`}>
+          {stageInfo.label}
+        </span>
+      )}
+    </Link>
+  );
+}
+
 export default function PokemonDetailPage({
   params,
 }: {
@@ -96,32 +180,38 @@ export default function PokemonDetailPage({
   const searchParams = useSearchParams();
   const form = searchParams.get('form');
 
-  // Load the species info
-  const { data: pokemonList } = useQuery<PokemonEntry[]>({
-    queryKey: ['pokemon-names'],
+  // Use species-summary (shared cache with list page)
+  const { data: speciesList } = useQuery<SpeciesSummary[]>({
+    queryKey: ['pokemon-species-summary'],
     queryFn: async () => {
-      const res = await fetch('/api/pokemon-names');
-      if (!res.ok) throw new Error('Failed to load');
-      return res.json();
+      const res = await apiClient.get('/cards/species-summary');
+      return res.data;
     },
-    staleTime: Infinity,
+    staleTime: 5 * 60 * 1000,
   });
 
   const species = useMemo(() => {
-    if (!pokemonList) return null;
-    return pokemonList.find(
-      (p) => p.number === dexNumber && (form ? p.form === form : !p.form)
-    ) ?? pokemonList.find((p) => p.number === dexNumber) ?? null;
-  }, [pokemonList, dexNumber, form]);
+    if (!speciesList) return null;
+    return (
+      speciesList.find(
+        (p) => p.dexNumber === dexNumber && (form ? p.form === form : !p.form)
+      ) ?? speciesList.find((p) => p.dexNumber === dexNumber) ?? null
+    );
+  }, [speciesList, dexNumber, form]);
 
-  // Fetch all cards with this Pokémon's name (try ZH_HANT name and JP name)
-  const searchName = species?.name_zh_hant || species?.name_en || '';
+  // Build evolution chain from species-summary data
+  const evolutionChain = useMemo(() => {
+    if (!species || !speciesList) return [];
+    return buildChainFor(species, speciesList);
+  }, [species, speciesList]);
 
-  const { data: cardsData, isLoading } = useQuery({
-    queryKey: ['pokemon-cards', dexNumber, searchName],
+  // Search by ZH name (primary)
+  const searchName = species?.nameZhHant || '';
+  const { data: zhCardsData, isLoading: zhLoading } = useQuery({
+    queryKey: ['pokemon-cards-zh', dexNumber, searchName],
     queryFn: async () => {
-      if (!searchName) return { data: [], pagination: { total: 0 } };
-      const params = new URLSearchParams({
+      if (!searchName) return { data: [] };
+      const p = new URLSearchParams({
         name: searchName,
         supertype: 'POKEMON',
         take: '100',
@@ -129,19 +219,19 @@ export default function PokemonDetailPage({
         sortBy: 'webCardId',
         sortOrder: 'desc',
       });
-      const res = await apiClient.get(`/cards?${params.toString()}`);
+      const res = await apiClient.get(`/cards?${p}`);
       return res.data;
     },
     enabled: !!searchName,
   });
 
-  // Also search with English name (to pick up EN_US cards)
+  // Also search EN name for EN_US cards
   const { data: enCardsData } = useQuery({
-    queryKey: ['pokemon-cards-en', dexNumber, species?.name_en],
+    queryKey: ['pokemon-cards-en', dexNumber, species?.nameEn],
     queryFn: async () => {
-      if (!species?.name_en || species.name_en === searchName) return { data: [] };
-      const params = new URLSearchParams({
-        name: species.name_en,
+      if (!species?.nameEn || species.nameEn === searchName) return { data: [] };
+      const p = new URLSearchParams({
+        name: species.nameEn,
         supertype: 'POKEMON',
         take: '100',
         skip: '0',
@@ -149,19 +239,19 @@ export default function PokemonDetailPage({
         sortBy: 'webCardId',
         sortOrder: 'desc',
       });
-      const res = await apiClient.get(`/cards?${params.toString()}`);
+      const res = await apiClient.get(`/cards?${p}`);
       return res.data;
     },
-    enabled: !!species?.name_en && species.name_en !== searchName,
+    enabled: !!species?.nameEn && species.nameEn !== searchName,
   });
 
-  // Also search with Japanese name
+  // Also search JA name for JA_JP cards
   const { data: jaCardsData } = useQuery({
-    queryKey: ['pokemon-cards-ja', dexNumber, species?.name_ja],
+    queryKey: ['pokemon-cards-ja', dexNumber, species?.nameJa],
     queryFn: async () => {
-      if (!species?.name_ja || species.name_ja === searchName) return { data: [] };
-      const params = new URLSearchParams({
-        name: species.name_ja,
+      if (!species?.nameJa || species.nameJa === searchName) return { data: [] };
+      const p = new URLSearchParams({
+        name: species.nameJa,
         supertype: 'POKEMON',
         take: '100',
         skip: '0',
@@ -169,26 +259,33 @@ export default function PokemonDetailPage({
         sortBy: 'webCardId',
         sortOrder: 'desc',
       });
-      const res = await apiClient.get(`/cards?${params.toString()}`);
+      const res = await apiClient.get(`/cards?${p}`);
       return res.data;
     },
-    enabled: !!species?.name_ja && species.name_ja !== searchName,
+    enabled: !!species?.nameJa && species.nameJa !== searchName,
   });
 
-  // Deduplicate by webCardId
+  const isLoading = zhLoading;
+
+  // Deduplicate then sort: language order (ZH→EN→JA), then webCardId desc within each group
   const allCards = useMemo((): CardItem[] => {
     const seen = new Set<string>();
     const combined: CardItem[] = [
-      ...(cardsData?.data ?? []),
+      ...(zhCardsData?.data ?? []),
       ...(enCardsData?.data ?? []),
       ...(jaCardsData?.data ?? []),
     ];
-    return combined.filter((c) => {
+    const deduped = combined.filter((c) => {
       if (seen.has(c.webCardId)) return false;
       seen.add(c.webCardId);
       return true;
     });
-  }, [cardsData, enCardsData, jaCardsData]);
+    return deduped.sort((a, b) => {
+      const langDiff = (LANG_ORDER[a.language] ?? 9) - (LANG_ORDER[b.language] ?? 9);
+      if (langDiff !== 0) return langDiff;
+      return b.webCardId.localeCompare(a.webCardId);
+    });
+  }, [zhCardsData, enCardsData, jaCardsData]);
 
   const handleCardClick = (card: CardItem) => {
     router.push(`/cards/${card.webCardId}`);
@@ -207,24 +304,31 @@ export default function PokemonDetailPage({
         </Link>
 
         {/* Header */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mb-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mb-4">
           <div className="flex items-start gap-4">
-            <div className="bg-blue-50 rounded-lg px-3 py-2 font-mono text-blue-700 font-bold text-lg">
+            <div className="bg-blue-50 rounded-lg px-3 py-2 font-mono text-blue-700 font-bold text-lg flex-shrink-0">
               #{dexNumber}
             </div>
-            <div>
+            <div className="min-w-0 flex-1">
               {species ? (
                 <>
-                  <h1 className="text-2xl font-bold text-gray-900">{species.name_zh_hant}</h1>
+                  <div className="flex items-center flex-wrap gap-2">
+                    <h1 className="text-2xl font-bold text-gray-900">{species.nameZhHant}</h1>
+                    {species.evolutionStage && STAGE_LABEL[species.evolutionStage] && (
+                      <span className={`text-xs font-bold px-2 py-1 rounded border ${STAGE_LABEL[species.evolutionStage].color}`}>
+                        {STAGE_LABEL[species.evolutionStage].label}
+                      </span>
+                    )}
+                  </div>
                   {species.form && (
                     <div className="text-sm text-purple-600 mt-0.5">{species.form}</div>
                   )}
                   <div className="flex flex-wrap gap-3 mt-1.5 text-sm text-gray-500">
-                    <span>{species.name_en}</span>
+                    <span>{species.nameEn}</span>
                     <span className="text-gray-300">|</span>
-                    <span>{species.name_ja}</span>
+                    <span>{species.nameJa}</span>
                     <span className="text-gray-300">|</span>
-                    <span className="text-gray-400">{species.name_zh_hans}</span>
+                    <span className="text-gray-400">{species.nameZhHans}</span>
                   </div>
                 </>
               ) : (
@@ -232,10 +336,32 @@ export default function PokemonDetailPage({
               )}
               <div className="mt-2 text-sm text-gray-500">
                 共 {allCards.length} 張卡牌
+                {species && (
+                  <span className="ml-3">
+                    {species.cardCounts['ZH_TW'] ? `🇹🇼 ${species.cardCounts['ZH_TW']} ` : ''}
+                    {species.cardCounts['EN_US'] ? `🇺🇸 ${species.cardCounts['EN_US']} ` : ''}
+                    {species.cardCounts['JA_JP'] ? `🇯🇵 ${species.cardCounts['JA_JP']}` : ''}
+                  </span>
+                )}
               </div>
             </div>
           </div>
         </div>
+
+        {/* Evolution chain */}
+        {evolutionChain.length > 1 && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
+            <h2 className="text-sm font-semibold text-gray-500 mb-3">進化鏈</h2>
+            <div className="flex items-center gap-1 overflow-x-auto pb-1">
+              {evolutionChain.map((s, i) => (
+                <div key={s.id} className="flex items-center gap-1 flex-shrink-0">
+                  {i > 0 && <span className="text-gray-300 text-lg">→</span>}
+                  <ChainThumb s={s} isCurrent={s.id === species?.id} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Cards grid */}
         {isLoading ? (
@@ -263,8 +389,9 @@ export default function PokemonDetailPage({
                       loading="lazy"
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-300 text-xs">
-                      No Image
+                    <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 gap-1">
+                      <span className="text-3xl opacity-20">⚪</span>
+                      <span className="text-[9px] text-gray-400">{card.name}</span>
                     </div>
                   )}
                   {/* Rarity badge */}
@@ -305,7 +432,7 @@ export default function PokemonDetailPage({
                     {card.regionalExpansion?.primaryExpansion?.code ??
                       card.primaryCard?.primaryExpansion?.code ??
                       ''}
-                    {(card.primaryCard?.cardNumber) ? ` #${card.primaryCard.cardNumber}` : ''}
+                    {card.primaryCard?.cardNumber ? ` #${card.primaryCard.cardNumber}` : ''}
                   </div>
                 </div>
               </div>

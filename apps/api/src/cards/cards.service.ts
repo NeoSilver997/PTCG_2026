@@ -1250,6 +1250,153 @@ export class CardsService {
     });
   }
 
+  async getSpeciesSummary(): Promise<any[]> {
+    const [allSpecies, latestImages, cardCountsRaw, evolvesFromRaw, evolutionStageRaw] = await Promise.all([
+      // 1. All species, sorted by dex number
+      this.prisma.pokemonSpecies.findMany({
+        select: {
+          id: true,
+          dexNumber: true,
+          form: true,
+          nameZhHant: true,
+          nameZhHans: true,
+          nameJa: true,
+          nameEn: true,
+        },
+        orderBy: [{ dexNumber: 'asc' }, { form: 'asc' }],
+      }),
+
+      // 2. Best image per species: highest rarity ZH_TW card, falling back to JA_JP
+      this.prisma.$queryRaw<Array<{ speciesId: string; imageUrl: string; webCardId: string }>>`
+        SELECT DISTINCT ON (pc."pokemonSpeciesId")
+          pc."pokemonSpeciesId" as "speciesId",
+          c."imageUrl",
+          c."webCardId"
+        FROM cards c
+        JOIN primary_cards pc ON pc.id = c."primaryCardId"
+        WHERE pc."pokemonSpeciesId" IS NOT NULL
+          AND c."imageUrl" IS NOT NULL
+          AND c.language IN ('ZH_TW', 'JA_JP')
+        ORDER BY pc."pokemonSpeciesId",
+          CASE c.language::text WHEN 'ZH_TW' THEN 0 ELSE 1 END,
+          CASE c.rarity::text
+            WHEN 'SPECIAL_ILLUSTRATION_RARE' THEN 0
+            WHEN 'ILLUSTRATION_RARE' THEN 1
+            WHEN 'HYPER_RARE' THEN 2
+            WHEN 'ULTRA_RARE' THEN 3
+            WHEN 'ACE_SPEC_RARE' THEN 4
+            WHEN 'DOUBLE_RARE' THEN 5
+            WHEN 'RARE' THEN 6
+            WHEN 'PROMO' THEN 7
+            WHEN 'UNCOMMON' THEN 8
+            WHEN 'COMMON' THEN 9
+            ELSE 10
+          END
+      `,
+
+      // 3. Card counts by language per species
+      this.prisma.$queryRaw<Array<{ speciesId: string; language: string; count: bigint }>>`
+        SELECT
+          pc."pokemonSpeciesId" as "speciesId",
+          c.language::text,
+          COUNT(*) as count
+        FROM cards c
+        JOIN primary_cards pc ON pc.id = c."primaryCardId"
+        WHERE pc."pokemonSpeciesId" IS NOT NULL
+          AND c.supertype = 'POKEMON'
+        GROUP BY pc."pokemonSpeciesId", c.language
+      `,
+
+      // 4. evolvesFrom per species — cross-language: always returns pre-evo's JA name
+      this.prisma.$queryRaw<Array<{ speciesId: string; evolvesFrom: string }>>`
+        SELECT DISTINCT ON (ps.id)
+          ps.id as "speciesId",
+          pre."nameJa" as "evolvesFrom"
+        FROM pokemon_species ps
+        JOIN primary_cards pc ON pc."pokemonSpeciesId" = ps.id
+        JOIN cards c ON c."primaryCardId" = pc.id
+        JOIN pokemon_species pre ON (
+          pre."nameJa" = c."evolvesFrom"
+          OR pre."nameZhHant" = c."evolvesFrom"
+          OR pre."nameZhHans" = c."evolvesFrom"
+          OR pre."nameEn" = c."evolvesFrom"
+        )
+        WHERE c."evolvesFrom" IS NOT NULL AND c."evolvesFrom" != ''
+        ORDER BY ps.id,
+          CASE c.language::text WHEN 'JA_JP' THEN 1 WHEN 'ZH_TW' THEN 2 ELSE 3 END
+      `,
+
+      // 5. evolutionStage per species (from most-recent JA card)
+      this.prisma.$queryRaw<Array<{ speciesId: string; evolutionStage: string }>>`
+        SELECT DISTINCT ON (pc."pokemonSpeciesId")
+          pc."pokemonSpeciesId" as "speciesId",
+          c."evolutionStage"::text as "evolutionStage"
+        FROM cards c
+        JOIN primary_cards pc ON pc.id = c."primaryCardId"
+        WHERE pc."pokemonSpeciesId" IS NOT NULL
+          AND c."evolutionStage" IS NOT NULL
+          AND c.language = 'JA_JP'
+        ORDER BY pc."pokemonSpeciesId", c."createdAt" DESC
+      `,
+    ]);
+
+    // Build lookup maps
+    const imageMap = new Map(latestImages.map((r) => [r.speciesId, r]));
+    const countMap = new Map<string, Record<string, number>>();
+    for (const row of cardCountsRaw) {
+      if (!countMap.has(row.speciesId)) countMap.set(row.speciesId, {});
+      countMap.get(row.speciesId)![row.language] = Number(row.count);
+    }
+    const evolvesFromMap = new Map(evolvesFromRaw.map((r) => [r.speciesId, r.evolvesFrom]));
+    const evolutionStageMap = new Map(evolutionStageRaw.map((r) => [r.speciesId, r.evolutionStage]));
+
+    // Image fallback: base forms with no image use the best available form variant image
+    for (const s of allSpecies) {
+      if (s.form !== '') continue; // only base forms
+      if (imageMap.has(s.id)) continue; // already has image
+      // Find any form variant with an image
+      const formVariant = allSpecies.find(
+        (f) => f.dexNumber === s.dexNumber && f.form !== '' && imageMap.has(f.id),
+      );
+      if (formVariant) imageMap.set(s.id, imageMap.get(formVariant.id)!);
+    }
+
+    // Build initial result
+    const result = allSpecies.map((s) => ({
+      ...s,
+      latestZhImage: imageMap.get(s.id)?.imageUrl ?? null,
+      latestZhCardId: imageMap.get(s.id)?.webCardId ?? null,
+      cardCounts: countMap.get(s.id) ?? {},
+      evolvesFrom: evolvesFromMap.get(s.id) ?? null,
+      evolutionStage: evolutionStageMap.get(s.id) ?? null,
+    }));
+
+    // Stage-inference fallback for evolvesFrom (when card-level data is missing)
+    // Infers: STAGE_1 evolves from the nearest BASIC species with a lower dex number (within 25 steps)
+    const STAGE_ORDER: Record<string, number> = { BABY: -1, BASIC: 0, STAGE_1: 1, STAGE_2: 2, STAGE_3: 3 };
+    const resultByDex = new Map(result.map((s) => [s.dexNumber, s]));
+    for (const s of result) {
+      if (s.evolvesFrom !== null) continue;
+      const sStage = STAGE_ORDER[s.evolutionStage ?? ''] ?? -2;
+      if (sStage <= 0) continue;
+      const myDex = parseInt(s.dexNumber, 10);
+      for (let d = myDex - 1; d >= Math.max(1, myDex - 25); d--) {
+        const dexStr = d.toString().padStart(4, '0');
+        const candidate = resultByDex.get(dexStr);
+        if (!candidate) continue;
+        const cStage = STAGE_ORDER[candidate.evolutionStage ?? ''] ?? -2;
+        if (cStage === sStage - 1) {
+          s.evolvesFrom = candidate.nameJa;
+          break;
+        }
+        // Stop if we hit equal or higher stage (different chain)
+        if (cStage >= sStage) break;
+      }
+    }
+
+    return result;
+  }
+
   async getCardStats(): Promise<{
     total: number;
     byLanguage: Array<{ language: string; count: number }>;
