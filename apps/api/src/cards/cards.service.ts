@@ -818,6 +818,17 @@ export class CardsService {
         primaryCard: {
           include: {
             primaryExpansion: true,
+            pokemonSpecies: {
+              select: {
+                id: true,
+                dexNumber: true,
+                form: true,
+                nameZhHans: true,
+                nameZhHant: true,
+                nameJa: true,
+                nameEn: true,
+              },
+            },
           },
         },
         regionalExpansion: {
@@ -832,13 +843,11 @@ export class CardsService {
       return null;
     }
 
-    // Get language variants (cards with same primaryCardId)
+    // Language variants (same primaryCardId, different language/variantType)
     const languageVariants = await this.prisma.card.findMany({
       where: {
         primaryCardId: card.primaryCardId,
-        NOT: {
-          id: card.id, // Exclude current card
-        },
+        NOT: { id: card.id },
       },
       select: {
         id: true,
@@ -853,23 +862,65 @@ export class CardsService {
             name: true,
             region: true,
             primaryExpansion: {
-              select: {
-                code: true,
-                nameEn: true,
-              },
+              select: { code: true, nameEn: true },
             },
           },
         },
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
+      orderBy: { createdAt: 'desc' },
       take: 10,
     });
+
+    // Same-species cards: other PrimaryCards linked to the same PokemonSpecies
+    // (i.e. the same Pokémon but different card versions / sets)
+    let sameSpeciesCards: any[] = [];
+    const speciesId = (card.primaryCard as any)?.pokemonSpecies?.id;
+    if (speciesId) {
+      const siblings = await this.prisma.primaryCard.findMany({
+        where: {
+          pokemonSpeciesId: speciesId,
+          NOT: { id: card.primaryCardId },
+        },
+        select: {
+          id: true,
+          cardNumber: true,
+          primaryExpansion: { select: { code: true, nameEn: true } },
+          cards: {
+            where: { language: { not: card.language } },
+            select: {
+              id: true,
+              webCardId: true,
+              name: true,
+              language: true,
+              variantType: true,
+              imageUrl: true,
+              rarity: true,
+              regionalExpansion: {
+                select: {
+                  code: true,
+                  name: true,
+                  region: true,
+                  primaryExpansion: { select: { code: true, nameEn: true } },
+                },
+              },
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 1, // one representative card per PrimaryCard
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      });
+
+      sameSpeciesCards = siblings
+        .filter((pc) => pc.cards.length > 0)
+        .map((pc) => ({ ...pc.cards[0], primaryCard: { id: pc.id, cardNumber: pc.cardNumber, primaryExpansion: pc.primaryExpansion } }));
+    }
 
     return {
       ...card,
       languageVariants,
+      sameSpeciesCards,
     };
   }
 

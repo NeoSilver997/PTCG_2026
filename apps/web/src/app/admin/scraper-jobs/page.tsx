@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/api-client';
 
@@ -41,6 +41,11 @@ interface ScraperJob {
 }
 
 interface LogEntry { ts: string; line: string; }
+
+interface CardScrapeInfo { region: 'HK' | 'JP' | 'EN'; cwd: string; files: string[]; }
+interface FileVerifyResult { name: string; fullPath: string; exists: boolean; cardCount: number; fileSize: number; }
+interface FileMoveResult { name: string; srcPath: string; destPath: string; }
+interface FollowUpState { verifying: boolean; verifyResults?: FileVerifyResult[]; moving: boolean; moveResults?: FileMoveResult[]; error?: string; }
 
 type TabKey = 'events' | 'cards' | 'import' | 'maintenance';
 
@@ -385,6 +390,7 @@ export default function ScraperJobsPage() {
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [liveLogs, setLiveLogs]    = useState<LogEntry[]>([]);
   const [streamDone, setStreamDone] = useState(false);
+  const [followUp, setFollowUp]    = useState<FollowUpState>({ verifying: false, moving: false });
   const logsEndRef      = useRef<HTMLDivElement>(null);
   const logsContainerRef = useRef<HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -445,6 +451,15 @@ export default function ScraperJobsPage() {
     },
   });
 
+  const startImportMutation = useMutation({
+    mutationFn: (payload: object) => apiClient.post('/scraper-jobs', payload),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['scraper-jobs'] });
+      setSelectedJobId(res.data.id);
+      openSSEStream(res.data.id);
+    },
+  });
+
   const cancelMutation = useMutation({
     mutationFn: (id: string) => apiClient.delete(`/scraper-jobs/${id}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['scraper-jobs'] }),
@@ -488,6 +503,82 @@ export default function ScraperJobsPage() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [selectedJobId, selectedJob, cancelMutation]);
+
+  // Reset follow-up state when switching jobs
+  useEffect(() => {
+    setFollowUp({ verifying: false, moving: false });
+  }, [selectedJobId]);
+
+  // Detect card scraping info from job logs (only for succeeded card scraper jobs)
+  const cardScrapeInfo: CardScrapeInfo | null = useMemo(() => {
+    if (selectedJob?.status !== 'SUCCESS') return null;
+    const cmdLine = displayLogs[0]?.line ?? '';
+    let region: 'HK' | 'JP' | 'EN' | null = null;
+    if (cmdLine.includes('hk_card_scraper.py')) region = 'HK';
+    else if (cmdLine.includes('japanese_card_scraper.py')) region = 'JP';
+    else if (cmdLine.includes('english_card_scraper.py')) region = 'EN';
+    if (!region) return null;
+    const cwd = (displayLogs[1]?.line ?? '').replace(/^cwd:\s*/i, '').trim();
+    const files: string[] = [];
+    for (const { line } of displayLogs) {
+      const m = line.match(/Saved \d+ cards to (.+\.json)/i);
+      if (m) files.push(m[1].trim().replace(/^\.[\\/]/, ''));
+    }
+    return { region, cwd, files: [...new Set(files)] };
+  }, [selectedJob?.status, displayLogs]);
+
+  const handleVerifyAll = useCallback(async () => {
+    if (!cardScrapeInfo) return;
+    setFollowUp((p) => ({ ...p, verifying: true, error: undefined }));
+    try {
+      const sep = cardScrapeInfo.cwd.includes('\\') ? '\\' : '/';
+      const results: FileVerifyResult[] = await Promise.all(
+        cardScrapeInfo.files.map(async (f) => {
+          const isAbs = /^[A-Za-z]:[\\\/]/.test(f) || f.startsWith('/');
+          const fullPath = isAbs ? f : (cardScrapeInfo.cwd ? `${cardScrapeInfo.cwd}${sep}${f}` : f);
+          try {
+            const res = await apiClient.post('/scraper-jobs/file-action', { action: 'verify', filePath: fullPath });
+            return { name: f, fullPath, ...res.data };
+          } catch {
+            return { name: f, fullPath, exists: false, cardCount: 0, fileSize: 0 };
+          }
+        })
+      );
+      setFollowUp((p) => ({ ...p, verifying: false, verifyResults: results }));
+    } catch (e: unknown) {
+      setFollowUp((p) => ({ ...p, verifying: false, error: String(e) }));
+    }
+  }, [cardScrapeInfo]);
+
+  const handleMoveAll = useCallback(async () => {
+    if (!cardScrapeInfo || !followUp.verifyResults) return;
+    const destDirMap = { HK: 'data/cards/hongkong', JP: 'data/cards/japan', EN: 'data/cards/english' };
+    const destDir = destDirMap[cardScrapeInfo.region];
+    setFollowUp((p) => ({ ...p, moving: true, error: undefined }));
+    try {
+      const toMove = followUp.verifyResults.filter((r) => r.exists);
+      const results: FileMoveResult[] = await Promise.all(
+        toMove.map(async (r) => {
+          const res = await apiClient.post('/scraper-jobs/file-action', { action: 'move', filePath: r.fullPath, destDir });
+          return { name: r.name, srcPath: r.fullPath, destPath: res.data.destPath };
+        })
+      );
+      setFollowUp((p) => ({ ...p, moving: false, moveResults: results }));
+    } catch (e: unknown) {
+      setFollowUp((p) => ({ ...p, moving: false, error: String(e) }));
+    }
+  }, [cardScrapeInfo, followUp.verifyResults]);
+
+  const handleImportFromFollowUp = useCallback(() => {
+    if (!cardScrapeInfo) return;
+    const regionDirMap = { HK: 'hongkong', JP: 'japan', EN: 'english' };
+    startImportMutation.mutate({
+      jobType: 'CARD_IMPORT',
+      source: 'JP',
+      baseDir: 'data/cards',
+      regionOrPattern: regionDirMap[cardScrapeInfo.region],
+    });
+  }, [cardScrapeInfo, startImportMutation]);
 
   const formatDuration = (start?: string, end?: string) => {
     if (!start) return '-';
@@ -618,6 +709,78 @@ export default function ScraperJobsPage() {
                     ✕ Cancel Job
                   </button>
                 </div>
+              )}
+            </div>
+          )}
+
+          {/* Follow-up: verify → move → import after a card scraping job */}
+          {cardScrapeInfo && (
+            <div className="bg-white rounded-lg shadow-sm p-4 space-y-3 border-l-4 border-slate-500">
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold text-gray-800 text-sm">📥 Follow-up Actions</h3>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                  cardScrapeInfo.region === 'HK' ? 'bg-red-100 text-red-700' :
+                  cardScrapeInfo.region === 'JP' ? 'bg-blue-100 text-blue-700' :
+                  'bg-green-100 text-green-700'
+                }`}>{cardScrapeInfo.region}</span>
+                <span className="text-xs text-gray-400 flex-1 font-mono truncate">→ data/cards/{
+                  cardScrapeInfo.region === 'HK' ? 'hongkong' : cardScrapeInfo.region === 'JP' ? 'japan' : 'english'
+                }</span>
+              </div>
+
+              {/* Detected output files */}
+              {cardScrapeInfo.files.length === 0 ? (
+                <p className="text-xs text-gray-400 italic">No output files detected in logs.</p>
+              ) : (
+                <div className="space-y-1 max-h-40 overflow-y-auto">
+                  {cardScrapeInfo.files.map((f) => {
+                    const vr = followUp.verifyResults?.find((r) => r.name === f);
+                    const mr = followUp.moveResults?.find((r) => r.name === f);
+                    return (
+                      <div key={f} className="flex items-center gap-2 text-xs bg-gray-50 rounded px-2 py-1.5">
+                        <span className="font-mono text-gray-700 flex-1 min-w-0 truncate">{f}</span>
+                        {vr && (
+                          <span className={`shrink-0 ${vr.exists ? 'text-green-600' : 'text-red-500'}`}>
+                            {vr.exists ? `✓ ${vr.cardCount} cards · ${(vr.fileSize / 1024).toFixed(0)} KB` : '✗ Not found'}
+                          </span>
+                        )}
+                        {mr && <span className="shrink-0 text-blue-600 font-medium">→ moved</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Action buttons */}
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  onClick={handleVerifyAll}
+                  disabled={followUp.verifying || cardScrapeInfo.files.length === 0}
+                  className="px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-40"
+                >
+                  {followUp.verifying ? '⟳ Verifying…' : '🔍 Verify Files'}
+                </button>
+                <button
+                  onClick={handleMoveAll}
+                  disabled={followUp.moving || !followUp.verifyResults?.some((r) => r.exists)}
+                  className="px-3 py-1.5 text-xs font-medium bg-blue-100 text-blue-700 rounded hover:bg-blue-200 disabled:opacity-40"
+                >
+                  {followUp.moving ? '⟳ Moving…' : '→ Move to Data Folder'}
+                </button>
+                <button
+                  onClick={handleImportFromFollowUp}
+                  disabled={startImportMutation.isPending || (!followUp.moveResults?.length && !followUp.verifyResults?.some((r) => r.exists))}
+                  className="px-3 py-1.5 text-xs font-medium bg-slate-700 text-white rounded hover:bg-slate-800 disabled:opacity-40"
+                >
+                  {startImportMutation.isPending ? '⟳ Starting…' : '📦 Import to DB'}
+                </button>
+              </div>
+
+              {followUp.error && (
+                <p className="text-xs text-red-500 font-mono">{followUp.error}</p>
+              )}
+              {followUp.moveResults && followUp.moveResults.length > 0 && (
+                <p className="text-xs text-green-600">✓ {followUp.moveResults.length} file{followUp.moveResults.length > 1 ? 's' : ''} moved — ready to import.</p>
               )}
             </div>
           )}

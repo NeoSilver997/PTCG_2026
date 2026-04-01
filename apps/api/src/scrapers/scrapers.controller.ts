@@ -47,6 +47,13 @@ export class ScrapersController {
     return this.scrapersService.startJob(dto);
   }
 
+  @Post('file-action')
+  @Throttle({ medium: { limit: 20, ttl: 10000 } })
+  @ApiOperation({ summary: 'Verify or move a scraped output file' })
+  fileAction(@Body() body: { action: string; filePath: string; destDir?: string }): Promise<Record<string, unknown>> {
+    return this.scrapersService.fileAction(body.action as 'verify' | 'move', body.filePath, body.destDir);
+  }
+
   @Delete(':id')
   @Throttle({ medium: { limit: 20, ttl: 10000 } })
   @ApiOperation({ summary: 'Cancel a running scraper job' })

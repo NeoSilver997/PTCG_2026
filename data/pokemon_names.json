@@ -1,0 +1,8658 @@
+[
+  {
+    "number": "0001",
+    "name_zh_hans": "妙蛙种子",
+    "name_zh_hant": "妙蛙種子",
+    "name_ja": "フシギダネ",
+    "name_en": "Bulbasaur",
+    "form": null
+  },
+  {
+    "number": "0002",
+    "name_zh_hans": "妙蛙草",
+    "name_zh_hant": "妙蛙草",
+    "name_ja": "フシギソウ",
+    "name_en": "Ivysaur",
+    "form": null
+  },
+  {
+    "number": "0003",
+    "name_zh_hans": "妙蛙花",
+    "name_zh_hant": "妙蛙花",
+    "name_ja": "フシギバナ",
+    "name_en": "Venusaur",
+    "form": null
+  },
+  {
+    "number": "0004",
+    "name_zh_hans": "小火龙",
+    "name_zh_hant": "小火龍",
+    "name_ja": "ヒトカゲ",
+    "name_en": "Charmander",
+    "form": null
+  },
+  {
+    "number": "0005",
+    "name_zh_hans": "火恐龙",
+    "name_zh_hant": "火恐龍",
+    "name_ja": "リザード",
+    "name_en": "Charmeleon",
+    "form": null
+  },
+  {
+    "number": "0006",
+    "name_zh_hans": "喷火龙",
+    "name_zh_hant": "噴火龍",
+    "name_ja": "リザードン",
+    "name_en": "Charizard",
+    "form": null
+  },
+  {
+    "number": "0007",
+    "name_zh_hans": "杰尼龟",
+    "name_zh_hant": "傑尼龜",
+    "name_ja": "ゼニガメ",
+    "name_en": "Squirtle",
+    "form": null
+  },
+  {
+    "number": "0008",
+    "name_zh_hans": "卡咪龟",
+    "name_zh_hant": "卡咪龜",
+    "name_ja": "カメール",
+    "name_en": "Wartortle",
+    "form": null
+  },
+  {
+    "number": "0009",
+    "name_zh_hans": "水箭龟",
+    "name_zh_hant": "水箭龜",
+    "name_ja": "カメックス",
+    "name_en": "Blastoise",
+    "form": null
+  },
+  {
+    "number": "0010",
+    "name_zh_hans": "绿毛虫",
+    "name_zh_hant": "綠毛蟲",
+    "name_ja": "キャタピー",
+    "name_en": "Caterpie",
+    "form": null
+  },
+  {
+    "number": "0011",
+    "name_zh_hans": "铁甲蛹",
+    "name_zh_hant": "鐵甲蛹",
+    "name_ja": "トランセル",
+    "name_en": "Metapod",
+    "form": null
+  },
+  {
+    "number": "0012",
+    "name_zh_hans": "巴大蝶",
+    "name_zh_hant": "巴大蝶",
+    "name_ja": "バタフリー",
+    "name_en": "Butterfree",
+    "form": null
+  },
+  {
+    "number": "0013",
+    "name_zh_hans": "独角虫",
+    "name_zh_hant": "獨角蟲",
+    "name_ja": "ビードル",
+    "name_en": "Weedle",
+    "form": null
+  },
+  {
+    "number": "0014",
+    "name_zh_hans": "铁壳蛹",
+    "name_zh_hant": "鐵殼蛹",
+    "name_ja": "コクーン",
+    "name_en": "Kakuna",
+    "form": null
+  },
+  {
+    "number": "0015",
+    "name_zh_hans": "大针蜂",
+    "name_zh_hant": "大針蜂",
+    "name_ja": "スピアー",
+    "name_en": "Beedrill",
+    "form": null
+  },
+  {
+    "number": "0016",
+    "name_zh_hans": "波波",
+    "name_zh_hant": "波波",
+    "name_ja": "ポッポ",
+    "name_en": "Pidgey",
+    "form": null
+  },
+  {
+    "number": "0017",
+    "name_zh_hans": "比比鸟",
+    "name_zh_hant": "比比鳥",
+    "name_ja": "ピジョン",
+    "name_en": "Pidgeotto",
+    "form": null
+  },
+  {
+    "number": "0018",
+    "name_zh_hans": "大比鸟",
+    "name_zh_hant": "大比鳥",
+    "name_ja": "ピジョット",
+    "name_en": "Pidgeot",
+    "form": null
+  },
+  {
+    "number": "0019",
+    "name_zh_hans": "小拉达",
+    "name_zh_hant": "小拉達",
+    "name_ja": "コラッタ",
+    "name_en": "Rattata",
+    "form": null
+  },
+  {
+    "number": "0019",
+    "name_zh_hans": "小拉达",
+    "name_zh_hant": "小拉達",
+    "name_ja": "コラッタ",
+    "name_en": "Rattata",
+    "form": "阿罗拉的样子"
+  },
+  {
+    "number": "0020",
+    "name_zh_hans": "拉达",
+    "name_zh_hant": "拉達",
+    "name_ja": "ラッタ",
+    "name_en": "Raticate",
+    "form": null
+  },
+  {
+    "number": "0020",
+    "name_zh_hans": "拉达",
+    "name_zh_hant": "拉達",
+    "name_ja": "ラッタ",
+    "name_en": "Raticate",
+    "form": "阿罗拉的样子"
+  },
+  {
+    "number": "0021",
+    "name_zh_hans": "烈雀",
+    "name_zh_hant": "烈雀",
+    "name_ja": "オニスズメ",
+    "name_en": "Spearow",
+    "form": null
+  },
+  {
+    "number": "0022",
+    "name_zh_hans": "大嘴雀",
+    "name_zh_hant": "大嘴雀",
+    "name_ja": "オニドリル",
+    "name_en": "Fearow",
+    "form": null
+  },
+  {
+    "number": "0023",
+    "name_zh_hans": "阿柏蛇",
+    "name_zh_hant": "阿柏蛇",
+    "name_ja": "アーボ",
+    "name_en": "Ekans",
+    "form": null
+  },
+  {
+    "number": "0024",
+    "name_zh_hans": "阿柏怪",
+    "name_zh_hant": "阿柏怪",
+    "name_ja": "アーボック",
+    "name_en": "Arbok",
+    "form": null
+  },
+  {
+    "number": "0025",
+    "name_zh_hans": "皮卡丘",
+    "name_zh_hant": "皮卡丘",
+    "name_ja": "ピカチュウ",
+    "name_en": "Pikachu",
+    "form": null
+  },
+  {
+    "number": "0026",
+    "name_zh_hans": "雷丘",
+    "name_zh_hant": "雷丘",
+    "name_ja": "ライチュウ",
+    "name_en": "Raichu",
+    "form": null
+  },
+  {
+    "number": "0026",
+    "name_zh_hans": "雷丘",
+    "name_zh_hant": "雷丘",
+    "name_ja": "ライチュウ",
+    "name_en": "Raichu",
+    "form": "阿罗拉的样子"
+  },
+  {
+    "number": "0027",
+    "name_zh_hans": "穿山鼠",
+    "name_zh_hant": "穿山鼠",
+    "name_ja": "サンド",
+    "name_en": "Sandshrew",
+    "form": null
+  },
+  {
+    "number": "0027",
+    "name_zh_hans": "穿山鼠",
+    "name_zh_hant": "穿山鼠",
+    "name_ja": "サンド",
+    "name_en": "Sandshrew",
+    "form": "阿罗拉的样子"
+  },
+  {
+    "number": "0028",
+    "name_zh_hans": "穿山王",
+    "name_zh_hant": "穿山王",
+    "name_ja": "サンドパン",
+    "name_en": "Sandslash",
+    "form": null
+  },
+  {
+    "number": "0028",
+    "name_zh_hans": "穿山王",
+    "name_zh_hant": "穿山王",
+    "name_ja": "サンドパン",
+    "name_en": "Sandslash",
+    "form": "阿罗拉的样子"
+  },
+  {
+    "number": "0029",
+    "name_zh_hans": "尼多兰",
+    "name_zh_hant": "尼多蘭",
+    "name_ja": "ニドラン♀",
+    "name_en": "Nidoran♀",
+    "form": null
+  },
+  {
+    "number": "0030",
+    "name_zh_hans": "尼多娜",
+    "name_zh_hant": "尼多娜",
+    "name_ja": "ニドリーナ",
+    "name_en": "Nidorina",
+    "form": null
+  },
+  {
+    "number": "0031",
+    "name_zh_hans": "尼多后",
+    "name_zh_hant": "尼多后",
+    "name_ja": "ニドクイン",
+    "name_en": "Nidoqueen",
+    "form": null
+  },
+  {
+    "number": "0032",
+    "name_zh_hans": "尼多朗",
+    "name_zh_hant": "尼多朗",
+    "name_ja": "ニドラン♂",
+    "name_en": "Nidoran♂",
+    "form": null
+  },
+  {
+    "number": "0033",
+    "name_zh_hans": "尼多力诺",
+    "name_zh_hant": "尼多力諾",
+    "name_ja": "ニドリーノ",
+    "name_en": "Nidorino",
+    "form": null
+  },
+  {
+    "number": "0034",
+    "name_zh_hans": "尼多王",
+    "name_zh_hant": "尼多王",
+    "name_ja": "ニドキング",
+    "name_en": "Nidoking",
+    "form": null
+  },
+  {
+    "number": "0035",
+    "name_zh_hans": "皮皮",
+    "name_zh_hant": "皮皮",
+    "name_ja": "ピッピ",
+    "name_en": "Clefairy",
+    "form": null
+  },
+  {
+    "number": "0036",
+    "name_zh_hans": "皮可西",
+    "name_zh_hant": "皮可西",
+    "name_ja": "ピクシー",
+    "name_en": "Clefable",
+    "form": null
+  },
+  {
+    "number": "0037",
+    "name_zh_hans": "六尾",
+    "name_zh_hant": "六尾",
+    "name_ja": "ロコン",
+    "name_en": "Vulpix",
+    "form": null
+  },
+  {
+    "number": "0037",
+    "name_zh_hans": "六尾",
+    "name_zh_hant": "六尾",
+    "name_ja": "ロコン",
+    "name_en": "Vulpix",
+    "form": "阿罗拉的样子"
+  },
+  {
+    "number": "0038",
+    "name_zh_hans": "九尾",
+    "name_zh_hant": "九尾",
+    "name_ja": "キュウコン",
+    "name_en": "Ninetales",
+    "form": null
+  },
+  {
+    "number": "0038",
+    "name_zh_hans": "九尾",
+    "name_zh_hant": "九尾",
+    "name_ja": "キュウコン",
+    "name_en": "Ninetales",
+    "form": "阿罗拉的样子"
+  },
+  {
+    "number": "0039",
+    "name_zh_hans": "胖丁",
+    "name_zh_hant": "胖丁",
+    "name_ja": "プリン",
+    "name_en": "Jigglypuff",
+    "form": null
+  },
+  {
+    "number": "0040",
+    "name_zh_hans": "胖可丁",
+    "name_zh_hant": "胖可丁",
+    "name_ja": "プクリン",
+    "name_en": "Wigglytuff",
+    "form": null
+  },
+  {
+    "number": "0041",
+    "name_zh_hans": "超音蝠",
+    "name_zh_hant": "超音蝠",
+    "name_ja": "ズバット",
+    "name_en": "Zubat",
+    "form": null
+  },
+  {
+    "number": "0042",
+    "name_zh_hans": "大嘴蝠",
+    "name_zh_hant": "大嘴蝠",
+    "name_ja": "ゴルバット",
+    "name_en": "Golbat",
+    "form": null
+  },
+  {
+    "number": "0043",
+    "name_zh_hans": "走路草",
+    "name_zh_hant": "走路草",
+    "name_ja": "ナゾノクサ",
+    "name_en": "Oddish",
+    "form": null
+  },
+  {
+    "number": "0044",
+    "name_zh_hans": "臭臭花",
+    "name_zh_hant": "臭臭花",
+    "name_ja": "クサイハナ",
+    "name_en": "Gloom",
+    "form": null
+  },
+  {
+    "number": "0045",
+    "name_zh_hans": "霸王花",
+    "name_zh_hant": "霸王花",
+    "name_ja": "ラフレシア",
+    "name_en": "Vileplume",
+    "form": null
+  },
+  {
+    "number": "0046",
+    "name_zh_hans": "派拉斯",
+    "name_zh_hant": "派拉斯",
+    "name_ja": "パラス",
+    "name_en": "Paras",
+    "form": null
+  },
+  {
+    "number": "0047",
+    "name_zh_hans": "派拉斯特",
+    "name_zh_hant": "派拉斯特",
+    "name_ja": "パラセクト",
+    "name_en": "Parasect",
+    "form": null
+  },
+  {
+    "number": "0048",
+    "name_zh_hans": "毛球",
+    "name_zh_hant": "毛球",
+    "name_ja": "コンパン",
+    "name_en": "Venonat",
+    "form": null
+  },
+  {
+    "number": "0049",
+    "name_zh_hans": "摩鲁蛾",
+    "name_zh_hant": "摩魯蛾",
+    "name_ja": "モルフォン",
+    "name_en": "Venomoth",
+    "form": null
+  },
+  {
+    "number": "0050",
+    "name_zh_hans": "地鼠",
+    "name_zh_hant": "地鼠",
+    "name_ja": "ディグダ",
+    "name_en": "Diglett",
+    "form": null
+  },
+  {
+    "number": "0050",
+    "name_zh_hans": "地鼠",
+    "name_zh_hant": "地鼠",
+    "name_ja": "ディグダ",
+    "name_en": "Diglett",
+    "form": "阿罗拉的样子"
+  },
+  {
+    "number": "0051",
+    "name_zh_hans": "三地鼠",
+    "name_zh_hant": "三地鼠",
+    "name_ja": "ダグトリオ",
+    "name_en": "Dugtrio",
+    "form": null
+  },
+  {
+    "number": "0051",
+    "name_zh_hans": "三地鼠",
+    "name_zh_hant": "三地鼠",
+    "name_ja": "ダグトリオ",
+    "name_en": "Dugtrio",
+    "form": "阿罗拉的样子"
+  },
+  {
+    "number": "0052",
+    "name_zh_hans": "喵喵",
+    "name_zh_hant": "喵喵",
+    "name_ja": "ニャース",
+    "name_en": "Meowth",
+    "form": null
+  },
+  {
+    "number": "0052",
+    "name_zh_hans": "喵喵",
+    "name_zh_hant": "喵喵",
+    "name_ja": "ニャース",
+    "name_en": "Meowth",
+    "form": "阿罗拉的样子"
+  },
+  {
+    "number": "0052",
+    "name_zh_hans": "喵喵",
+    "name_zh_hant": "喵喵",
+    "name_ja": "ニャース",
+    "name_en": "Meowth",
+    "form": "伽勒尔的样子"
+  },
+  {
+    "number": "0053",
+    "name_zh_hans": "猫老大",
+    "name_zh_hant": "貓老大",
+    "name_ja": "ペルシアン",
+    "name_en": "Persian",
+    "form": null
+  },
+  {
+    "number": "0053",
+    "name_zh_hans": "猫老大",
+    "name_zh_hant": "貓老大",
+    "name_ja": "ペルシアン",
+    "name_en": "Persian",
+    "form": "阿罗拉的样子"
+  },
+  {
+    "number": "0054",
+    "name_zh_hans": "可达鸭",
+    "name_zh_hant": "可達鴨",
+    "name_ja": "コダック",
+    "name_en": "Psyduck",
+    "form": null
+  },
+  {
+    "number": "0055",
+    "name_zh_hans": "哥达鸭",
+    "name_zh_hant": "哥達鴨",
+    "name_ja": "ゴルダック",
+    "name_en": "Golduck",
+    "form": null
+  },
+  {
+    "number": "0056",
+    "name_zh_hans": "猴怪",
+    "name_zh_hant": "猴怪",
+    "name_ja": "マンキー",
+    "name_en": "Mankey",
+    "form": null
+  },
+  {
+    "number": "0057",
+    "name_zh_hans": "火暴猴",
+    "name_zh_hant": "火爆猴",
+    "name_ja": "オコリザル",
+    "name_en": "Primeape",
+    "form": null
+  },
+  {
+    "number": "0058",
+    "name_zh_hans": "卡蒂狗",
+    "name_zh_hant": "卡蒂狗",
+    "name_ja": "ガーディ",
+    "name_en": "Growlithe",
+    "form": null
+  },
+  {
+    "number": "0058",
+    "name_zh_hans": "卡蒂狗",
+    "name_zh_hant": "卡蒂狗",
+    "name_ja": "ガーディ",
+    "name_en": "Growlithe",
+    "form": "洗翠的样子"
+  },
+  {
+    "number": "0059",
+    "name_zh_hans": "风速狗",
+    "name_zh_hant": "風速狗",
+    "name_ja": "ウインディ",
+    "name_en": "Arcanine",
+    "form": null
+  },
+  {
+    "number": "0059",
+    "name_zh_hans": "风速狗",
+    "name_zh_hant": "風速狗",
+    "name_ja": "ウインディ",
+    "name_en": "Arcanine",
+    "form": "洗翠的样子"
+  },
+  {
+    "number": "0060",
+    "name_zh_hans": "蚊香蝌蚪",
+    "name_zh_hant": "蚊香蝌蚪",
+    "name_ja": "ニョロモ",
+    "name_en": "Poliwag",
+    "form": null
+  },
+  {
+    "number": "0061",
+    "name_zh_hans": "蚊香君",
+    "name_zh_hant": "蚊香君",
+    "name_ja": "ニョロゾ",
+    "name_en": "Poliwhirl",
+    "form": null
+  },
+  {
+    "number": "0062",
+    "name_zh_hans": "蚊香泳士",
+    "name_zh_hant": "蚊香泳士",
+    "name_ja": "ニョロボン",
+    "name_en": "Poliwrath",
+    "form": null
+  },
+  {
+    "number": "0063",
+    "name_zh_hans": "凯西",
+    "name_zh_hant": "凱西",
+    "name_ja": "ケーシィ",
+    "name_en": "Abra",
+    "form": null
+  },
+  {
+    "number": "0064",
+    "name_zh_hans": "勇基拉",
+    "name_zh_hant": "勇基拉",
+    "name_ja": "ユンゲラー",
+    "name_en": "Kadabra",
+    "form": null
+  },
+  {
+    "number": "0065",
+    "name_zh_hans": "胡地",
+    "name_zh_hant": "胡地",
+    "name_ja": "フーディン",
+    "name_en": "Alakazam",
+    "form": null
+  },
+  {
+    "number": "0066",
+    "name_zh_hans": "腕力",
+    "name_zh_hant": "腕力",
+    "name_ja": "ワンリキー",
+    "name_en": "Machop",
+    "form": null
+  },
+  {
+    "number": "0067",
+    "name_zh_hans": "豪力",
+    "name_zh_hant": "豪力",
+    "name_ja": "ゴーリキー",
+    "name_en": "Machoke",
+    "form": null
+  },
+  {
+    "number": "0068",
+    "name_zh_hans": "怪力",
+    "name_zh_hant": "怪力",
+    "name_ja": "カイリキー",
+    "name_en": "Machamp",
+    "form": null
+  },
+  {
+    "number": "0069",
+    "name_zh_hans": "喇叭芽",
+    "name_zh_hant": "喇叭芽",
+    "name_ja": "マダツボミ",
+    "name_en": "Bellsprout",
+    "form": null
+  },
+  {
+    "number": "0070",
+    "name_zh_hans": "口呆花",
+    "name_zh_hant": "口呆花",
+    "name_ja": "ウツドン",
+    "name_en": "Weepinbell",
+    "form": null
+  },
+  {
+    "number": "0071",
+    "name_zh_hans": "大食花",
+    "name_zh_hant": "大食花",
+    "name_ja": "ウツボット",
+    "name_en": "Victreebel",
+    "form": null
+  },
+  {
+    "number": "0072",
+    "name_zh_hans": "玛瑙水母",
+    "name_zh_hant": "瑪瑙水母",
+    "name_ja": "メノクラゲ",
+    "name_en": "Tentacool",
+    "form": null
+  },
+  {
+    "number": "0073",
+    "name_zh_hans": "毒刺水母",
+    "name_zh_hant": "毒刺水母",
+    "name_ja": "ドククラゲ",
+    "name_en": "Tentacruel",
+    "form": null
+  },
+  {
+    "number": "0074",
+    "name_zh_hans": "小拳石",
+    "name_zh_hant": "小拳石",
+    "name_ja": "イシツブテ",
+    "name_en": "Geodude",
+    "form": null
+  },
+  {
+    "number": "0074",
+    "name_zh_hans": "小拳石",
+    "name_zh_hant": "小拳石",
+    "name_ja": "イシツブテ",
+    "name_en": "Geodude",
+    "form": "阿罗拉的样子"
+  },
+  {
+    "number": "0075",
+    "name_zh_hans": "隆隆石",
+    "name_zh_hant": "隆隆石",
+    "name_ja": "ゴローン",
+    "name_en": "Graveler",
+    "form": null
+  },
+  {
+    "number": "0075",
+    "name_zh_hans": "隆隆石",
+    "name_zh_hant": "隆隆石",
+    "name_ja": "ゴローン",
+    "name_en": "Graveler",
+    "form": "阿罗拉的样子"
+  },
+  {
+    "number": "0076",
+    "name_zh_hans": "隆隆岩",
+    "name_zh_hant": "隆隆岩",
+    "name_ja": "ゴローニャ",
+    "name_en": "Golem",
+    "form": null
+  },
+  {
+    "number": "0076",
+    "name_zh_hans": "隆隆岩",
+    "name_zh_hant": "隆隆岩",
+    "name_ja": "ゴローニャ",
+    "name_en": "Golem",
+    "form": "阿罗拉的样子"
+  },
+  {
+    "number": "0077",
+    "name_zh_hans": "小火马",
+    "name_zh_hant": "小火馬",
+    "name_ja": "ポニータ",
+    "name_en": "Ponyta",
+    "form": null
+  },
+  {
+    "number": "0077",
+    "name_zh_hans": "小火马",
+    "name_zh_hant": "小火馬",
+    "name_ja": "ポニータ",
+    "name_en": "Ponyta",
+    "form": "伽勒尔的样子"
+  },
+  {
+    "number": "0078",
+    "name_zh_hans": "烈焰马",
+    "name_zh_hant": "烈焰馬",
+    "name_ja": "ギャロップ",
+    "name_en": "Rapidash",
+    "form": null
+  },
+  {
+    "number": "0078",
+    "name_zh_hans": "烈焰马",
+    "name_zh_hant": "烈焰馬",
+    "name_ja": "ギャロップ",
+    "name_en": "Rapidash",
+    "form": "伽勒尔的样子"
+  },
+  {
+    "number": "0079",
+    "name_zh_hans": "呆呆兽",
+    "name_zh_hant": "呆呆獸",
+    "name_ja": "ヤドン",
+    "name_en": "Slowpoke",
+    "form": null
+  },
+  {
+    "number": "0079",
+    "name_zh_hans": "呆呆兽",
+    "name_zh_hant": "呆呆獸",
+    "name_ja": "ヤドン",
+    "name_en": "Slowpoke",
+    "form": "伽勒尔的样子"
+  },
+  {
+    "number": "0080",
+    "name_zh_hans": "呆壳兽",
+    "name_zh_hant": "呆殼獸",
+    "name_ja": "ヤドラン",
+    "name_en": "Slowbro",
+    "form": null
+  },
+  {
+    "number": "0080",
+    "name_zh_hans": "呆壳兽",
+    "name_zh_hant": "呆殼獸",
+    "name_ja": "ヤドラン",
+    "name_en": "Slowbro",
+    "form": "伽勒尔的样子"
+  },
+  {
+    "number": "0081",
+    "name_zh_hans": "小磁怪",
+    "name_zh_hant": "小磁怪",
+    "name_ja": "コイル",
+    "name_en": "Magnemite",
+    "form": null
+  },
+  {
+    "number": "0082",
+    "name_zh_hans": "三合一磁怪",
+    "name_zh_hant": "三合一磁怪",
+    "name_ja": "レアコイル",
+    "name_en": "Magneton",
+    "form": null
+  },
+  {
+    "number": "0083",
+    "name_zh_hans": "大葱鸭",
+    "name_zh_hant": "大蔥鴨",
+    "name_ja": "カモネギ",
+    "name_en": "Farfetch'd",
+    "form": null
+  },
+  {
+    "number": "0083",
+    "name_zh_hans": "大葱鸭",
+    "name_zh_hant": "大蔥鴨",
+    "name_ja": "カモネギ",
+    "name_en": "Farfetch'd",
+    "form": "伽勒尔的样子"
+  },
+  {
+    "number": "0084",
+    "name_zh_hans": "嘟嘟",
+    "name_zh_hant": "嘟嘟",
+    "name_ja": "ドードー",
+    "name_en": "Doduo",
+    "form": null
+  },
+  {
+    "number": "0085",
+    "name_zh_hans": "嘟嘟利",
+    "name_zh_hant": "嘟嘟利",
+    "name_ja": "ドードリオ",
+    "name_en": "Dodrio",
+    "form": null
+  },
+  {
+    "number": "0086",
+    "name_zh_hans": "小海狮",
+    "name_zh_hant": "小海獅",
+    "name_ja": "パウワウ",
+    "name_en": "Seel",
+    "form": null
+  },
+  {
+    "number": "0087",
+    "name_zh_hans": "白海狮",
+    "name_zh_hant": "白海獅",
+    "name_ja": "ジュゴン",
+    "name_en": "Dewgong",
+    "form": null
+  },
+  {
+    "number": "0088",
+    "name_zh_hans": "臭泥",
+    "name_zh_hant": "臭泥",
+    "name_ja": "ベトベター",
+    "name_en": "Grimer",
+    "form": null
+  },
+  {
+    "number": "0088",
+    "name_zh_hans": "臭泥",
+    "name_zh_hant": "臭泥",
+    "name_ja": "ベトベター",
+    "name_en": "Grimer",
+    "form": "阿罗拉的样子"
+  },
+  {
+    "number": "0089",
+    "name_zh_hans": "臭臭泥",
+    "name_zh_hant": "臭臭泥",
+    "name_ja": "ベトベトン",
+    "name_en": "Muk",
+    "form": null
+  },
+  {
+    "number": "0089",
+    "name_zh_hans": "臭臭泥",
+    "name_zh_hant": "臭臭泥",
+    "name_ja": "ベトベトン",
+    "name_en": "Muk",
+    "form": "阿罗拉的样子"
+  },
+  {
+    "number": "0090",
+    "name_zh_hans": "大舌贝",
+    "name_zh_hant": "大舌貝",
+    "name_ja": "シェルダー",
+    "name_en": "Shellder",
+    "form": null
+  },
+  {
+    "number": "0091",
+    "name_zh_hans": "刺甲贝",
+    "name_zh_hant": "刺甲貝",
+    "name_ja": "パルシェン",
+    "name_en": "Cloyster",
+    "form": null
+  },
+  {
+    "number": "0092",
+    "name_zh_hans": "鬼斯",
+    "name_zh_hant": "鬼斯",
+    "name_ja": "ゴース",
+    "name_en": "Gastly",
+    "form": null
+  },
+  {
+    "number": "0093",
+    "name_zh_hans": "鬼斯通",
+    "name_zh_hant": "鬼斯通",
+    "name_ja": "ゴースト",
+    "name_en": "Haunter",
+    "form": null
+  },
+  {
+    "number": "0094",
+    "name_zh_hans": "耿鬼",
+    "name_zh_hant": "耿鬼",
+    "name_ja": "ゲンガー",
+    "name_en": "Gengar",
+    "form": null
+  },
+  {
+    "number": "0095",
+    "name_zh_hans": "大岩蛇",
+    "name_zh_hant": "大岩蛇",
+    "name_ja": "イワーク",
+    "name_en": "Onix",
+    "form": null
+  },
+  {
+    "number": "0096",
+    "name_zh_hans": "催眠貘",
+    "name_zh_hant": "催眠貘",
+    "name_ja": "スリープ",
+    "name_en": "Drowzee",
+    "form": null
+  },
+  {
+    "number": "0097",
+    "name_zh_hans": "引梦貘人",
+    "name_zh_hant": "引夢貘人",
+    "name_ja": "スリーパー",
+    "name_en": "Hypno",
+    "form": null
+  },
+  {
+    "number": "0098",
+    "name_zh_hans": "大钳蟹",
+    "name_zh_hant": "大鉗蟹",
+    "name_ja": "クラブ",
+    "name_en": "Krabby",
+    "form": null
+  },
+  {
+    "number": "0099",
+    "name_zh_hans": "巨钳蟹",
+    "name_zh_hant": "巨鉗蟹",
+    "name_ja": "キングラー",
+    "name_en": "Kingler",
+    "form": null
+  },
+  {
+    "number": "0100",
+    "name_zh_hans": "霹雳电球",
+    "name_zh_hant": "霹靂電球",
+    "name_ja": "ビリリダマ",
+    "name_en": "Voltorb",
+    "form": null
+  },
+  {
+    "number": "0100",
+    "name_zh_hans": "霹雳电球",
+    "name_zh_hant": "霹靂電球",
+    "name_ja": "ビリリダマ",
+    "name_en": "Voltorb",
+    "form": "洗翠的样子"
+  },
+  {
+    "number": "0101",
+    "name_zh_hans": "顽皮雷弹",
+    "name_zh_hant": "頑皮雷彈",
+    "name_ja": "マルマイン",
+    "name_en": "Electrode",
+    "form": null
+  },
+  {
+    "number": "0101",
+    "name_zh_hans": "顽皮雷弹",
+    "name_zh_hant": "頑皮雷彈",
+    "name_ja": "マルマイン",
+    "name_en": "Electrode",
+    "form": "洗翠的样子"
+  },
+  {
+    "number": "0102",
+    "name_zh_hans": "蛋蛋",
+    "name_zh_hant": "蛋蛋",
+    "name_ja": "タマタマ",
+    "name_en": "Exeggcute",
+    "form": null
+  },
+  {
+    "number": "0103",
+    "name_zh_hans": "椰蛋树",
+    "name_zh_hant": "椰蛋樹",
+    "name_ja": "ナッシー",
+    "name_en": "Exeggutor",
+    "form": null
+  },
+  {
+    "number": "0103",
+    "name_zh_hans": "椰蛋树",
+    "name_zh_hant": "椰蛋樹",
+    "name_ja": "ナッシー",
+    "name_en": "Exeggutor",
+    "form": "阿罗拉的样子"
+  },
+  {
+    "number": "0104",
+    "name_zh_hans": "卡拉卡拉",
+    "name_zh_hant": "卡拉卡拉",
+    "name_ja": "カラカラ",
+    "name_en": "Cubone",
+    "form": null
+  },
+  {
+    "number": "0105",
+    "name_zh_hans": "嘎啦嘎啦",
+    "name_zh_hant": "嘎啦嘎啦",
+    "name_ja": "ガラガラ",
+    "name_en": "Marowak",
+    "form": null
+  },
+  {
+    "number": "0105",
+    "name_zh_hans": "嘎啦嘎啦",
+    "name_zh_hant": "嘎啦嘎啦",
+    "name_ja": "ガラガラ",
+    "name_en": "Marowak",
+    "form": "阿罗拉的样子"
+  },
+  {
+    "number": "0106",
+    "name_zh_hans": "飞腿郎",
+    "name_zh_hant": "飛腿郎",
+    "name_ja": "サワムラー",
+    "name_en": "Hitmonlee",
+    "form": null
+  },
+  {
+    "number": "0107",
+    "name_zh_hans": "快拳郎",
+    "name_zh_hant": "快拳郎",
+    "name_ja": "エビワラー",
+    "name_en": "Hitmonchan",
+    "form": null
+  },
+  {
+    "number": "0108",
+    "name_zh_hans": "大舌头",
+    "name_zh_hant": "大舌頭",
+    "name_ja": "ベロリンガ",
+    "name_en": "Lickitung",
+    "form": null
+  },
+  {
+    "number": "0109",
+    "name_zh_hans": "瓦斯弹",
+    "name_zh_hant": "瓦斯彈",
+    "name_ja": "ドガース",
+    "name_en": "Koffing",
+    "form": null
+  },
+  {
+    "number": "0110",
+    "name_zh_hans": "双弹瓦斯",
+    "name_zh_hant": "雙彈瓦斯",
+    "name_ja": "マタドガス",
+    "name_en": "Weezing",
+    "form": null
+  },
+  {
+    "number": "0110",
+    "name_zh_hans": "双弹瓦斯",
+    "name_zh_hant": "雙彈瓦斯",
+    "name_ja": "マタドガス",
+    "name_en": "Weezing",
+    "form": "伽勒尔的样子"
+  },
+  {
+    "number": "0111",
+    "name_zh_hans": "独角犀牛",
+    "name_zh_hant": "獨角犀牛",
+    "name_ja": "サイホーン",
+    "name_en": "Rhyhorn",
+    "form": null
+  },
+  {
+    "number": "0112",
+    "name_zh_hans": "钻角犀兽",
+    "name_zh_hant": "鑽角犀獸",
+    "name_ja": "サイドン",
+    "name_en": "Rhydon",
+    "form": null
+  },
+  {
+    "number": "0113",
+    "name_zh_hans": "吉利蛋",
+    "name_zh_hant": "吉利蛋",
+    "name_ja": "ラッキー",
+    "name_en": "Chansey",
+    "form": null
+  },
+  {
+    "number": "0114",
+    "name_zh_hans": "蔓藤怪",
+    "name_zh_hant": "蔓藤怪",
+    "name_ja": "モンジャラ",
+    "name_en": "Tangela",
+    "form": null
+  },
+  {
+    "number": "0115",
+    "name_zh_hans": "袋兽",
+    "name_zh_hant": "袋獸",
+    "name_ja": "ガルーラ",
+    "name_en": "Kangaskhan",
+    "form": null
+  },
+  {
+    "number": "0116",
+    "name_zh_hans": "墨海马",
+    "name_zh_hant": "墨海馬",
+    "name_ja": "タッツー",
+    "name_en": "Horsea",
+    "form": null
+  },
+  {
+    "number": "0117",
+    "name_zh_hans": "海刺龙",
+    "name_zh_hant": "海刺龍",
+    "name_ja": "シードラ",
+    "name_en": "Seadra",
+    "form": null
+  },
+  {
+    "number": "0118",
+    "name_zh_hans": "角金鱼",
+    "name_zh_hant": "角金魚",
+    "name_ja": "トサキント",
+    "name_en": "Goldeen",
+    "form": null
+  },
+  {
+    "number": "0119",
+    "name_zh_hans": "金鱼王",
+    "name_zh_hant": "金魚王",
+    "name_ja": "アズマオウ",
+    "name_en": "Seaking",
+    "form": null
+  },
+  {
+    "number": "0120",
+    "name_zh_hans": "海星星",
+    "name_zh_hant": "海星星",
+    "name_ja": "ヒトデマン",
+    "name_en": "Staryu",
+    "form": null
+  },
+  {
+    "number": "0121",
+    "name_zh_hans": "宝石海星",
+    "name_zh_hant": "寶石海星",
+    "name_ja": "スターミー",
+    "name_en": "Starmie",
+    "form": null
+  },
+  {
+    "number": "0122",
+    "name_zh_hans": "魔墙人偶",
+    "name_zh_hant": "魔牆人偶",
+    "name_ja": "バリヤード",
+    "name_en": "Mr. Mime",
+    "form": null
+  },
+  {
+    "number": "0122",
+    "name_zh_hans": "魔墙人偶",
+    "name_zh_hant": "魔牆人偶",
+    "name_ja": "バリヤード",
+    "name_en": "Mr. Mime",
+    "form": "伽勒尔的样子"
+  },
+  {
+    "number": "0123",
+    "name_zh_hans": "飞天螳螂",
+    "name_zh_hant": "飛天螳螂",
+    "name_ja": "ストライク",
+    "name_en": "Scyther",
+    "form": null
+  },
+  {
+    "number": "0124",
+    "name_zh_hans": "迷唇姐",
+    "name_zh_hant": "迷唇姐",
+    "name_ja": "ルージュラ",
+    "name_en": "Jynx",
+    "form": null
+  },
+  {
+    "number": "0125",
+    "name_zh_hans": "电击兽",
+    "name_zh_hant": "電擊獸",
+    "name_ja": "エレブー",
+    "name_en": "Electabuzz",
+    "form": null
+  },
+  {
+    "number": "0126",
+    "name_zh_hans": "鸭嘴火兽",
+    "name_zh_hant": "鴨嘴火獸",
+    "name_ja": "ブーバー",
+    "name_en": "Magmar",
+    "form": null
+  },
+  {
+    "number": "0127",
+    "name_zh_hans": "凯罗斯",
+    "name_zh_hant": "凱羅斯",
+    "name_ja": "カイロス",
+    "name_en": "Pinsir",
+    "form": null
+  },
+  {
+    "number": "0128",
+    "name_zh_hans": "肯泰罗",
+    "name_zh_hant": "肯泰羅",
+    "name_ja": "ケンタロス",
+    "name_en": "Tauros",
+    "form": null
+  },
+  {
+    "number": "0128",
+    "name_zh_hans": "肯泰罗",
+    "name_zh_hant": "肯泰羅",
+    "name_ja": "ケンタロス",
+    "name_en": "Tauros",
+    "form": "帕底亚的样子（斗战种）"
+  },
+  {
+    "number": "0128",
+    "name_zh_hans": "肯泰罗",
+    "name_zh_hant": "肯泰羅",
+    "name_ja": "ケンタロス",
+    "name_en": "Tauros",
+    "form": "帕底亚的样子（火炽种）"
+  },
+  {
+    "number": "0128",
+    "name_zh_hans": "肯泰罗",
+    "name_zh_hant": "肯泰羅",
+    "name_ja": "ケンタロス",
+    "name_en": "Tauros",
+    "form": "帕底亚的样子（水澜种）"
+  },
+  {
+    "number": "0129",
+    "name_zh_hans": "鲤鱼王",
+    "name_zh_hant": "鯉魚王",
+    "name_ja": "コイキング",
+    "name_en": "Magikarp",
+    "form": null
+  },
+  {
+    "number": "0130",
+    "name_zh_hans": "暴鲤龙",
+    "name_zh_hant": "暴鯉龍",
+    "name_ja": "ギャラドス",
+    "name_en": "Gyarados",
+    "form": null
+  },
+  {
+    "number": "0131",
+    "name_zh_hans": "拉普拉斯",
+    "name_zh_hant": "拉普拉斯",
+    "name_ja": "ラプラス",
+    "name_en": "Lapras",
+    "form": null
+  },
+  {
+    "number": "0132",
+    "name_zh_hans": "百变怪",
+    "name_zh_hant": "百變怪",
+    "name_ja": "メタモン",
+    "name_en": "Ditto",
+    "form": null
+  },
+  {
+    "number": "0133",
+    "name_zh_hans": "伊布",
+    "name_zh_hant": "伊布",
+    "name_ja": "イーブイ",
+    "name_en": "Eevee",
+    "form": null
+  },
+  {
+    "number": "0134",
+    "name_zh_hans": "水伊布",
+    "name_zh_hant": "水伊布",
+    "name_ja": "シャワーズ",
+    "name_en": "Vaporeon",
+    "form": null
+  },
+  {
+    "number": "0135",
+    "name_zh_hans": "雷伊布",
+    "name_zh_hant": "雷伊布",
+    "name_ja": "サンダース",
+    "name_en": "Jolteon",
+    "form": null
+  },
+  {
+    "number": "0136",
+    "name_zh_hans": "火伊布",
+    "name_zh_hant": "火伊布",
+    "name_ja": "ブースター",
+    "name_en": "Flareon",
+    "form": null
+  },
+  {
+    "number": "0137",
+    "name_zh_hans": "多边兽",
+    "name_zh_hant": "多邊獸",
+    "name_ja": "ポリゴン",
+    "name_en": "Porygon",
+    "form": null
+  },
+  {
+    "number": "0138",
+    "name_zh_hans": "菊石兽",
+    "name_zh_hant": "菊石獸",
+    "name_ja": "オムナイト",
+    "name_en": "Omanyte",
+    "form": null
+  },
+  {
+    "number": "0139",
+    "name_zh_hans": "多刺菊石兽",
+    "name_zh_hant": "多刺菊石獸",
+    "name_ja": "オムスター",
+    "name_en": "Omastar",
+    "form": null
+  },
+  {
+    "number": "0140",
+    "name_zh_hans": "化石盔",
+    "name_zh_hant": "化石盔",
+    "name_ja": "カブト",
+    "name_en": "Kabuto",
+    "form": null
+  },
+  {
+    "number": "0141",
+    "name_zh_hans": "镰刀盔",
+    "name_zh_hant": "鐮刀盔",
+    "name_ja": "カブトプス",
+    "name_en": "Kabutops",
+    "form": null
+  },
+  {
+    "number": "0142",
+    "name_zh_hans": "化石翼龙",
+    "name_zh_hant": "化石翼龍",
+    "name_ja": "プテラ",
+    "name_en": "Aerodactyl",
+    "form": null
+  },
+  {
+    "number": "0143",
+    "name_zh_hans": "卡比兽",
+    "name_zh_hant": "卡比獸",
+    "name_ja": "カビゴン",
+    "name_en": "Snorlax",
+    "form": null
+  },
+  {
+    "number": "0144",
+    "name_zh_hans": "急冻鸟",
+    "name_zh_hant": "急凍鳥",
+    "name_ja": "フリーザー",
+    "name_en": "Articuno",
+    "form": null
+  },
+  {
+    "number": "0144",
+    "name_zh_hans": "急冻鸟",
+    "name_zh_hant": "急凍鳥",
+    "name_ja": "フリーザー",
+    "name_en": "Articuno",
+    "form": "伽勒尔的样子"
+  },
+  {
+    "number": "0145",
+    "name_zh_hans": "闪电鸟",
+    "name_zh_hant": "閃電鳥",
+    "name_ja": "サンダー",
+    "name_en": "Zapdos",
+    "form": null
+  },
+  {
+    "number": "0145",
+    "name_zh_hans": "闪电鸟",
+    "name_zh_hant": "閃電鳥",
+    "name_ja": "サンダー",
+    "name_en": "Zapdos",
+    "form": "伽勒尔的样子"
+  },
+  {
+    "number": "0146",
+    "name_zh_hans": "火焰鸟",
+    "name_zh_hant": "火焰鳥",
+    "name_ja": "ファイヤー",
+    "name_en": "Moltres",
+    "form": null
+  },
+  {
+    "number": "0146",
+    "name_zh_hans": "火焰鸟",
+    "name_zh_hant": "火焰鳥",
+    "name_ja": "ファイヤー",
+    "name_en": "Moltres",
+    "form": "伽勒尔的样子"
+  },
+  {
+    "number": "0147",
+    "name_zh_hans": "迷你龙",
+    "name_zh_hant": "迷你龍",
+    "name_ja": "ミニリュウ",
+    "name_en": "Dratini",
+    "form": null
+  },
+  {
+    "number": "0148",
+    "name_zh_hans": "哈克龙",
+    "name_zh_hant": "哈克龍",
+    "name_ja": "ハクリュー",
+    "name_en": "Dragonair",
+    "form": null
+  },
+  {
+    "number": "0149",
+    "name_zh_hans": "快龙",
+    "name_zh_hant": "快龍",
+    "name_ja": "カイリュー",
+    "name_en": "Dragonite",
+    "form": null
+  },
+  {
+    "number": "0150",
+    "name_zh_hans": "超梦",
+    "name_zh_hant": "超夢",
+    "name_ja": "ミュウツー",
+    "name_en": "Mewtwo",
+    "form": null
+  },
+  {
+    "number": "0151",
+    "name_zh_hans": "梦幻",
+    "name_zh_hant": "夢幻",
+    "name_ja": "ミュウ",
+    "name_en": "Mew",
+    "form": null
+  },
+  {
+    "number": "0152",
+    "name_zh_hans": "菊草叶",
+    "name_zh_hant": "菊草葉",
+    "name_ja": "チコリータ",
+    "name_en": "Chikorita",
+    "form": null
+  },
+  {
+    "number": "0153",
+    "name_zh_hans": "月桂叶",
+    "name_zh_hant": "月桂葉",
+    "name_ja": "ベイリーフ",
+    "name_en": "Bayleef",
+    "form": null
+  },
+  {
+    "number": "0154",
+    "name_zh_hans": "大竺葵",
+    "name_zh_hant": "大竺葵",
+    "name_ja": "メガニウム",
+    "name_en": "Meganium",
+    "form": null
+  },
+  {
+    "number": "0155",
+    "name_zh_hans": "火球鼠",
+    "name_zh_hant": "火球鼠",
+    "name_ja": "ヒノアラシ",
+    "name_en": "Cyndaquil",
+    "form": null
+  },
+  {
+    "number": "0156",
+    "name_zh_hans": "火岩鼠",
+    "name_zh_hant": "火岩鼠",
+    "name_ja": "マグマラシ",
+    "name_en": "Quilava",
+    "form": null
+  },
+  {
+    "number": "0157",
+    "name_zh_hans": "火暴兽",
+    "name_zh_hant": "火爆獸",
+    "name_ja": "バクフーン",
+    "name_en": "Typhlosion",
+    "form": null
+  },
+  {
+    "number": "0157",
+    "name_zh_hans": "火暴兽",
+    "name_zh_hant": "火爆獸",
+    "name_ja": "バクフーン",
+    "name_en": "Typhlosion",
+    "form": "洗翠的样子"
+  },
+  {
+    "number": "0158",
+    "name_zh_hans": "小锯鳄",
+    "name_zh_hant": "小鋸鱷",
+    "name_ja": "ワニノコ",
+    "name_en": "Totodile",
+    "form": null
+  },
+  {
+    "number": "0159",
+    "name_zh_hans": "蓝鳄",
+    "name_zh_hant": "藍鱷",
+    "name_ja": "アリゲイツ",
+    "name_en": "Croconaw",
+    "form": null
+  },
+  {
+    "number": "0160",
+    "name_zh_hans": "大力鳄",
+    "name_zh_hant": "大力鱷",
+    "name_ja": "オーダイル",
+    "name_en": "Feraligatr",
+    "form": null
+  },
+  {
+    "number": "0161",
+    "name_zh_hans": "尾立",
+    "name_zh_hant": "尾立",
+    "name_ja": "オタチ",
+    "name_en": "Sentret",
+    "form": null
+  },
+  {
+    "number": "0162",
+    "name_zh_hans": "大尾立",
+    "name_zh_hant": "大尾立",
+    "name_ja": "オオタチ",
+    "name_en": "Furret",
+    "form": null
+  },
+  {
+    "number": "0163",
+    "name_zh_hans": "咕咕",
+    "name_zh_hant": "咕咕",
+    "name_ja": "ホーホー",
+    "name_en": "Hoothoot",
+    "form": null
+  },
+  {
+    "number": "0164",
+    "name_zh_hans": "猫头夜鹰",
+    "name_zh_hant": "貓頭夜鷹",
+    "name_ja": "ヨルノズク",
+    "name_en": "Noctowl",
+    "form": null
+  },
+  {
+    "number": "0165",
+    "name_zh_hans": "芭瓢虫",
+    "name_zh_hant": "芭瓢蟲",
+    "name_ja": "レディバ",
+    "name_en": "Ledyba",
+    "form": null
+  },
+  {
+    "number": "0166",
+    "name_zh_hans": "安瓢虫",
+    "name_zh_hant": "安瓢蟲",
+    "name_ja": "レディアン",
+    "name_en": "Ledian",
+    "form": null
+  },
+  {
+    "number": "0167",
+    "name_zh_hans": "圆丝蛛",
+    "name_zh_hant": "圓絲蛛",
+    "name_ja": "イトマル",
+    "name_en": "Spinarak",
+    "form": null
+  },
+  {
+    "number": "0168",
+    "name_zh_hans": "阿利多斯",
+    "name_zh_hant": "阿利多斯",
+    "name_ja": "アリアドス",
+    "name_en": "Ariados",
+    "form": null
+  },
+  {
+    "number": "0169",
+    "name_zh_hans": "叉字蝠",
+    "name_zh_hant": "叉字蝠",
+    "name_ja": "クロバット",
+    "name_en": "Crobat",
+    "form": null
+  },
+  {
+    "number": "0170",
+    "name_zh_hans": "灯笼鱼",
+    "name_zh_hant": "燈籠魚",
+    "name_ja": "チョンチー",
+    "name_en": "Chinchou",
+    "form": null
+  },
+  {
+    "number": "0171",
+    "name_zh_hans": "电灯怪",
+    "name_zh_hant": "電燈怪",
+    "name_ja": "ランターン",
+    "name_en": "Lanturn",
+    "form": null
+  },
+  {
+    "number": "0172",
+    "name_zh_hans": "皮丘",
+    "name_zh_hant": "皮丘",
+    "name_ja": "ピチュー",
+    "name_en": "Pichu",
+    "form": null
+  },
+  {
+    "number": "0173",
+    "name_zh_hans": "皮宝宝",
+    "name_zh_hant": "皮寶寶",
+    "name_ja": "ピィ",
+    "name_en": "Cleffa",
+    "form": null
+  },
+  {
+    "number": "0174",
+    "name_zh_hans": "宝宝丁",
+    "name_zh_hant": "寶寶丁",
+    "name_ja": "ププリン",
+    "name_en": "Igglybuff",
+    "form": null
+  },
+  {
+    "number": "0175",
+    "name_zh_hans": "波克比",
+    "name_zh_hant": "波克比",
+    "name_ja": "トゲピー",
+    "name_en": "Togepi",
+    "form": null
+  },
+  {
+    "number": "0176",
+    "name_zh_hans": "波克基古",
+    "name_zh_hant": "波克基古",
+    "name_ja": "トゲチック",
+    "name_en": "Togetic",
+    "form": null
+  },
+  {
+    "number": "0177",
+    "name_zh_hans": "天然雀",
+    "name_zh_hant": "天然雀",
+    "name_ja": "ネイティ",
+    "name_en": "Natu",
+    "form": null
+  },
+  {
+    "number": "0178",
+    "name_zh_hans": "天然鸟",
+    "name_zh_hant": "天然鳥",
+    "name_ja": "ネイティオ",
+    "name_en": "Xatu",
+    "form": null
+  },
+  {
+    "number": "0179",
+    "name_zh_hans": "咩利羊",
+    "name_zh_hant": "咩利羊",
+    "name_ja": "メリープ",
+    "name_en": "Mareep",
+    "form": null
+  },
+  {
+    "number": "0180",
+    "name_zh_hans": "茸茸羊",
+    "name_zh_hant": "茸茸羊",
+    "name_ja": "モココ",
+    "name_en": "Flaaffy",
+    "form": null
+  },
+  {
+    "number": "0181",
+    "name_zh_hans": "电龙",
+    "name_zh_hant": "電龍",
+    "name_ja": "デンリュウ",
+    "name_en": "Ampharos",
+    "form": null
+  },
+  {
+    "number": "0182",
+    "name_zh_hans": "美丽花",
+    "name_zh_hant": "美麗花",
+    "name_ja": "キレイハナ",
+    "name_en": "Bellossom",
+    "form": null
+  },
+  {
+    "number": "0183",
+    "name_zh_hans": "玛力露",
+    "name_zh_hant": "瑪力露",
+    "name_ja": "マリル",
+    "name_en": "Marill",
+    "form": null
+  },
+  {
+    "number": "0184",
+    "name_zh_hans": "玛力露丽",
+    "name_zh_hant": "瑪力露麗",
+    "name_ja": "マリルリ",
+    "name_en": "Azumarill",
+    "form": null
+  },
+  {
+    "number": "0185",
+    "name_zh_hans": "树才怪",
+    "name_zh_hant": "樹才怪",
+    "name_ja": "ウソッキー",
+    "name_en": "Sudowoodo",
+    "form": null
+  },
+  {
+    "number": "0186",
+    "name_zh_hans": "蚊香蛙皇",
+    "name_zh_hant": "蚊香蛙皇",
+    "name_ja": "ニョロトノ",
+    "name_en": "Politoed",
+    "form": null
+  },
+  {
+    "number": "0187",
+    "name_zh_hans": "毽子草",
+    "name_zh_hant": "毽子草",
+    "name_ja": "ハネッコ",
+    "name_en": "Hoppip",
+    "form": null
+  },
+  {
+    "number": "0188",
+    "name_zh_hans": "毽子花",
+    "name_zh_hant": "毽子花",
+    "name_ja": "ポポッコ",
+    "name_en": "Skiploom",
+    "form": null
+  },
+  {
+    "number": "0189",
+    "name_zh_hans": "毽子棉",
+    "name_zh_hant": "毽子棉",
+    "name_ja": "ワタッコ",
+    "name_en": "Jumpluff",
+    "form": null
+  },
+  {
+    "number": "0190",
+    "name_zh_hans": "长尾怪手",
+    "name_zh_hant": "長尾怪手",
+    "name_ja": "エイパム",
+    "name_en": "Aipom",
+    "form": null
+  },
+  {
+    "number": "0191",
+    "name_zh_hans": "向日种子",
+    "name_zh_hant": "向日種子",
+    "name_ja": "ヒマナッツ",
+    "name_en": "Sunkern",
+    "form": null
+  },
+  {
+    "number": "0192",
+    "name_zh_hans": "向日花怪",
+    "name_zh_hant": "向日花怪",
+    "name_ja": "キマワリ",
+    "name_en": "Sunflora",
+    "form": null
+  },
+  {
+    "number": "0193",
+    "name_zh_hans": "蜻蜻蜓",
+    "name_zh_hant": "蜻蜻蜓",
+    "name_ja": "ヤンヤンマ",
+    "name_en": "Yanma",
+    "form": null
+  },
+  {
+    "number": "0194",
+    "name_zh_hans": "乌波",
+    "name_zh_hant": "烏波",
+    "name_ja": "ウパー",
+    "name_en": "Wooper",
+    "form": null
+  },
+  {
+    "number": "0194",
+    "name_zh_hans": "乌波",
+    "name_zh_hant": "烏波",
+    "name_ja": "ウパー",
+    "name_en": "Wooper",
+    "form": "帕底亚的样子"
+  },
+  {
+    "number": "0195",
+    "name_zh_hans": "沼王",
+    "name_zh_hant": "沼王",
+    "name_ja": "ヌオー",
+    "name_en": "Quagsire",
+    "form": null
+  },
+  {
+    "number": "0196",
+    "name_zh_hans": "太阳伊布",
+    "name_zh_hant": "太陽伊布",
+    "name_ja": "エーフィ",
+    "name_en": "Espeon",
+    "form": null
+  },
+  {
+    "number": "0197",
+    "name_zh_hans": "月亮伊布",
+    "name_zh_hant": "月亮伊布",
+    "name_ja": "ブラッキー",
+    "name_en": "Umbreon",
+    "form": null
+  },
+  {
+    "number": "0198",
+    "name_zh_hans": "黑暗鸦",
+    "name_zh_hant": "黑暗鴉",
+    "name_ja": "ヤミカラス",
+    "name_en": "Murkrow",
+    "form": null
+  },
+  {
+    "number": "0199",
+    "name_zh_hans": "呆呆王",
+    "name_zh_hant": "呆呆王",
+    "name_ja": "ヤドキング",
+    "name_en": "Slowking",
+    "form": null
+  },
+  {
+    "number": "0199",
+    "name_zh_hans": "呆呆王",
+    "name_zh_hant": "呆呆王",
+    "name_ja": "ヤドキング",
+    "name_en": "Slowking",
+    "form": "伽勒尔的样子"
+  },
+  {
+    "number": "0200",
+    "name_zh_hans": "梦妖",
+    "name_zh_hant": "夢妖",
+    "name_ja": "ムウマ",
+    "name_en": "Misdreavus",
+    "form": null
+  },
+  {
+    "number": "0201",
+    "name_zh_hans": "未知图腾",
+    "name_zh_hant": "未知圖騰",
+    "name_ja": "アンノーン",
+    "name_en": "Unown",
+    "form": null
+  },
+  {
+    "number": "0202",
+    "name_zh_hans": "果然翁",
+    "name_zh_hant": "果然翁",
+    "name_ja": "ソーナンス",
+    "name_en": "Wobbuffet",
+    "form": null
+  },
+  {
+    "number": "0203",
+    "name_zh_hans": "麒麟奇",
+    "name_zh_hant": "麒麟奇",
+    "name_ja": "キリンリキ",
+    "name_en": "Girafarig",
+    "form": null
+  },
+  {
+    "number": "0204",
+    "name_zh_hans": "榛果球",
+    "name_zh_hant": "榛果球",
+    "name_ja": "クヌギダマ",
+    "name_en": "Pineco",
+    "form": null
+  },
+  {
+    "number": "0205",
+    "name_zh_hans": "佛烈托斯",
+    "name_zh_hant": "佛烈托斯",
+    "name_ja": "フォレトス",
+    "name_en": "Forretress",
+    "form": null
+  },
+  {
+    "number": "0206",
+    "name_zh_hans": "土龙弟弟",
+    "name_zh_hant": "土龍弟弟",
+    "name_ja": "ノコッチ",
+    "name_en": "Dunsparce",
+    "form": null
+  },
+  {
+    "number": "0207",
+    "name_zh_hans": "天蝎",
+    "name_zh_hant": "天蠍",
+    "name_ja": "グライガー",
+    "name_en": "Gligar",
+    "form": null
+  },
+  {
+    "number": "0208",
+    "name_zh_hans": "大钢蛇",
+    "name_zh_hant": "大鋼蛇",
+    "name_ja": "ハガネール",
+    "name_en": "Steelix",
+    "form": null
+  },
+  {
+    "number": "0209",
+    "name_zh_hans": "布鲁",
+    "name_zh_hant": "布魯",
+    "name_ja": "ブルー",
+    "name_en": "Snubbull",
+    "form": null
+  },
+  {
+    "number": "0210",
+    "name_zh_hans": "布鲁皇",
+    "name_zh_hant": "布魯皇",
+    "name_ja": "グランブル",
+    "name_en": "Granbull",
+    "form": null
+  },
+  {
+    "number": "0211",
+    "name_zh_hans": "千针鱼",
+    "name_zh_hant": "千針魚",
+    "name_ja": "ハリーセン",
+    "name_en": "Qwilfish",
+    "form": null
+  },
+  {
+    "number": "0211",
+    "name_zh_hans": "千针鱼",
+    "name_zh_hant": "千針魚",
+    "name_ja": "ハリーセン",
+    "name_en": "Qwilfish",
+    "form": "洗翠的样子"
+  },
+  {
+    "number": "0212",
+    "name_zh_hans": "巨钳螳螂",
+    "name_zh_hant": "巨鉗螳螂",
+    "name_ja": "ハッサム",
+    "name_en": "Scizor",
+    "form": null
+  },
+  {
+    "number": "0213",
+    "name_zh_hans": "壶壶",
+    "name_zh_hant": "壺壺",
+    "name_ja": "ツボツボ",
+    "name_en": "Shuckle",
+    "form": null
+  },
+  {
+    "number": "0214",
+    "name_zh_hans": "赫拉克罗斯",
+    "name_zh_hant": "赫拉克羅斯",
+    "name_ja": "ヘラクロス",
+    "name_en": "Heracross",
+    "form": null
+  },
+  {
+    "number": "0215",
+    "name_zh_hans": "狃拉",
+    "name_zh_hant": "狃拉",
+    "name_ja": "ニューラ",
+    "name_en": "Sneasel",
+    "form": null
+  },
+  {
+    "number": "0215",
+    "name_zh_hans": "狃拉",
+    "name_zh_hant": "狃拉",
+    "name_ja": "ニューラ",
+    "name_en": "Sneasel",
+    "form": "洗翠的样子"
+  },
+  {
+    "number": "0216",
+    "name_zh_hans": "熊宝宝",
+    "name_zh_hant": "熊寶寶",
+    "name_ja": "ヒメグマ",
+    "name_en": "Teddiursa",
+    "form": null
+  },
+  {
+    "number": "0217",
+    "name_zh_hans": "圈圈熊",
+    "name_zh_hant": "圈圈熊",
+    "name_ja": "リングマ",
+    "name_en": "Ursaring",
+    "form": null
+  },
+  {
+    "number": "0218",
+    "name_zh_hans": "熔岩虫",
+    "name_zh_hant": "熔岩蟲",
+    "name_ja": "マグマッグ",
+    "name_en": "Slugma",
+    "form": null
+  },
+  {
+    "number": "0219",
+    "name_zh_hans": "熔岩蜗牛",
+    "name_zh_hant": "熔岩蝸牛",
+    "name_ja": "マグカルゴ",
+    "name_en": "Magcargo",
+    "form": null
+  },
+  {
+    "number": "0220",
+    "name_zh_hans": "小山猪",
+    "name_zh_hant": "小山豬",
+    "name_ja": "ウリムー",
+    "name_en": "Swinub",
+    "form": null
+  },
+  {
+    "number": "0221",
+    "name_zh_hans": "长毛猪",
+    "name_zh_hant": "長毛豬",
+    "name_ja": "イノムー",
+    "name_en": "Piloswine",
+    "form": null
+  },
+  {
+    "number": "0222",
+    "name_zh_hans": "太阳珊瑚",
+    "name_zh_hant": "太陽珊瑚",
+    "name_ja": "サニーゴ",
+    "name_en": "Corsola",
+    "form": null
+  },
+  {
+    "number": "0222",
+    "name_zh_hans": "太阳珊瑚",
+    "name_zh_hant": "太陽珊瑚",
+    "name_ja": "サニーゴ",
+    "name_en": "Corsola",
+    "form": "伽勒尔的样子"
+  },
+  {
+    "number": "0223",
+    "name_zh_hans": "铁炮鱼",
+    "name_zh_hant": "鐵炮魚",
+    "name_ja": "テッポウオ",
+    "name_en": "Remoraid",
+    "form": null
+  },
+  {
+    "number": "0224",
+    "name_zh_hans": "章鱼桶",
+    "name_zh_hant": "章魚桶",
+    "name_ja": "オクタン",
+    "name_en": "Octillery",
+    "form": null
+  },
+  {
+    "number": "0225",
+    "name_zh_hans": "信使鸟",
+    "name_zh_hant": "信使鳥",
+    "name_ja": "デリバード",
+    "name_en": "Delibird",
+    "form": null
+  },
+  {
+    "number": "0226",
+    "name_zh_hans": "巨翅飞鱼",
+    "name_zh_hant": "巨翅飛魚",
+    "name_ja": "マンタイン",
+    "name_en": "Mantine",
+    "form": null
+  },
+  {
+    "number": "0227",
+    "name_zh_hans": "盔甲鸟",
+    "name_zh_hant": "盔甲鳥",
+    "name_ja": "エアームド",
+    "name_en": "Skarmory",
+    "form": null
+  },
+  {
+    "number": "0228",
+    "name_zh_hans": "戴鲁比",
+    "name_zh_hant": "戴魯比",
+    "name_ja": "デルビル",
+    "name_en": "Houndour",
+    "form": null
+  },
+  {
+    "number": "0229",
+    "name_zh_hans": "黑鲁加",
+    "name_zh_hant": "黑魯加",
+    "name_ja": "ヘルガー",
+    "name_en": "Houndoom",
+    "form": null
+  },
+  {
+    "number": "0230",
+    "name_zh_hans": "刺龙王",
+    "name_zh_hant": "刺龍王",
+    "name_ja": "キングドラ",
+    "name_en": "Kingdra",
+    "form": null
+  },
+  {
+    "number": "0231",
+    "name_zh_hans": "小小象",
+    "name_zh_hant": "小小象",
+    "name_ja": "ゴマゾウ",
+    "name_en": "Phanpy",
+    "form": null
+  },
+  {
+    "number": "0232",
+    "name_zh_hans": "顿甲",
+    "name_zh_hant": "頓甲",
+    "name_ja": "ドンファン",
+    "name_en": "Donphan",
+    "form": null
+  },
+  {
+    "number": "0233",
+    "name_zh_hans": "多边兽２型",
+    "name_zh_hant": "多邊獸Ⅱ",
+    "name_ja": "ポリゴン２",
+    "name_en": "Porygon2",
+    "form": null
+  },
+  {
+    "number": "0234",
+    "name_zh_hans": "惊角鹿",
+    "name_zh_hant": "驚角鹿",
+    "name_ja": "オドシシ",
+    "name_en": "Stantler",
+    "form": null
+  },
+  {
+    "number": "0235",
+    "name_zh_hans": "图图犬",
+    "name_zh_hant": "圖圖犬",
+    "name_ja": "ドーブル",
+    "name_en": "Smeargle",
+    "form": null
+  },
+  {
+    "number": "0236",
+    "name_zh_hans": "无畏小子",
+    "name_zh_hant": "無畏小子",
+    "name_ja": "バルキー",
+    "name_en": "Tyrogue",
+    "form": null
+  },
+  {
+    "number": "0237",
+    "name_zh_hans": "战舞郎",
+    "name_zh_hant": "戰舞郎",
+    "name_ja": "カポエラー",
+    "name_en": "Hitmontop",
+    "form": null
+  },
+  {
+    "number": "0238",
+    "name_zh_hans": "迷唇娃",
+    "name_zh_hant": "迷唇娃",
+    "name_ja": "ムチュール",
+    "name_en": "Smoochum",
+    "form": null
+  },
+  {
+    "number": "0239",
+    "name_zh_hans": "电击怪",
+    "name_zh_hant": "電擊怪",
+    "name_ja": "エレキッド",
+    "name_en": "Elekid",
+    "form": null
+  },
+  {
+    "number": "0240",
+    "name_zh_hans": "鸭嘴宝宝",
+    "name_zh_hant": "鴨嘴寶寶",
+    "name_ja": "ブビィ",
+    "name_en": "Magby",
+    "form": null
+  },
+  {
+    "number": "0241",
+    "name_zh_hans": "大奶罐",
+    "name_zh_hant": "大奶罐",
+    "name_ja": "ミルタンク",
+    "name_en": "Miltank",
+    "form": null
+  },
+  {
+    "number": "0242",
+    "name_zh_hans": "幸福蛋",
+    "name_zh_hant": "幸福蛋",
+    "name_ja": "ハピナス",
+    "name_en": "Blissey",
+    "form": null
+  },
+  {
+    "number": "0243",
+    "name_zh_hans": "雷公",
+    "name_zh_hant": "雷公",
+    "name_ja": "ライコウ",
+    "name_en": "Raikou",
+    "form": null
+  },
+  {
+    "number": "0244",
+    "name_zh_hans": "炎帝",
+    "name_zh_hant": "炎帝",
+    "name_ja": "エンテイ",
+    "name_en": "Entei",
+    "form": null
+  },
+  {
+    "number": "0245",
+    "name_zh_hans": "水君",
+    "name_zh_hant": "水君",
+    "name_ja": "スイクン",
+    "name_en": "Suicune",
+    "form": null
+  },
+  {
+    "number": "0246",
+    "name_zh_hans": "幼基拉斯",
+    "name_zh_hant": "幼基拉斯",
+    "name_ja": "ヨーギラス",
+    "name_en": "Larvitar",
+    "form": null
+  },
+  {
+    "number": "0247",
+    "name_zh_hans": "沙基拉斯",
+    "name_zh_hant": "沙基拉斯",
+    "name_ja": "サナギラス",
+    "name_en": "Pupitar",
+    "form": null
+  },
+  {
+    "number": "0248",
+    "name_zh_hans": "班基拉斯",
+    "name_zh_hant": "班基拉斯",
+    "name_ja": "バンギラス",
+    "name_en": "Tyranitar",
+    "form": null
+  },
+  {
+    "number": "0249",
+    "name_zh_hans": "洛奇亚",
+    "name_zh_hant": "洛奇亞",
+    "name_ja": "ルギア",
+    "name_en": "Lugia",
+    "form": null
+  },
+  {
+    "number": "0250",
+    "name_zh_hans": "凤王",
+    "name_zh_hant": "鳳王",
+    "name_ja": "ホウオウ",
+    "name_en": "Ho-Oh",
+    "form": null
+  },
+  {
+    "number": "0251",
+    "name_zh_hans": "时拉比",
+    "name_zh_hant": "時拉比",
+    "name_ja": "セレビィ",
+    "name_en": "Celebi",
+    "form": null
+  },
+  {
+    "number": "0252",
+    "name_zh_hans": "木守宫",
+    "name_zh_hant": "木守宮",
+    "name_ja": "キモリ",
+    "name_en": "Treecko",
+    "form": null
+  },
+  {
+    "number": "0253",
+    "name_zh_hans": "森林蜥蜴",
+    "name_zh_hant": "森林蜥蜴",
+    "name_ja": "ジュプトル",
+    "name_en": "Grovyle",
+    "form": null
+  },
+  {
+    "number": "0254",
+    "name_zh_hans": "蜥蜴王",
+    "name_zh_hant": "蜥蜴王",
+    "name_ja": "ジュカイン",
+    "name_en": "Sceptile",
+    "form": null
+  },
+  {
+    "number": "0255",
+    "name_zh_hans": "火稚鸡",
+    "name_zh_hant": "火稚雞",
+    "name_ja": "アチャモ",
+    "name_en": "Torchic",
+    "form": null
+  },
+  {
+    "number": "0256",
+    "name_zh_hans": "力壮鸡",
+    "name_zh_hant": "力壯雞",
+    "name_ja": "ワカシャモ",
+    "name_en": "Combusken",
+    "form": null
+  },
+  {
+    "number": "0257",
+    "name_zh_hans": "火焰鸡",
+    "name_zh_hant": "火焰雞",
+    "name_ja": "バシャーモ",
+    "name_en": "Blaziken",
+    "form": null
+  },
+  {
+    "number": "0258",
+    "name_zh_hans": "水跃鱼",
+    "name_zh_hant": "水躍魚",
+    "name_ja": "ミズゴロウ",
+    "name_en": "Mudkip",
+    "form": null
+  },
+  {
+    "number": "0259",
+    "name_zh_hans": "沼跃鱼",
+    "name_zh_hant": "沼躍魚",
+    "name_ja": "ヌマクロー",
+    "name_en": "Marshtomp",
+    "form": null
+  },
+  {
+    "number": "0260",
+    "name_zh_hans": "巨沼怪",
+    "name_zh_hant": "巨沼怪",
+    "name_ja": "ラグラージ",
+    "name_en": "Swampert",
+    "form": null
+  },
+  {
+    "number": "0261",
+    "name_zh_hans": "土狼犬",
+    "name_zh_hant": "土狼犬",
+    "name_ja": "ポチエナ",
+    "name_en": "Poochyena",
+    "form": null
+  },
+  {
+    "number": "0262",
+    "name_zh_hans": "大狼犬",
+    "name_zh_hant": "大狼犬",
+    "name_ja": "グラエナ",
+    "name_en": "Mightyena",
+    "form": null
+  },
+  {
+    "number": "0263",
+    "name_zh_hans": "蛇纹熊",
+    "name_zh_hant": "蛇紋熊",
+    "name_ja": "ジグザグマ",
+    "name_en": "Zigzagoon",
+    "form": null
+  },
+  {
+    "number": "0263",
+    "name_zh_hans": "蛇纹熊",
+    "name_zh_hant": "蛇紋熊",
+    "name_ja": "ジグザグマ",
+    "name_en": "Zigzagoon",
+    "form": "伽勒尔的样子"
+  },
+  {
+    "number": "0264",
+    "name_zh_hans": "直冲熊",
+    "name_zh_hant": "直衝熊",
+    "name_ja": "マッスグマ",
+    "name_en": "Linoone",
+    "form": null
+  },
+  {
+    "number": "0264",
+    "name_zh_hans": "直冲熊",
+    "name_zh_hant": "直衝熊",
+    "name_ja": "マッスグマ",
+    "name_en": "Linoone",
+    "form": "伽勒尔的样子"
+  },
+  {
+    "number": "0265",
+    "name_zh_hans": "刺尾虫",
+    "name_zh_hant": "刺尾蟲",
+    "name_ja": "ケムッソ",
+    "name_en": "Wurmple",
+    "form": null
+  },
+  {
+    "number": "0266",
+    "name_zh_hans": "甲壳茧",
+    "name_zh_hant": "甲殼繭",
+    "name_ja": "カラサリス",
+    "name_en": "Silcoon",
+    "form": null
+  },
+  {
+    "number": "0267",
+    "name_zh_hans": "狩猎凤蝶",
+    "name_zh_hant": "狩獵鳳蝶",
+    "name_ja": "アゲハント",
+    "name_en": "Beautifly",
+    "form": null
+  },
+  {
+    "number": "0268",
+    "name_zh_hans": "盾甲茧",
+    "name_zh_hant": "盾甲繭",
+    "name_ja": "マユルド",
+    "name_en": "Cascoon",
+    "form": null
+  },
+  {
+    "number": "0269",
+    "name_zh_hans": "毒粉蛾",
+    "name_zh_hant": "毒粉蛾",
+    "name_ja": "ドクケイル",
+    "name_en": "Dustox",
+    "form": null
+  },
+  {
+    "number": "0270",
+    "name_zh_hans": "莲叶童子",
+    "name_zh_hant": "蓮葉童子",
+    "name_ja": "ハスボー",
+    "name_en": "Lotad",
+    "form": null
+  },
+  {
+    "number": "0271",
+    "name_zh_hans": "莲帽小童",
+    "name_zh_hant": "蓮帽小童",
+    "name_ja": "ハスブレロ",
+    "name_en": "Lombre",
+    "form": null
+  },
+  {
+    "number": "0272",
+    "name_zh_hans": "乐天河童",
+    "name_zh_hant": "樂天河童",
+    "name_ja": "ルンパッパ",
+    "name_en": "Ludicolo",
+    "form": null
+  },
+  {
+    "number": "0273",
+    "name_zh_hans": "橡实果",
+    "name_zh_hant": "橡實果",
+    "name_ja": "タネボー",
+    "name_en": "Seedot",
+    "form": null
+  },
+  {
+    "number": "0274",
+    "name_zh_hans": "长鼻叶",
+    "name_zh_hant": "長鼻葉",
+    "name_ja": "コノハナ",
+    "name_en": "Nuzleaf",
+    "form": null
+  },
+  {
+    "number": "0275",
+    "name_zh_hans": "狡猾天狗",
+    "name_zh_hant": "狡猾天狗",
+    "name_ja": "ダーテング",
+    "name_en": "Shiftry",
+    "form": null
+  },
+  {
+    "number": "0276",
+    "name_zh_hans": "傲骨燕",
+    "name_zh_hant": "傲骨燕",
+    "name_ja": "スバメ",
+    "name_en": "Taillow",
+    "form": null
+  },
+  {
+    "number": "0277",
+    "name_zh_hans": "大王燕",
+    "name_zh_hant": "大王燕",
+    "name_ja": "オオスバメ",
+    "name_en": "Swellow",
+    "form": null
+  },
+  {
+    "number": "0278",
+    "name_zh_hans": "长翅鸥",
+    "name_zh_hant": "長翅鷗",
+    "name_ja": "キャモメ",
+    "name_en": "Wingull",
+    "form": null
+  },
+  {
+    "number": "0279",
+    "name_zh_hans": "大嘴鸥",
+    "name_zh_hant": "大嘴鷗",
+    "name_ja": "ペリッパー",
+    "name_en": "Pelipper",
+    "form": null
+  },
+  {
+    "number": "0280",
+    "name_zh_hans": "拉鲁拉丝",
+    "name_zh_hant": "拉魯拉絲",
+    "name_ja": "ラルトス",
+    "name_en": "Ralts",
+    "form": null
+  },
+  {
+    "number": "0281",
+    "name_zh_hans": "奇鲁莉安",
+    "name_zh_hant": "奇魯莉安",
+    "name_ja": "キルリア",
+    "name_en": "Kirlia",
+    "form": null
+  },
+  {
+    "number": "0282",
+    "name_zh_hans": "沙奈朵",
+    "name_zh_hant": "沙奈朵",
+    "name_ja": "サーナイト",
+    "name_en": "Gardevoir",
+    "form": null
+  },
+  {
+    "number": "0283",
+    "name_zh_hans": "溜溜糖球",
+    "name_zh_hant": "溜溜糖球",
+    "name_ja": "アメタマ",
+    "name_en": "Surskit",
+    "form": null
+  },
+  {
+    "number": "0284",
+    "name_zh_hans": "雨翅蛾",
+    "name_zh_hant": "雨翅蛾",
+    "name_ja": "アメモース",
+    "name_en": "Masquerain",
+    "form": null
+  },
+  {
+    "number": "0285",
+    "name_zh_hans": "蘑蘑菇",
+    "name_zh_hant": "蘑蘑菇",
+    "name_ja": "キノココ",
+    "name_en": "Shroomish",
+    "form": null
+  },
+  {
+    "number": "0286",
+    "name_zh_hans": "斗笠菇",
+    "name_zh_hant": "斗笠菇",
+    "name_ja": "キノガッサ",
+    "name_en": "Breloom",
+    "form": null
+  },
+  {
+    "number": "0287",
+    "name_zh_hans": "懒人獭",
+    "name_zh_hant": "懶人獺",
+    "name_ja": "ナマケロ",
+    "name_en": "Slakoth",
+    "form": null
+  },
+  {
+    "number": "0288",
+    "name_zh_hans": "过动猿",
+    "name_zh_hant": "過動猿",
+    "name_ja": "ヤルキモノ",
+    "name_en": "Vigoroth",
+    "form": null
+  },
+  {
+    "number": "0289",
+    "name_zh_hans": "请假王",
+    "name_zh_hant": "請假王",
+    "name_ja": "ケッキング",
+    "name_en": "Slaking",
+    "form": null
+  },
+  {
+    "number": "0290",
+    "name_zh_hans": "土居忍士",
+    "name_zh_hant": "土居忍士",
+    "name_ja": "ツチニン",
+    "name_en": "Nincada",
+    "form": null
+  },
+  {
+    "number": "0291",
+    "name_zh_hans": "铁面忍者",
+    "name_zh_hant": "鐵面忍者",
+    "name_ja": "テッカニン",
+    "name_en": "Ninjask",
+    "form": null
+  },
+  {
+    "number": "0292",
+    "name_zh_hans": "脱壳忍者",
+    "name_zh_hant": "脫殼忍者",
+    "name_ja": "ヌケニン",
+    "name_en": "Shedinja",
+    "form": null
+  },
+  {
+    "number": "0293",
+    "name_zh_hans": "咕妞妞",
+    "name_zh_hant": "咕妞妞",
+    "name_ja": "ゴニョニョ",
+    "name_en": "Whismur",
+    "form": null
+  },
+  {
+    "number": "0294",
+    "name_zh_hans": "吼爆弹",
+    "name_zh_hant": "吼爆彈",
+    "name_ja": "ドゴーム",
+    "name_en": "Loudred",
+    "form": null
+  },
+  {
+    "number": "0295",
+    "name_zh_hans": "爆音怪",
+    "name_zh_hant": "爆音怪",
+    "name_ja": "バクオング",
+    "name_en": "Exploud",
+    "form": null
+  },
+  {
+    "number": "0296",
+    "name_zh_hans": "幕下力士",
+    "name_zh_hant": "幕下力士",
+    "name_ja": "マクノシタ",
+    "name_en": "Makuhita",
+    "form": null
+  },
+  {
+    "number": "0297",
+    "name_zh_hans": "铁掌力士",
+    "name_zh_hant": "鐵掌力士",
+    "name_ja": "ハリテヤマ",
+    "name_en": "Hariyama",
+    "form": null
+  },
+  {
+    "number": "0298",
+    "name_zh_hans": "露力丽",
+    "name_zh_hant": "露力麗",
+    "name_ja": "ルリリ",
+    "name_en": "Azurill",
+    "form": null
+  },
+  {
+    "number": "0299",
+    "name_zh_hans": "朝北鼻",
+    "name_zh_hant": "朝北鼻",
+    "name_ja": "ノズパス",
+    "name_en": "Nosepass",
+    "form": null
+  },
+  {
+    "number": "0300",
+    "name_zh_hans": "向尾喵",
+    "name_zh_hant": "向尾喵",
+    "name_ja": "エネコ",
+    "name_en": "Skitty",
+    "form": null
+  },
+  {
+    "number": "0301",
+    "name_zh_hans": "优雅猫",
+    "name_zh_hant": "優雅貓",
+    "name_ja": "エネコロロ",
+    "name_en": "Delcatty",
+    "form": null
+  },
+  {
+    "number": "0302",
+    "name_zh_hans": "勾魂眼",
+    "name_zh_hant": "勾魂眼",
+    "name_ja": "ヤミラミ",
+    "name_en": "Sableye",
+    "form": null
+  },
+  {
+    "number": "0303",
+    "name_zh_hans": "大嘴娃",
+    "name_zh_hant": "大嘴娃",
+    "name_ja": "クチート",
+    "name_en": "Mawile",
+    "form": null
+  },
+  {
+    "number": "0304",
+    "name_zh_hans": "可可多拉",
+    "name_zh_hant": "可可多拉",
+    "name_ja": "ココドラ",
+    "name_en": "Aron",
+    "form": null
+  },
+  {
+    "number": "0305",
+    "name_zh_hans": "可多拉",
+    "name_zh_hant": "可多拉",
+    "name_ja": "コドラ",
+    "name_en": "Lairon",
+    "form": null
+  },
+  {
+    "number": "0306",
+    "name_zh_hans": "波士可多拉",
+    "name_zh_hant": "波士可多拉",
+    "name_ja": "ボスゴドラ",
+    "name_en": "Aggron",
+    "form": null
+  },
+  {
+    "number": "0307",
+    "name_zh_hans": "玛沙那",
+    "name_zh_hant": "瑪沙那",
+    "name_ja": "アサナン",
+    "name_en": "Meditite",
+    "form": null
+  },
+  {
+    "number": "0308",
+    "name_zh_hans": "恰雷姆",
+    "name_zh_hant": "恰雷姆",
+    "name_ja": "チャーレム",
+    "name_en": "Medicham",
+    "form": null
+  },
+  {
+    "number": "0309",
+    "name_zh_hans": "落雷兽",
+    "name_zh_hant": "落雷獸",
+    "name_ja": "ラクライ",
+    "name_en": "Electrike",
+    "form": null
+  },
+  {
+    "number": "0310",
+    "name_zh_hans": "雷电兽",
+    "name_zh_hant": "雷電獸",
+    "name_ja": "ライボルト",
+    "name_en": "Manectric",
+    "form": null
+  },
+  {
+    "number": "0311",
+    "name_zh_hans": "正电拍拍",
+    "name_zh_hant": "正電拍拍",
+    "name_ja": "プラスル",
+    "name_en": "Plusle",
+    "form": null
+  },
+  {
+    "number": "0312",
+    "name_zh_hans": "负电拍拍",
+    "name_zh_hant": "負電拍拍",
+    "name_ja": "マイナン",
+    "name_en": "Minun",
+    "form": null
+  },
+  {
+    "number": "0313",
+    "name_zh_hans": "电萤虫",
+    "name_zh_hant": "電螢蟲",
+    "name_ja": "バルビート",
+    "name_en": "Volbeat",
+    "form": null
+  },
+  {
+    "number": "0314",
+    "name_zh_hans": "甜甜萤",
+    "name_zh_hant": "甜甜螢",
+    "name_ja": "イルミーゼ",
+    "name_en": "Illumise",
+    "form": null
+  },
+  {
+    "number": "0315",
+    "name_zh_hans": "毒蔷薇",
+    "name_zh_hant": "毒薔薇",
+    "name_ja": "ロゼリア",
+    "name_en": "Roselia",
+    "form": null
+  },
+  {
+    "number": "0316",
+    "name_zh_hans": "溶食兽",
+    "name_zh_hant": "溶食獸",
+    "name_ja": "ゴクリン",
+    "name_en": "Gulpin",
+    "form": null
+  },
+  {
+    "number": "0317",
+    "name_zh_hans": "吞食兽",
+    "name_zh_hant": "吞食獸",
+    "name_ja": "マルノーム",
+    "name_en": "Swalot",
+    "form": null
+  },
+  {
+    "number": "0318",
+    "name_zh_hans": "利牙鱼",
+    "name_zh_hant": "利牙魚",
+    "name_ja": "キバニア",
+    "name_en": "Carvanha",
+    "form": null
+  },
+  {
+    "number": "0319",
+    "name_zh_hans": "巨牙鲨",
+    "name_zh_hant": "巨牙鯊",
+    "name_ja": "サメハダー",
+    "name_en": "Sharpedo",
+    "form": null
+  },
+  {
+    "number": "0320",
+    "name_zh_hans": "吼吼鲸",
+    "name_zh_hant": "吼吼鯨",
+    "name_ja": "ホエルコ",
+    "name_en": "Wailmer",
+    "form": null
+  },
+  {
+    "number": "0321",
+    "name_zh_hans": "吼鲸王",
+    "name_zh_hant": "吼鯨王",
+    "name_ja": "ホエルオー",
+    "name_en": "Wailord",
+    "form": null
+  },
+  {
+    "number": "0322",
+    "name_zh_hans": "呆火驼",
+    "name_zh_hant": "呆火駝",
+    "name_ja": "ドンメル",
+    "name_en": "Numel",
+    "form": null
+  },
+  {
+    "number": "0323",
+    "name_zh_hans": "喷火驼",
+    "name_zh_hant": "噴火駝",
+    "name_ja": "バクーダ",
+    "name_en": "Camerupt",
+    "form": null
+  },
+  {
+    "number": "0324",
+    "name_zh_hans": "煤炭龟",
+    "name_zh_hant": "煤炭龜",
+    "name_ja": "コータス",
+    "name_en": "Torkoal",
+    "form": null
+  },
+  {
+    "number": "0325",
+    "name_zh_hans": "跳跳猪",
+    "name_zh_hant": "跳跳豬",
+    "name_ja": "バネブー",
+    "name_en": "Spoink",
+    "form": null
+  },
+  {
+    "number": "0326",
+    "name_zh_hans": "噗噗猪",
+    "name_zh_hant": "噗噗豬",
+    "name_ja": "ブーピッグ",
+    "name_en": "Grumpig",
+    "form": null
+  },
+  {
+    "number": "0327",
+    "name_zh_hans": "晃晃斑",
+    "name_zh_hant": "晃晃斑",
+    "name_ja": "パッチール",
+    "name_en": "Spinda",
+    "form": null
+  },
+  {
+    "number": "0328",
+    "name_zh_hans": "大颚蚁",
+    "name_zh_hant": "大顎蟻",
+    "name_ja": "ナックラー",
+    "name_en": "Trapinch",
+    "form": null
+  },
+  {
+    "number": "0329",
+    "name_zh_hans": "超音波幼虫",
+    "name_zh_hant": "超音波幼蟲",
+    "name_ja": "ビブラーバ",
+    "name_en": "Vibrava",
+    "form": null
+  },
+  {
+    "number": "0330",
+    "name_zh_hans": "沙漠蜻蜓",
+    "name_zh_hant": "沙漠蜻蜓",
+    "name_ja": "フライゴン",
+    "name_en": "Flygon",
+    "form": null
+  },
+  {
+    "number": "0331",
+    "name_zh_hans": "刺球仙人掌",
+    "name_zh_hant": "刺球仙人掌",
+    "name_ja": "サボネア",
+    "name_en": "Cacnea",
+    "form": null
+  },
+  {
+    "number": "0332",
+    "name_zh_hans": "梦歌仙人掌",
+    "name_zh_hant": "夢歌仙人掌",
+    "name_ja": "ノクタス",
+    "name_en": "Cacturne",
+    "form": null
+  },
+  {
+    "number": "0333",
+    "name_zh_hans": "青绵鸟",
+    "name_zh_hant": "青綿鳥",
+    "name_ja": "チルット",
+    "name_en": "Swablu",
+    "form": null
+  },
+  {
+    "number": "0334",
+    "name_zh_hans": "七夕青鸟",
+    "name_zh_hant": "七夕青鳥",
+    "name_ja": "チルタリス",
+    "name_en": "Altaria",
+    "form": null
+  },
+  {
+    "number": "0335",
+    "name_zh_hans": "猫鼬斩",
+    "name_zh_hant": "貓鼬斬",
+    "name_ja": "ザングース",
+    "name_en": "Zangoose",
+    "form": null
+  },
+  {
+    "number": "0336",
+    "name_zh_hans": "饭匙蛇",
+    "name_zh_hant": "飯匙蛇",
+    "name_ja": "ハブネーク",
+    "name_en": "Seviper",
+    "form": null
+  },
+  {
+    "number": "0337",
+    "name_zh_hans": "月石",
+    "name_zh_hant": "月石",
+    "name_ja": "ルナトーン",
+    "name_en": "Lunatone",
+    "form": null
+  },
+  {
+    "number": "0338",
+    "name_zh_hans": "太阳岩",
+    "name_zh_hant": "太陽岩",
+    "name_ja": "ソルロック",
+    "name_en": "Solrock",
+    "form": null
+  },
+  {
+    "number": "0339",
+    "name_zh_hans": "泥泥鳅",
+    "name_zh_hant": "泥泥鰍",
+    "name_ja": "ドジョッチ",
+    "name_en": "Barboach",
+    "form": null
+  },
+  {
+    "number": "0340",
+    "name_zh_hans": "鲶鱼王",
+    "name_zh_hant": "鯰魚王",
+    "name_ja": "ナマズン",
+    "name_en": "Whiscash",
+    "form": null
+  },
+  {
+    "number": "0341",
+    "name_zh_hans": "龙虾小兵",
+    "name_zh_hant": "龍蝦小兵",
+    "name_ja": "ヘイガニ",
+    "name_en": "Corphish",
+    "form": null
+  },
+  {
+    "number": "0342",
+    "name_zh_hans": "铁螯龙虾",
+    "name_zh_hant": "鐵螯龍蝦",
+    "name_ja": "シザリガー",
+    "name_en": "Crawdaunt",
+    "form": null
+  },
+  {
+    "number": "0343",
+    "name_zh_hans": "天秤偶",
+    "name_zh_hant": "天秤偶",
+    "name_ja": "ヤジロン",
+    "name_en": "Baltoy",
+    "form": null
+  },
+  {
+    "number": "0344",
+    "name_zh_hans": "念力土偶",
+    "name_zh_hant": "念力土偶",
+    "name_ja": "ネンドール",
+    "name_en": "Claydol",
+    "form": null
+  },
+  {
+    "number": "0345",
+    "name_zh_hans": "触手百合",
+    "name_zh_hant": "觸手百合",
+    "name_ja": "リリーラ",
+    "name_en": "Lileep",
+    "form": null
+  },
+  {
+    "number": "0346",
+    "name_zh_hans": "摇篮百合",
+    "name_zh_hant": "搖籃百合",
+    "name_ja": "ユレイドル",
+    "name_en": "Cradily",
+    "form": null
+  },
+  {
+    "number": "0347",
+    "name_zh_hans": "太古羽虫",
+    "name_zh_hant": "太古羽蟲",
+    "name_ja": "アノプス",
+    "name_en": "Anorith",
+    "form": null
+  },
+  {
+    "number": "0348",
+    "name_zh_hans": "太古盔甲",
+    "name_zh_hant": "太古盔甲",
+    "name_ja": "アーマルド",
+    "name_en": "Armaldo",
+    "form": null
+  },
+  {
+    "number": "0349",
+    "name_zh_hans": "丑丑鱼",
+    "name_zh_hant": "醜醜魚",
+    "name_ja": "ヒンバス",
+    "name_en": "Feebas",
+    "form": null
+  },
+  {
+    "number": "0350",
+    "name_zh_hans": "美纳斯",
+    "name_zh_hant": "美納斯",
+    "name_ja": "ミロカロス",
+    "name_en": "Milotic",
+    "form": null
+  },
+  {
+    "number": "0351",
+    "name_zh_hans": "飘浮泡泡",
+    "name_zh_hant": "飄浮泡泡",
+    "name_ja": "ポワルン",
+    "name_en": "Castform",
+    "form": null
+  },
+  {
+    "number": "0352",
+    "name_zh_hans": "变隐龙",
+    "name_zh_hant": "變隱龍",
+    "name_ja": "カクレオン",
+    "name_en": "Kecleon",
+    "form": null
+  },
+  {
+    "number": "0353",
+    "name_zh_hans": "怨影娃娃",
+    "name_zh_hant": "怨影娃娃",
+    "name_ja": "カゲボウズ",
+    "name_en": "Shuppet",
+    "form": null
+  },
+  {
+    "number": "0354",
+    "name_zh_hans": "诅咒娃娃",
+    "name_zh_hant": "詛咒娃娃",
+    "name_ja": "ジュペッタ",
+    "name_en": "Banette",
+    "form": null
+  },
+  {
+    "number": "0355",
+    "name_zh_hans": "夜巡灵",
+    "name_zh_hant": "夜巡靈",
+    "name_ja": "ヨマワル",
+    "name_en": "Duskull",
+    "form": null
+  },
+  {
+    "number": "0356",
+    "name_zh_hans": "彷徨夜灵",
+    "name_zh_hant": "彷徨夜靈",
+    "name_ja": "サマヨール",
+    "name_en": "Dusclops",
+    "form": null
+  },
+  {
+    "number": "0357",
+    "name_zh_hans": "热带龙",
+    "name_zh_hant": "熱帶龍",
+    "name_ja": "トロピウス",
+    "name_en": "Tropius",
+    "form": null
+  },
+  {
+    "number": "0358",
+    "name_zh_hans": "风铃铃",
+    "name_zh_hant": "風鈴鈴",
+    "name_ja": "チリーン",
+    "name_en": "Chimecho",
+    "form": null
+  },
+  {
+    "number": "0359",
+    "name_zh_hans": "阿勃梭鲁",
+    "name_zh_hant": "阿勃梭魯",
+    "name_ja": "アブソル",
+    "name_en": "Absol",
+    "form": null
+  },
+  {
+    "number": "0360",
+    "name_zh_hans": "小果然",
+    "name_zh_hant": "小果然",
+    "name_ja": "ソーナノ",
+    "name_en": "Wynaut",
+    "form": null
+  },
+  {
+    "number": "0361",
+    "name_zh_hans": "雪童子",
+    "name_zh_hant": "雪童子",
+    "name_ja": "ユキワラシ",
+    "name_en": "Snorunt",
+    "form": null
+  },
+  {
+    "number": "0362",
+    "name_zh_hans": "冰鬼护",
+    "name_zh_hant": "冰鬼護",
+    "name_ja": "オニゴーリ",
+    "name_en": "Glalie",
+    "form": null
+  },
+  {
+    "number": "0363",
+    "name_zh_hans": "海豹球",
+    "name_zh_hant": "海豹球",
+    "name_ja": "タマザラシ",
+    "name_en": "Spheal",
+    "form": null
+  },
+  {
+    "number": "0364",
+    "name_zh_hans": "海魔狮",
+    "name_zh_hant": "海魔獅",
+    "name_ja": "トドグラー",
+    "name_en": "Sealeo",
+    "form": null
+  },
+  {
+    "number": "0365",
+    "name_zh_hans": "帝牙海狮",
+    "name_zh_hant": "帝牙海獅",
+    "name_ja": "トドゼルガ",
+    "name_en": "Walrein",
+    "form": null
+  },
+  {
+    "number": "0366",
+    "name_zh_hans": "珍珠贝",
+    "name_zh_hant": "珍珠貝",
+    "name_ja": "パールル",
+    "name_en": "Clamperl",
+    "form": null
+  },
+  {
+    "number": "0367",
+    "name_zh_hans": "猎斑鱼",
+    "name_zh_hant": "獵斑魚",
+    "name_ja": "ハンテール",
+    "name_en": "Huntail",
+    "form": null
+  },
+  {
+    "number": "0368",
+    "name_zh_hans": "樱花鱼",
+    "name_zh_hant": "櫻花魚",
+    "name_ja": "サクラビス",
+    "name_en": "Gorebyss",
+    "form": null
+  },
+  {
+    "number": "0369",
+    "name_zh_hans": "古空棘鱼",
+    "name_zh_hant": "古空棘魚",
+    "name_ja": "ジーランス",
+    "name_en": "Relicanth",
+    "form": null
+  },
+  {
+    "number": "0370",
+    "name_zh_hans": "爱心鱼",
+    "name_zh_hant": "愛心魚",
+    "name_ja": "ラブカス",
+    "name_en": "Luvdisc",
+    "form": null
+  },
+  {
+    "number": "0371",
+    "name_zh_hans": "宝贝龙",
+    "name_zh_hant": "寶貝龍",
+    "name_ja": "タツベイ",
+    "name_en": "Bagon",
+    "form": null
+  },
+  {
+    "number": "0372",
+    "name_zh_hans": "甲壳龙",
+    "name_zh_hant": "甲殼龍",
+    "name_ja": "コモルー",
+    "name_en": "Shelgon",
+    "form": null
+  },
+  {
+    "number": "0373",
+    "name_zh_hans": "暴飞龙",
+    "name_zh_hant": "暴飛龍",
+    "name_ja": "ボーマンダ",
+    "name_en": "Salamence",
+    "form": null
+  },
+  {
+    "number": "0374",
+    "name_zh_hans": "铁哑铃",
+    "name_zh_hant": "鐵啞鈴",
+    "name_ja": "ダンバル",
+    "name_en": "Beldum",
+    "form": null
+  },
+  {
+    "number": "0375",
+    "name_zh_hans": "金属怪",
+    "name_zh_hant": "金屬怪",
+    "name_ja": "メタング",
+    "name_en": "Metang",
+    "form": null
+  },
+  {
+    "number": "0376",
+    "name_zh_hans": "巨金怪",
+    "name_zh_hant": "巨金怪",
+    "name_ja": "メタグロス",
+    "name_en": "Metagross",
+    "form": null
+  },
+  {
+    "number": "0377",
+    "name_zh_hans": "雷吉洛克",
+    "name_zh_hant": "雷吉洛克",
+    "name_ja": "レジロック",
+    "name_en": "Regirock",
+    "form": null
+  },
+  {
+    "number": "0378",
+    "name_zh_hans": "雷吉艾斯",
+    "name_zh_hant": "雷吉艾斯",
+    "name_ja": "レジアイス",
+    "name_en": "Regice",
+    "form": null
+  },
+  {
+    "number": "0379",
+    "name_zh_hans": "雷吉斯奇鲁",
+    "name_zh_hant": "雷吉斯奇魯",
+    "name_ja": "レジスチル",
+    "name_en": "Registeel",
+    "form": null
+  },
+  {
+    "number": "0380",
+    "name_zh_hans": "拉帝亚斯",
+    "name_zh_hant": "拉帝亞斯",
+    "name_ja": "ラティアス",
+    "name_en": "Latias",
+    "form": null
+  },
+  {
+    "number": "0381",
+    "name_zh_hans": "拉帝欧斯",
+    "name_zh_hant": "拉帝歐斯",
+    "name_ja": "ラティオス",
+    "name_en": "Latios",
+    "form": null
+  },
+  {
+    "number": "0382",
+    "name_zh_hans": "盖欧卡",
+    "name_zh_hant": "蓋歐卡",
+    "name_ja": "カイオーガ",
+    "name_en": "Kyogre",
+    "form": null
+  },
+  {
+    "number": "0383",
+    "name_zh_hans": "固拉多",
+    "name_zh_hant": "固拉多",
+    "name_ja": "グラードン",
+    "name_en": "Groudon",
+    "form": null
+  },
+  {
+    "number": "0384",
+    "name_zh_hans": "烈空坐",
+    "name_zh_hant": "烈空坐",
+    "name_ja": "レックウザ",
+    "name_en": "Rayquaza",
+    "form": null
+  },
+  {
+    "number": "0385",
+    "name_zh_hans": "基拉祈",
+    "name_zh_hant": "基拉祈",
+    "name_ja": "ジラーチ",
+    "name_en": "Jirachi",
+    "form": null
+  },
+  {
+    "number": "0386",
+    "name_zh_hans": "代欧奇希斯",
+    "name_zh_hant": "代歐奇希斯",
+    "name_ja": "デオキシス",
+    "name_en": "Deoxys",
+    "form": null
+  },
+  {
+    "number": "0387",
+    "name_zh_hans": "草苗龟",
+    "name_zh_hant": "草苗龜",
+    "name_ja": "ナエトル",
+    "name_en": "Turtwig",
+    "form": null
+  },
+  {
+    "number": "0388",
+    "name_zh_hans": "树林龟",
+    "name_zh_hant": "樹林龜",
+    "name_ja": "ハヤシガメ",
+    "name_en": "Grotle",
+    "form": null
+  },
+  {
+    "number": "0389",
+    "name_zh_hans": "土台龟",
+    "name_zh_hant": "土台龜",
+    "name_ja": "ドダイトス",
+    "name_en": "Torterra",
+    "form": null
+  },
+  {
+    "number": "0390",
+    "name_zh_hans": "小火焰猴",
+    "name_zh_hant": "小火焰猴",
+    "name_ja": "ヒコザル",
+    "name_en": "Chimchar",
+    "form": null
+  },
+  {
+    "number": "0391",
+    "name_zh_hans": "猛火猴",
+    "name_zh_hant": "猛火猴",
+    "name_ja": "モウカザル",
+    "name_en": "Monferno",
+    "form": null
+  },
+  {
+    "number": "0392",
+    "name_zh_hans": "烈焰猴",
+    "name_zh_hant": "烈焰猴",
+    "name_ja": "ゴウカザル",
+    "name_en": "Infernape",
+    "form": null
+  },
+  {
+    "number": "0393",
+    "name_zh_hans": "波加曼",
+    "name_zh_hant": "波加曼",
+    "name_ja": "ポッチャマ",
+    "name_en": "Piplup",
+    "form": null
+  },
+  {
+    "number": "0394",
+    "name_zh_hans": "波皇子",
+    "name_zh_hant": "波皇子",
+    "name_ja": "ポッタイシ",
+    "name_en": "Prinplup",
+    "form": null
+  },
+  {
+    "number": "0395",
+    "name_zh_hans": "帝王拿波",
+    "name_zh_hant": "帝王拿波",
+    "name_ja": "エンペルト",
+    "name_en": "Empoleon",
+    "form": null
+  },
+  {
+    "number": "0396",
+    "name_zh_hans": "姆克儿",
+    "name_zh_hant": "姆克兒",
+    "name_ja": "ムックル",
+    "name_en": "Starly",
+    "form": null
+  },
+  {
+    "number": "0397",
+    "name_zh_hans": "姆克鸟",
+    "name_zh_hant": "姆克鳥",
+    "name_ja": "ムクバード",
+    "name_en": "Staravia",
+    "form": null
+  },
+  {
+    "number": "0398",
+    "name_zh_hans": "姆克鹰",
+    "name_zh_hant": "姆克鷹",
+    "name_ja": "ムクホーク",
+    "name_en": "Staraptor",
+    "form": null
+  },
+  {
+    "number": "0399",
+    "name_zh_hans": "大牙狸",
+    "name_zh_hant": "大牙狸",
+    "name_ja": "ビッパ",
+    "name_en": "Bidoof",
+    "form": null
+  },
+  {
+    "number": "0400",
+    "name_zh_hans": "大尾狸",
+    "name_zh_hant": "大尾狸",
+    "name_ja": "ビーダル",
+    "name_en": "Bibarel",
+    "form": null
+  },
+  {
+    "number": "0401",
+    "name_zh_hans": "圆法师",
+    "name_zh_hant": "圓法師",
+    "name_ja": "コロボーシ",
+    "name_en": "Kricketot",
+    "form": null
+  },
+  {
+    "number": "0402",
+    "name_zh_hans": "音箱蟀",
+    "name_zh_hant": "音箱蟀",
+    "name_ja": "コロトック",
+    "name_en": "Kricketune",
+    "form": null
+  },
+  {
+    "number": "0403",
+    "name_zh_hans": "小猫怪",
+    "name_zh_hant": "小貓怪",
+    "name_ja": "コリンク",
+    "name_en": "Shinx",
+    "form": null
+  },
+  {
+    "number": "0404",
+    "name_zh_hans": "勒克猫",
+    "name_zh_hant": "勒克貓",
+    "name_ja": "ルクシオ",
+    "name_en": "Luxio",
+    "form": null
+  },
+  {
+    "number": "0405",
+    "name_zh_hans": "伦琴猫",
+    "name_zh_hant": "倫琴貓",
+    "name_ja": "レントラー",
+    "name_en": "Luxray",
+    "form": null
+  },
+  {
+    "number": "0406",
+    "name_zh_hans": "含羞苞",
+    "name_zh_hant": "含羞苞",
+    "name_ja": "スボミー",
+    "name_en": "Budew",
+    "form": null
+  },
+  {
+    "number": "0407",
+    "name_zh_hans": "罗丝雷朵",
+    "name_zh_hant": "羅絲雷朵",
+    "name_ja": "ロズレイド",
+    "name_en": "Roserade",
+    "form": null
+  },
+  {
+    "number": "0408",
+    "name_zh_hans": "头盖龙",
+    "name_zh_hant": "頭蓋龍",
+    "name_ja": "ズガイドス",
+    "name_en": "Cranidos",
+    "form": null
+  },
+  {
+    "number": "0409",
+    "name_zh_hans": "战槌龙",
+    "name_zh_hant": "戰槌龍",
+    "name_ja": "ラムパルド",
+    "name_en": "Rampardos",
+    "form": null
+  },
+  {
+    "number": "0410",
+    "name_zh_hans": "盾甲龙",
+    "name_zh_hant": "盾甲龍",
+    "name_ja": "タテトプス",
+    "name_en": "Shieldon",
+    "form": null
+  },
+  {
+    "number": "0411",
+    "name_zh_hans": "护城龙",
+    "name_zh_hant": "護城龍",
+    "name_ja": "トリデプス",
+    "name_en": "Bastiodon",
+    "form": null
+  },
+  {
+    "number": "0412",
+    "name_zh_hans": "结草儿",
+    "name_zh_hant": "結草兒",
+    "name_ja": "ミノムッチ",
+    "name_en": "Burmy",
+    "form": null
+  },
+  {
+    "number": "0413",
+    "name_zh_hans": "结草贵妇",
+    "name_zh_hant": "結草貴婦",
+    "name_ja": "ミノマダム",
+    "name_en": "Wormadam",
+    "form": null
+  },
+  {
+    "number": "0414",
+    "name_zh_hans": "绅士蛾",
+    "name_zh_hant": "紳士蛾",
+    "name_ja": "ガーメイル",
+    "name_en": "Mothim",
+    "form": null
+  },
+  {
+    "number": "0415",
+    "name_zh_hans": "三蜜蜂",
+    "name_zh_hant": "三蜜蜂",
+    "name_ja": "ミツハニー",
+    "name_en": "Combee",
+    "form": null
+  },
+  {
+    "number": "0416",
+    "name_zh_hans": "蜂女王",
+    "name_zh_hant": "蜂女王",
+    "name_ja": "ビークイン",
+    "name_en": "Vespiquen",
+    "form": null
+  },
+  {
+    "number": "0417",
+    "name_zh_hans": "帕奇利兹",
+    "name_zh_hant": "帕奇利茲",
+    "name_ja": "パチリス",
+    "name_en": "Pachirisu",
+    "form": null
+  },
+  {
+    "number": "0418",
+    "name_zh_hans": "泳圈鼬",
+    "name_zh_hant": "泳圈鼬",
+    "name_ja": "ブイゼル",
+    "name_en": "Buizel",
+    "form": null
+  },
+  {
+    "number": "0419",
+    "name_zh_hans": "浮潜鼬",
+    "name_zh_hant": "浮潛鼬",
+    "name_ja": "フローゼル",
+    "name_en": "Floatzel",
+    "form": null
+  },
+  {
+    "number": "0420",
+    "name_zh_hans": "樱花宝",
+    "name_zh_hant": "櫻花寶",
+    "name_ja": "チェリンボ",
+    "name_en": "Cherubi",
+    "form": null
+  },
+  {
+    "number": "0421",
+    "name_zh_hans": "樱花儿",
+    "name_zh_hant": "櫻花兒",
+    "name_ja": "チェリム",
+    "name_en": "Cherrim",
+    "form": null
+  },
+  {
+    "number": "0422",
+    "name_zh_hans": "无壳海兔",
+    "name_zh_hant": "無殼海兔",
+    "name_ja": "カラナクシ",
+    "name_en": "Shellos",
+    "form": null
+  },
+  {
+    "number": "0423",
+    "name_zh_hans": "海兔兽",
+    "name_zh_hant": "海兔獸",
+    "name_ja": "トリトドン",
+    "name_en": "Gastrodon",
+    "form": null
+  },
+  {
+    "number": "0424",
+    "name_zh_hans": "双尾怪手",
+    "name_zh_hant": "雙尾怪手",
+    "name_ja": "エテボース",
+    "name_en": "Ambipom",
+    "form": null
+  },
+  {
+    "number": "0425",
+    "name_zh_hans": "飘飘球",
+    "name_zh_hant": "飄飄球",
+    "name_ja": "フワンテ",
+    "name_en": "Drifloon",
+    "form": null
+  },
+  {
+    "number": "0426",
+    "name_zh_hans": "随风球",
+    "name_zh_hant": "隨風球",
+    "name_ja": "フワライド",
+    "name_en": "Drifblim",
+    "form": null
+  },
+  {
+    "number": "0427",
+    "name_zh_hans": "卷卷耳",
+    "name_zh_hant": "捲捲耳",
+    "name_ja": "ミミロル",
+    "name_en": "Buneary",
+    "form": null
+  },
+  {
+    "number": "0428",
+    "name_zh_hans": "长耳兔",
+    "name_zh_hant": "長耳兔",
+    "name_ja": "ミミロップ",
+    "name_en": "Lopunny",
+    "form": null
+  },
+  {
+    "number": "0429",
+    "name_zh_hans": "梦妖魔",
+    "name_zh_hant": "夢妖魔",
+    "name_ja": "ムウマージ",
+    "name_en": "Mismagius",
+    "form": null
+  },
+  {
+    "number": "0430",
+    "name_zh_hans": "乌鸦头头",
+    "name_zh_hant": "烏鴉頭頭",
+    "name_ja": "ドンカラス",
+    "name_en": "Honchkrow",
+    "form": null
+  },
+  {
+    "number": "0431",
+    "name_zh_hans": "魅力喵",
+    "name_zh_hant": "魅力喵",
+    "name_ja": "ニャルマー",
+    "name_en": "Glameow",
+    "form": null
+  },
+  {
+    "number": "0432",
+    "name_zh_hans": "东施喵",
+    "name_zh_hant": "東施喵",
+    "name_ja": "ブニャット",
+    "name_en": "Purugly",
+    "form": null
+  },
+  {
+    "number": "0433",
+    "name_zh_hans": "铃铛响",
+    "name_zh_hant": "鈴鐺響",
+    "name_ja": "リーシャン",
+    "name_en": "Chingling",
+    "form": null
+  },
+  {
+    "number": "0434",
+    "name_zh_hans": "臭鼬噗",
+    "name_zh_hant": "臭鼬噗",
+    "name_ja": "スカンプー",
+    "name_en": "Stunky",
+    "form": null
+  },
+  {
+    "number": "0435",
+    "name_zh_hans": "坦克臭鼬",
+    "name_zh_hant": "坦克臭鼬",
+    "name_ja": "スカタンク",
+    "name_en": "Skuntank",
+    "form": null
+  },
+  {
+    "number": "0436",
+    "name_zh_hans": "铜镜怪",
+    "name_zh_hant": "銅鏡怪",
+    "name_ja": "ドーミラー",
+    "name_en": "Bronzor",
+    "form": null
+  },
+  {
+    "number": "0437",
+    "name_zh_hans": "青铜钟",
+    "name_zh_hant": "青銅鐘",
+    "name_ja": "ドータクン",
+    "name_en": "Bronzong",
+    "form": null
+  },
+  {
+    "number": "0438",
+    "name_zh_hans": "盆才怪",
+    "name_zh_hant": "盆才怪",
+    "name_ja": "ウソハチ",
+    "name_en": "Bonsly",
+    "form": null
+  },
+  {
+    "number": "0439",
+    "name_zh_hans": "魔尼尼",
+    "name_zh_hant": "魔尼尼",
+    "name_ja": "マネネ",
+    "name_en": "Mime Jr.",
+    "form": null
+  },
+  {
+    "number": "0440",
+    "name_zh_hans": "小福蛋",
+    "name_zh_hant": "小福蛋",
+    "name_ja": "ピンプク",
+    "name_en": "Happiny",
+    "form": null
+  },
+  {
+    "number": "0441",
+    "name_zh_hans": "聒噪鸟",
+    "name_zh_hant": "聒噪鳥",
+    "name_ja": "ペラップ",
+    "name_en": "Chatot",
+    "form": null
+  },
+  {
+    "number": "0442",
+    "name_zh_hans": "花岩怪",
+    "name_zh_hant": "花岩怪",
+    "name_ja": "ミカルゲ",
+    "name_en": "Spiritomb",
+    "form": null
+  },
+  {
+    "number": "0443",
+    "name_zh_hans": "圆陆鲨",
+    "name_zh_hant": "圓陸鯊",
+    "name_ja": "フカマル",
+    "name_en": "Gible",
+    "form": null
+  },
+  {
+    "number": "0444",
+    "name_zh_hans": "尖牙陆鲨",
+    "name_zh_hant": "尖牙陸鯊",
+    "name_ja": "ガバイト",
+    "name_en": "Gabite",
+    "form": null
+  },
+  {
+    "number": "0445",
+    "name_zh_hans": "烈咬陆鲨",
+    "name_zh_hant": "烈咬陸鯊",
+    "name_ja": "ガブリアス",
+    "name_en": "Garchomp",
+    "form": null
+  },
+  {
+    "number": "0446",
+    "name_zh_hans": "小卡比兽",
+    "name_zh_hant": "小卡比獸",
+    "name_ja": "ゴンベ",
+    "name_en": "Munchlax",
+    "form": null
+  },
+  {
+    "number": "0447",
+    "name_zh_hans": "利欧路",
+    "name_zh_hant": "利歐路",
+    "name_ja": "リオル",
+    "name_en": "Riolu",
+    "form": null
+  },
+  {
+    "number": "0448",
+    "name_zh_hans": "路卡利欧",
+    "name_zh_hant": "路卡利歐",
+    "name_ja": "ルカリオ",
+    "name_en": "Lucario",
+    "form": null
+  },
+  {
+    "number": "0449",
+    "name_zh_hans": "沙河马",
+    "name_zh_hant": "沙河馬",
+    "name_ja": "ヒポポタス",
+    "name_en": "Hippopotas",
+    "form": null
+  },
+  {
+    "number": "0450",
+    "name_zh_hans": "河马兽",
+    "name_zh_hant": "河馬獸",
+    "name_ja": "カバルドン",
+    "name_en": "Hippowdon",
+    "form": null
+  },
+  {
+    "number": "0451",
+    "name_zh_hans": "钳尾蝎",
+    "name_zh_hant": "鉗尾蠍",
+    "name_ja": "スコルピ",
+    "name_en": "Skorupi",
+    "form": null
+  },
+  {
+    "number": "0452",
+    "name_zh_hans": "龙王蝎",
+    "name_zh_hant": "龍王蠍",
+    "name_ja": "ドラピオン",
+    "name_en": "Drapion",
+    "form": null
+  },
+  {
+    "number": "0453",
+    "name_zh_hans": "不良蛙",
+    "name_zh_hant": "不良蛙",
+    "name_ja": "グレッグル",
+    "name_en": "Croagunk",
+    "form": null
+  },
+  {
+    "number": "0454",
+    "name_zh_hans": "毒骷蛙",
+    "name_zh_hant": "毒骷蛙",
+    "name_ja": "ドクロッグ",
+    "name_en": "Toxicroak",
+    "form": null
+  },
+  {
+    "number": "0455",
+    "name_zh_hans": "尖牙笼",
+    "name_zh_hant": "尖牙籠",
+    "name_ja": "マスキッパ",
+    "name_en": "Carnivine",
+    "form": null
+  },
+  {
+    "number": "0456",
+    "name_zh_hans": "荧光鱼",
+    "name_zh_hant": "螢光魚",
+    "name_ja": "ケイコウオ",
+    "name_en": "Finneon",
+    "form": null
+  },
+  {
+    "number": "0457",
+    "name_zh_hans": "霓虹鱼",
+    "name_zh_hant": "霓虹魚",
+    "name_ja": "ネオラント",
+    "name_en": "Lumineon",
+    "form": null
+  },
+  {
+    "number": "0458",
+    "name_zh_hans": "小球飞鱼",
+    "name_zh_hant": "小球飛魚",
+    "name_ja": "タマンタ",
+    "name_en": "Mantyke",
+    "form": null
+  },
+  {
+    "number": "0459",
+    "name_zh_hans": "雪笠怪",
+    "name_zh_hant": "雪笠怪",
+    "name_ja": "ユキカブリ",
+    "name_en": "Snover",
+    "form": null
+  },
+  {
+    "number": "0460",
+    "name_zh_hans": "暴雪王",
+    "name_zh_hant": "暴雪王",
+    "name_ja": "ユキノオー",
+    "name_en": "Abomasnow",
+    "form": null
+  },
+  {
+    "number": "0461",
+    "name_zh_hans": "玛狃拉",
+    "name_zh_hant": "瑪狃拉",
+    "name_ja": "マニューラ",
+    "name_en": "Weavile",
+    "form": null
+  },
+  {
+    "number": "0462",
+    "name_zh_hans": "自爆磁怪",
+    "name_zh_hant": "自爆磁怪",
+    "name_ja": "ジバコイル",
+    "name_en": "Magnezone",
+    "form": null
+  },
+  {
+    "number": "0463",
+    "name_zh_hans": "大舌舔",
+    "name_zh_hant": "大舌舔",
+    "name_ja": "ベロベルト",
+    "name_en": "Lickilicky",
+    "form": null
+  },
+  {
+    "number": "0464",
+    "name_zh_hans": "超甲狂犀",
+    "name_zh_hant": "超甲狂犀",
+    "name_ja": "ドサイドン",
+    "name_en": "Rhyperior",
+    "form": null
+  },
+  {
+    "number": "0465",
+    "name_zh_hans": "巨蔓藤",
+    "name_zh_hant": "巨蔓藤",
+    "name_ja": "モジャンボ",
+    "name_en": "Tangrowth",
+    "form": null
+  },
+  {
+    "number": "0466",
+    "name_zh_hans": "电击魔兽",
+    "name_zh_hant": "電擊魔獸",
+    "name_ja": "エレキブル",
+    "name_en": "Electivire",
+    "form": null
+  },
+  {
+    "number": "0467",
+    "name_zh_hans": "鸭嘴炎兽",
+    "name_zh_hant": "鴨嘴炎獸",
+    "name_ja": "ブーバーン",
+    "name_en": "Magmortar",
+    "form": null
+  },
+  {
+    "number": "0468",
+    "name_zh_hans": "波克基斯",
+    "name_zh_hant": "波克基斯",
+    "name_ja": "トゲキッス",
+    "name_en": "Togekiss",
+    "form": null
+  },
+  {
+    "number": "0469",
+    "name_zh_hans": "远古巨蜓",
+    "name_zh_hant": "遠古巨蜓",
+    "name_ja": "メガヤンマ",
+    "name_en": "Yanmega",
+    "form": null
+  },
+  {
+    "number": "0470",
+    "name_zh_hans": "叶伊布",
+    "name_zh_hant": "葉伊布",
+    "name_ja": "リーフィア",
+    "name_en": "Leafeon",
+    "form": null
+  },
+  {
+    "number": "0471",
+    "name_zh_hans": "冰伊布",
+    "name_zh_hant": "冰伊布",
+    "name_ja": "グレイシア",
+    "name_en": "Glaceon",
+    "form": null
+  },
+  {
+    "number": "0472",
+    "name_zh_hans": "天蝎王",
+    "name_zh_hant": "天蠍王",
+    "name_ja": "グライオン",
+    "name_en": "Gliscor",
+    "form": null
+  },
+  {
+    "number": "0473",
+    "name_zh_hans": "象牙猪",
+    "name_zh_hant": "象牙豬",
+    "name_ja": "マンムー",
+    "name_en": "Mamoswine",
+    "form": null
+  },
+  {
+    "number": "0474",
+    "name_zh_hans": "多边兽乙型",
+    "name_zh_hant": "多邊獸Ｚ",
+    "name_ja": "ポリゴンＺ",
+    "name_en": "Porygon-Z",
+    "form": null
+  },
+  {
+    "number": "0475",
+    "name_zh_hans": "艾路雷朵",
+    "name_zh_hant": "艾路雷朵",
+    "name_ja": "エルレイド",
+    "name_en": "Gallade",
+    "form": null
+  },
+  {
+    "number": "0476",
+    "name_zh_hans": "大朝北鼻",
+    "name_zh_hant": "大朝北鼻",
+    "name_ja": "ダイノーズ",
+    "name_en": "Probopass",
+    "form": null
+  },
+  {
+    "number": "0477",
+    "name_zh_hans": "黑夜魔灵",
+    "name_zh_hant": "黑夜魔靈",
+    "name_ja": "ヨノワール",
+    "name_en": "Dusknoir",
+    "form": null
+  },
+  {
+    "number": "0478",
+    "name_zh_hans": "雪妖女",
+    "name_zh_hant": "雪妖女",
+    "name_ja": "ユキメノコ",
+    "name_en": "Froslass",
+    "form": null
+  },
+  {
+    "number": "0479",
+    "name_zh_hans": "洛托姆",
+    "name_zh_hant": "洛托姆",
+    "name_ja": "ロトム",
+    "name_en": "Rotom",
+    "form": null
+  },
+  {
+    "number": "0480",
+    "name_zh_hans": "由克希",
+    "name_zh_hant": "由克希",
+    "name_ja": "ユクシー",
+    "name_en": "Uxie",
+    "form": null
+  },
+  {
+    "number": "0481",
+    "name_zh_hans": "艾姆利多",
+    "name_zh_hant": "艾姆利多",
+    "name_ja": "エムリット",
+    "name_en": "Mesprit",
+    "form": null
+  },
+  {
+    "number": "0482",
+    "name_zh_hans": "亚克诺姆",
+    "name_zh_hant": "亞克諾姆",
+    "name_ja": "アグノム",
+    "name_en": "Azelf",
+    "form": null
+  },
+  {
+    "number": "0483",
+    "name_zh_hans": "帝牙卢卡",
+    "name_zh_hant": "帝牙盧卡",
+    "name_ja": "ディアルガ",
+    "name_en": "Dialga",
+    "form": null
+  },
+  {
+    "number": "0484",
+    "name_zh_hans": "帕路奇亚",
+    "name_zh_hant": "帕路奇亞",
+    "name_ja": "パルキア",
+    "name_en": "Palkia",
+    "form": null
+  },
+  {
+    "number": "0485",
+    "name_zh_hans": "席多蓝恩",
+    "name_zh_hant": "席多藍恩",
+    "name_ja": "ヒードラン",
+    "name_en": "Heatran",
+    "form": null
+  },
+  {
+    "number": "0486",
+    "name_zh_hans": "雷吉奇卡斯",
+    "name_zh_hant": "雷吉奇卡斯",
+    "name_ja": "レジギガス",
+    "name_en": "Regigigas",
+    "form": null
+  },
+  {
+    "number": "0487",
+    "name_zh_hans": "骑拉帝纳",
+    "name_zh_hant": "騎拉帝納",
+    "name_ja": "ギラティナ",
+    "name_en": "Giratina",
+    "form": null
+  },
+  {
+    "number": "0488",
+    "name_zh_hans": "克雷色利亚",
+    "name_zh_hant": "克雷色利亞",
+    "name_ja": "クレセリア",
+    "name_en": "Cresselia",
+    "form": null
+  },
+  {
+    "number": "0489",
+    "name_zh_hans": "霏欧纳",
+    "name_zh_hant": "霏歐納",
+    "name_ja": "フィオネ",
+    "name_en": "Phione",
+    "form": null
+  },
+  {
+    "number": "0490",
+    "name_zh_hans": "玛纳霏",
+    "name_zh_hant": "瑪納霏",
+    "name_ja": "マナフィ",
+    "name_en": "Manaphy",
+    "form": null
+  },
+  {
+    "number": "0491",
+    "name_zh_hans": "达克莱伊",
+    "name_zh_hant": "達克萊伊",
+    "name_ja": "ダークライ",
+    "name_en": "Darkrai",
+    "form": null
+  },
+  {
+    "number": "0492",
+    "name_zh_hans": "谢米",
+    "name_zh_hant": "謝米",
+    "name_ja": "シェイミ",
+    "name_en": "Shaymin",
+    "form": null
+  },
+  {
+    "number": "0493",
+    "name_zh_hans": "阿尔宙斯",
+    "name_zh_hant": "阿爾宙斯",
+    "name_ja": "アルセウス",
+    "name_en": "Arceus",
+    "form": null
+  },
+  {
+    "number": "0494",
+    "name_zh_hans": "比克提尼",
+    "name_zh_hant": "比克提尼",
+    "name_ja": "ビクティニ",
+    "name_en": "Victini",
+    "form": null
+  },
+  {
+    "number": "0495",
+    "name_zh_hans": "藤藤蛇",
+    "name_zh_hant": "藤藤蛇",
+    "name_ja": "ツタージャ",
+    "name_en": "Snivy",
+    "form": null
+  },
+  {
+    "number": "0496",
+    "name_zh_hans": "青藤蛇",
+    "name_zh_hant": "青藤蛇",
+    "name_ja": "ジャノビー",
+    "name_en": "Servine",
+    "form": null
+  },
+  {
+    "number": "0497",
+    "name_zh_hans": "君主蛇",
+    "name_zh_hant": "君主蛇",
+    "name_ja": "ジャローダ",
+    "name_en": "Serperior",
+    "form": null
+  },
+  {
+    "number": "0498",
+    "name_zh_hans": "暖暖猪",
+    "name_zh_hant": "暖暖豬",
+    "name_ja": "ポカブ",
+    "name_en": "Tepig",
+    "form": null
+  },
+  {
+    "number": "0499",
+    "name_zh_hans": "炒炒猪",
+    "name_zh_hant": "炒炒豬",
+    "name_ja": "チャオブー",
+    "name_en": "Pignite",
+    "form": null
+  },
+  {
+    "number": "0500",
+    "name_zh_hans": "炎武王",
+    "name_zh_hant": "炎武王",
+    "name_ja": "エンブオー",
+    "name_en": "Emboar",
+    "form": null
+  },
+  {
+    "number": "0501",
+    "name_zh_hans": "水水獭",
+    "name_zh_hant": "水水獺",
+    "name_ja": "ミジュマル",
+    "name_en": "Oshawott",
+    "form": null
+  },
+  {
+    "number": "0502",
+    "name_zh_hans": "双刃丸",
+    "name_zh_hant": "雙刃丸",
+    "name_ja": "フタチマル",
+    "name_en": "Dewott",
+    "form": null
+  },
+  {
+    "number": "0503",
+    "name_zh_hans": "大剑鬼",
+    "name_zh_hant": "大劍鬼",
+    "name_ja": "ダイケンキ",
+    "name_en": "Samurott",
+    "form": null
+  },
+  {
+    "number": "0503",
+    "name_zh_hans": "大剑鬼",
+    "name_zh_hant": "大劍鬼",
+    "name_ja": "ダイケンキ",
+    "name_en": "Samurott",
+    "form": "洗翠的样子"
+  },
+  {
+    "number": "0504",
+    "name_zh_hans": "探探鼠",
+    "name_zh_hant": "探探鼠",
+    "name_ja": "ミネズミ",
+    "name_en": "Patrat",
+    "form": null
+  },
+  {
+    "number": "0505",
+    "name_zh_hans": "步哨鼠",
+    "name_zh_hant": "步哨鼠",
+    "name_ja": "ミルホッグ",
+    "name_en": "Watchog",
+    "form": null
+  },
+  {
+    "number": "0506",
+    "name_zh_hans": "小约克",
+    "name_zh_hant": "小約克",
+    "name_ja": "ヨーテリー",
+    "name_en": "Lillipup",
+    "form": null
+  },
+  {
+    "number": "0507",
+    "name_zh_hans": "哈约克",
+    "name_zh_hant": "哈約克",
+    "name_ja": "ハーデリア",
+    "name_en": "Herdier",
+    "form": null
+  },
+  {
+    "number": "0508",
+    "name_zh_hans": "长毛狗",
+    "name_zh_hant": "長毛狗",
+    "name_ja": "ムーランド",
+    "name_en": "Stoutland",
+    "form": null
+  },
+  {
+    "number": "0509",
+    "name_zh_hans": "扒手猫",
+    "name_zh_hant": "扒手貓",
+    "name_ja": "チョロネコ",
+    "name_en": "Purrloin",
+    "form": null
+  },
+  {
+    "number": "0510",
+    "name_zh_hans": "酷豹",
+    "name_zh_hant": "酷豹",
+    "name_ja": "レパルダス",
+    "name_en": "Liepard",
+    "form": null
+  },
+  {
+    "number": "0511",
+    "name_zh_hans": "花椰猴",
+    "name_zh_hant": "花椰猴",
+    "name_ja": "ヤナップ",
+    "name_en": "Pansage",
+    "form": null
+  },
+  {
+    "number": "0512",
+    "name_zh_hans": "花椰猿",
+    "name_zh_hant": "花椰猿",
+    "name_ja": "ヤナッキー",
+    "name_en": "Simisage",
+    "form": null
+  },
+  {
+    "number": "0513",
+    "name_zh_hans": "爆香猴",
+    "name_zh_hant": "爆香猴",
+    "name_ja": "バオップ",
+    "name_en": "Pansear",
+    "form": null
+  },
+  {
+    "number": "0514",
+    "name_zh_hans": "爆香猿",
+    "name_zh_hant": "爆香猿",
+    "name_ja": "バオッキー",
+    "name_en": "Simisear",
+    "form": null
+  },
+  {
+    "number": "0515",
+    "name_zh_hans": "冷水猴",
+    "name_zh_hant": "冷水猴",
+    "name_ja": "ヒヤップ",
+    "name_en": "Panpour",
+    "form": null
+  },
+  {
+    "number": "0516",
+    "name_zh_hans": "冷水猿",
+    "name_zh_hant": "冷水猿",
+    "name_ja": "ヒヤッキー",
+    "name_en": "Simipour",
+    "form": null
+  },
+  {
+    "number": "0517",
+    "name_zh_hans": "食梦梦",
+    "name_zh_hant": "食夢夢",
+    "name_ja": "ムンナ",
+    "name_en": "Munna",
+    "form": null
+  },
+  {
+    "number": "0518",
+    "name_zh_hans": "梦梦蚀",
+    "name_zh_hant": "夢夢蝕",
+    "name_ja": "ムシャーナ",
+    "name_en": "Musharna",
+    "form": null
+  },
+  {
+    "number": "0519",
+    "name_zh_hans": "豆豆鸽",
+    "name_zh_hant": "豆豆鴿",
+    "name_ja": "マメパト",
+    "name_en": "Pidove",
+    "form": null
+  },
+  {
+    "number": "0520",
+    "name_zh_hans": "咕咕鸽",
+    "name_zh_hant": "咕咕鴿",
+    "name_ja": "ハトーボー",
+    "name_en": "Tranquill",
+    "form": null
+  },
+  {
+    "number": "0521",
+    "name_zh_hans": "高傲雉鸡",
+    "name_zh_hant": "高傲雉雞",
+    "name_ja": "ケンホロウ",
+    "name_en": "Unfezant",
+    "form": null
+  },
+  {
+    "number": "0522",
+    "name_zh_hans": "斑斑马",
+    "name_zh_hant": "斑斑馬",
+    "name_ja": "シママ",
+    "name_en": "Blitzle",
+    "form": null
+  },
+  {
+    "number": "0523",
+    "name_zh_hans": "雷电斑马",
+    "name_zh_hant": "雷電斑馬",
+    "name_ja": "ゼブライカ",
+    "name_en": "Zebstrika",
+    "form": null
+  },
+  {
+    "number": "0524",
+    "name_zh_hans": "石丸子",
+    "name_zh_hant": "石丸子",
+    "name_ja": "ダンゴロ",
+    "name_en": "Roggenrola",
+    "form": null
+  },
+  {
+    "number": "0525",
+    "name_zh_hans": "地幔岩",
+    "name_zh_hant": "地幔岩",
+    "name_ja": "ガントル",
+    "name_en": "Boldore",
+    "form": null
+  },
+  {
+    "number": "0526",
+    "name_zh_hans": "庞岩怪",
+    "name_zh_hant": "龐岩怪",
+    "name_ja": "ギガイアス",
+    "name_en": "Gigalith",
+    "form": null
+  },
+  {
+    "number": "0527",
+    "name_zh_hans": "滚滚蝙蝠",
+    "name_zh_hant": "滾滾蝙蝠",
+    "name_ja": "コロモリ",
+    "name_en": "Woobat",
+    "form": null
+  },
+  {
+    "number": "0528",
+    "name_zh_hans": "心蝙蝠",
+    "name_zh_hant": "心蝙蝠",
+    "name_ja": "ココロモリ",
+    "name_en": "Swoobat",
+    "form": null
+  },
+  {
+    "number": "0529",
+    "name_zh_hans": "螺钉地鼠",
+    "name_zh_hant": "螺釘地鼠",
+    "name_ja": "モグリュー",
+    "name_en": "Drilbur",
+    "form": null
+  },
+  {
+    "number": "0530",
+    "name_zh_hans": "龙头地鼠",
+    "name_zh_hant": "龍頭地鼠",
+    "name_ja": "ドリュウズ",
+    "name_en": "Excadrill",
+    "form": null
+  },
+  {
+    "number": "0531",
+    "name_zh_hans": "差不多娃娃",
+    "name_zh_hant": "差不多娃娃",
+    "name_ja": "タブンネ",
+    "name_en": "Audino",
+    "form": null
+  },
+  {
+    "number": "0532",
+    "name_zh_hans": "搬运小匠",
+    "name_zh_hant": "搬運小匠",
+    "name_ja": "ドッコラー",
+    "name_en": "Timburr",
+    "form": null
+  },
+  {
+    "number": "0533",
+    "name_zh_hans": "铁骨土人",
+    "name_zh_hant": "鐵骨土人",
+    "name_ja": "ドテッコツ",
+    "name_en": "Gurdurr",
+    "form": null
+  },
+  {
+    "number": "0534",
+    "name_zh_hans": "修建老匠",
+    "name_zh_hant": "修建老匠",
+    "name_ja": "ローブシン",
+    "name_en": "Conkeldurr",
+    "form": null
+  },
+  {
+    "number": "0535",
+    "name_zh_hans": "圆蝌蚪",
+    "name_zh_hant": "圓蝌蚪",
+    "name_ja": "オタマロ",
+    "name_en": "Tympole",
+    "form": null
+  },
+  {
+    "number": "0536",
+    "name_zh_hans": "蓝蟾蜍",
+    "name_zh_hant": "藍蟾蜍",
+    "name_ja": "ガマガル",
+    "name_en": "Palpitoad",
+    "form": null
+  },
+  {
+    "number": "0537",
+    "name_zh_hans": "蟾蜍王",
+    "name_zh_hant": "蟾蜍王",
+    "name_ja": "ガマゲロゲ",
+    "name_en": "Seismitoad",
+    "form": null
+  },
+  {
+    "number": "0538",
+    "name_zh_hans": "投摔鬼",
+    "name_zh_hant": "投摔鬼",
+    "name_ja": "ナゲキ",
+    "name_en": "Throh",
+    "form": null
+  },
+  {
+    "number": "0539",
+    "name_zh_hans": "打击鬼",
+    "name_zh_hant": "打擊鬼",
+    "name_ja": "ダゲキ",
+    "name_en": "Sawk",
+    "form": null
+  },
+  {
+    "number": "0540",
+    "name_zh_hans": "虫宝包",
+    "name_zh_hant": "蟲寶包",
+    "name_ja": "クルミル",
+    "name_en": "Sewaddle",
+    "form": null
+  },
+  {
+    "number": "0541",
+    "name_zh_hans": "宝包茧",
+    "name_zh_hant": "寶包繭",
+    "name_ja": "クルマユ",
+    "name_en": "Swadloon",
+    "form": null
+  },
+  {
+    "number": "0542",
+    "name_zh_hans": "保姆虫",
+    "name_zh_hant": "保母蟲",
+    "name_ja": "ハハコモリ",
+    "name_en": "Leavanny",
+    "form": null
+  },
+  {
+    "number": "0543",
+    "name_zh_hans": "百足蜈蚣",
+    "name_zh_hant": "百足蜈蚣",
+    "name_ja": "フシデ",
+    "name_en": "Venipede",
+    "form": null
+  },
+  {
+    "number": "0544",
+    "name_zh_hans": "车轮球",
+    "name_zh_hant": "車輪毬",
+    "name_ja": "ホイーガ",
+    "name_en": "Whirlipede",
+    "form": null
+  },
+  {
+    "number": "0545",
+    "name_zh_hans": "蜈蚣王",
+    "name_zh_hant": "蜈蚣王",
+    "name_ja": "ペンドラー",
+    "name_en": "Scolipede",
+    "form": null
+  },
+  {
+    "number": "0546",
+    "name_zh_hans": "木棉球",
+    "name_zh_hant": "木棉球",
+    "name_ja": "モンメン",
+    "name_en": "Cottonee",
+    "form": null
+  },
+  {
+    "number": "0547",
+    "name_zh_hans": "风妖精",
+    "name_zh_hant": "風妖精",
+    "name_ja": "エルフーン",
+    "name_en": "Whimsicott",
+    "form": null
+  },
+  {
+    "number": "0548",
+    "name_zh_hans": "百合根娃娃",
+    "name_zh_hant": "百合根娃娃",
+    "name_ja": "チュリネ",
+    "name_en": "Petilil",
+    "form": null
+  },
+  {
+    "number": "0549",
+    "name_zh_hans": "裙儿小姐",
+    "name_zh_hant": "裙兒小姐",
+    "name_ja": "ドレディア",
+    "name_en": "Lilligant",
+    "form": null
+  },
+  {
+    "number": "0549",
+    "name_zh_hans": "裙儿小姐",
+    "name_zh_hant": "裙兒小姐",
+    "name_ja": "ドレディア",
+    "name_en": "Lilligant",
+    "form": "洗翠的样子"
+  },
+  {
+    "number": "0550",
+    "name_zh_hans": "野蛮鲈鱼",
+    "name_zh_hant": "野蠻鱸魚",
+    "name_ja": "バスラオ",
+    "name_en": "Basculin",
+    "form": null
+  },
+  {
+    "number": "0551",
+    "name_zh_hans": "黑眼鳄",
+    "name_zh_hant": "黑眼鱷",
+    "name_ja": "メグロコ",
+    "name_en": "Sandile",
+    "form": null
+  },
+  {
+    "number": "0552",
+    "name_zh_hans": "混混鳄",
+    "name_zh_hant": "混混鱷",
+    "name_ja": "ワルビル",
+    "name_en": "Krokorok",
+    "form": null
+  },
+  {
+    "number": "0553",
+    "name_zh_hans": "流氓鳄",
+    "name_zh_hant": "流氓鱷",
+    "name_ja": "ワルビアル",
+    "name_en": "Krookodile",
+    "form": null
+  },
+  {
+    "number": "0554",
+    "name_zh_hans": "火红不倒翁",
+    "name_zh_hant": "火紅不倒翁",
+    "name_ja": "ダルマッカ",
+    "name_en": "Darumaka",
+    "form": null
+  },
+  {
+    "number": "0554",
+    "name_zh_hans": "火红不倒翁",
+    "name_zh_hant": "火紅不倒翁",
+    "name_ja": "ダルマッカ",
+    "name_en": "Darumaka",
+    "form": "伽勒尔的样子"
+  },
+  {
+    "number": "0555",
+    "name_zh_hans": "达摩狒狒",
+    "name_zh_hant": "達摩狒狒",
+    "name_ja": "ヒヒダルマ",
+    "name_en": "Darmanitan",
+    "form": null
+  },
+  {
+    "number": "0555",
+    "name_zh_hans": "达摩狒狒",
+    "name_zh_hant": "達摩狒狒",
+    "name_ja": "ヒヒダルマ",
+    "name_en": "Darmanitan",
+    "form": "伽勒尔的样子"
+  },
+  {
+    "number": "0556",
+    "name_zh_hans": "沙铃仙人掌",
+    "name_zh_hant": "沙鈴仙人掌",
+    "name_ja": "マラカッチ",
+    "name_en": "Maractus",
+    "form": null
+  },
+  {
+    "number": "0557",
+    "name_zh_hans": "石居蟹",
+    "name_zh_hant": "石居蟹",
+    "name_ja": "イシズマイ",
+    "name_en": "Dwebble",
+    "form": null
+  },
+  {
+    "number": "0558",
+    "name_zh_hans": "岩殿居蟹",
+    "name_zh_hant": "岩殿居蟹",
+    "name_ja": "イワパレス",
+    "name_en": "Crustle",
+    "form": null
+  },
+  {
+    "number": "0559",
+    "name_zh_hans": "滑滑小子",
+    "name_zh_hant": "滑滑小子",
+    "name_ja": "ズルッグ",
+    "name_en": "Scraggy",
+    "form": null
+  },
+  {
+    "number": "0560",
+    "name_zh_hans": "头巾混混",
+    "name_zh_hant": "頭巾混混",
+    "name_ja": "ズルズキン",
+    "name_en": "Scrafty",
+    "form": null
+  },
+  {
+    "number": "0561",
+    "name_zh_hans": "象征鸟",
+    "name_zh_hant": "象徵鳥",
+    "name_ja": "シンボラー",
+    "name_en": "Sigilyph",
+    "form": null
+  },
+  {
+    "number": "0562",
+    "name_zh_hans": "哭哭面具",
+    "name_zh_hant": "哭哭面具",
+    "name_ja": "デスマス",
+    "name_en": "Yamask",
+    "form": null
+  },
+  {
+    "number": "0562",
+    "name_zh_hans": "哭哭面具",
+    "name_zh_hant": "哭哭面具",
+    "name_ja": "デスマス",
+    "name_en": "Yamask",
+    "form": "伽勒尔的样子"
+  },
+  {
+    "number": "0563",
+    "name_zh_hans": "迭失棺",
+    "name_zh_hant": "死神棺",
+    "name_ja": "デスカーン",
+    "name_en": "Cofagrigus",
+    "form": null
+  },
+  {
+    "number": "0564",
+    "name_zh_hans": "原盖海龟",
+    "name_zh_hant": "原蓋海龜",
+    "name_ja": "プロトーガ",
+    "name_en": "Tirtouga",
+    "form": null
+  },
+  {
+    "number": "0565",
+    "name_zh_hans": "肋骨海龟",
+    "name_zh_hant": "肋骨海龜",
+    "name_ja": "アバゴーラ",
+    "name_en": "Carracosta",
+    "form": null
+  },
+  {
+    "number": "0566",
+    "name_zh_hans": "始祖小鸟",
+    "name_zh_hant": "始祖小鳥",
+    "name_ja": "アーケン",
+    "name_en": "Archen",
+    "form": null
+  },
+  {
+    "number": "0567",
+    "name_zh_hans": "始祖大鸟",
+    "name_zh_hant": "始祖大鳥",
+    "name_ja": "アーケオス",
+    "name_en": "Archeops",
+    "form": null
+  },
+  {
+    "number": "0568",
+    "name_zh_hans": "破破袋",
+    "name_zh_hant": "破破袋",
+    "name_ja": "ヤブクロン",
+    "name_en": "Trubbish",
+    "form": null
+  },
+  {
+    "number": "0569",
+    "name_zh_hans": "灰尘山",
+    "name_zh_hant": "灰塵山",
+    "name_ja": "ダストダス",
+    "name_en": "Garbodor",
+    "form": null
+  },
+  {
+    "number": "0570",
+    "name_zh_hans": "索罗亚",
+    "name_zh_hant": "索羅亞",
+    "name_ja": "ゾロア",
+    "name_en": "Zorua",
+    "form": null
+  },
+  {
+    "number": "0570",
+    "name_zh_hans": "索罗亚",
+    "name_zh_hant": "索羅亞",
+    "name_ja": "ゾロア",
+    "name_en": "Zorua",
+    "form": "洗翠的样子"
+  },
+  {
+    "number": "0571",
+    "name_zh_hans": "索罗亚克",
+    "name_zh_hant": "索羅亞克",
+    "name_ja": "ゾロアーク",
+    "name_en": "Zoroark",
+    "form": null
+  },
+  {
+    "number": "0571",
+    "name_zh_hans": "索罗亚克",
+    "name_zh_hant": "索羅亞克",
+    "name_ja": "ゾロアーク",
+    "name_en": "Zoroark",
+    "form": "洗翠的样子"
+  },
+  {
+    "number": "0572",
+    "name_zh_hans": "泡沫栗鼠",
+    "name_zh_hant": "泡沫栗鼠",
+    "name_ja": "チラーミィ",
+    "name_en": "Minccino",
+    "form": null
+  },
+  {
+    "number": "0573",
+    "name_zh_hans": "奇诺栗鼠",
+    "name_zh_hant": "奇諾栗鼠",
+    "name_ja": "チラチーノ",
+    "name_en": "Cinccino",
+    "form": null
+  },
+  {
+    "number": "0574",
+    "name_zh_hans": "哥德宝宝",
+    "name_zh_hant": "哥德寶寶",
+    "name_ja": "ゴチム",
+    "name_en": "Gothita",
+    "form": null
+  },
+  {
+    "number": "0575",
+    "name_zh_hans": "哥德小童",
+    "name_zh_hant": "哥德小童",
+    "name_ja": "ゴチミル",
+    "name_en": "Gothorita",
+    "form": null
+  },
+  {
+    "number": "0576",
+    "name_zh_hans": "哥德小姐",
+    "name_zh_hant": "哥德小姐",
+    "name_ja": "ゴチルゼル",
+    "name_en": "Gothitelle",
+    "form": null
+  },
+  {
+    "number": "0577",
+    "name_zh_hans": "单卵细胞球",
+    "name_zh_hant": "單卵細胞球",
+    "name_ja": "ユニラン",
+    "name_en": "Solosis",
+    "form": null
+  },
+  {
+    "number": "0578",
+    "name_zh_hans": "双卵细胞球",
+    "name_zh_hant": "雙卵細胞球",
+    "name_ja": "ダブラン",
+    "name_en": "Duosion",
+    "form": null
+  },
+  {
+    "number": "0579",
+    "name_zh_hans": "人造细胞卵",
+    "name_zh_hant": "人造細胞卵",
+    "name_ja": "ランクルス",
+    "name_en": "Reuniclus",
+    "form": null
+  },
+  {
+    "number": "0580",
+    "name_zh_hans": "鸭宝宝",
+    "name_zh_hant": "鴨寶寶",
+    "name_ja": "コアルヒー",
+    "name_en": "Ducklett",
+    "form": null
+  },
+  {
+    "number": "0581",
+    "name_zh_hans": "舞天鹅",
+    "name_zh_hant": "舞天鵝",
+    "name_ja": "スワンナ",
+    "name_en": "Swanna",
+    "form": null
+  },
+  {
+    "number": "0582",
+    "name_zh_hans": "迷你冰",
+    "name_zh_hant": "迷你冰",
+    "name_ja": "バニプッチ",
+    "name_en": "Vanillite",
+    "form": null
+  },
+  {
+    "number": "0583",
+    "name_zh_hans": "多多冰",
+    "name_zh_hant": "多多冰",
+    "name_ja": "バニリッチ",
+    "name_en": "Vanillish",
+    "form": null
+  },
+  {
+    "number": "0584",
+    "name_zh_hans": "双倍多多冰",
+    "name_zh_hant": "雙倍多多冰",
+    "name_ja": "バイバニラ",
+    "name_en": "Vanilluxe",
+    "form": null
+  },
+  {
+    "number": "0585",
+    "name_zh_hans": "四季鹿",
+    "name_zh_hant": "四季鹿",
+    "name_ja": "シキジカ",
+    "name_en": "Deerling",
+    "form": null
+  },
+  {
+    "number": "0586",
+    "name_zh_hans": "萌芽鹿",
+    "name_zh_hant": "萌芽鹿",
+    "name_ja": "メブキジカ",
+    "name_en": "Sawsbuck",
+    "form": null
+  },
+  {
+    "number": "0587",
+    "name_zh_hans": "电飞鼠",
+    "name_zh_hant": "電飛鼠",
+    "name_ja": "エモンガ",
+    "name_en": "Emolga",
+    "form": null
+  },
+  {
+    "number": "0588",
+    "name_zh_hans": "盖盖虫",
+    "name_zh_hant": "蓋蓋蟲",
+    "name_ja": "カブルモ",
+    "name_en": "Karrablast",
+    "form": null
+  },
+  {
+    "number": "0589",
+    "name_zh_hans": "骑士蜗牛",
+    "name_zh_hant": "騎士蝸牛",
+    "name_ja": "シュバルゴ",
+    "name_en": "Escavalier",
+    "form": null
+  },
+  {
+    "number": "0590",
+    "name_zh_hans": "哎呀球菇",
+    "name_zh_hant": "哎呀球菇",
+    "name_ja": "タマゲタケ",
+    "name_en": "Foongus",
+    "form": null
+  },
+  {
+    "number": "0591",
+    "name_zh_hans": "败露球菇",
+    "name_zh_hant": "敗露球菇",
+    "name_ja": "モロバレル",
+    "name_en": "Amoonguss",
+    "form": null
+  },
+  {
+    "number": "0592",
+    "name_zh_hans": "轻飘飘",
+    "name_zh_hant": "輕飄飄",
+    "name_ja": "プルリル",
+    "name_en": "Frillish",
+    "form": null
+  },
+  {
+    "number": "0593",
+    "name_zh_hans": "胖嘟嘟",
+    "name_zh_hant": "胖嘟嘟",
+    "name_ja": "ブルンゲル",
+    "name_en": "Jellicent",
+    "form": null
+  },
+  {
+    "number": "0594",
+    "name_zh_hans": "保姆曼波",
+    "name_zh_hant": "保母曼波",
+    "name_ja": "ママンボウ",
+    "name_en": "Alomomola",
+    "form": null
+  },
+  {
+    "number": "0595",
+    "name_zh_hans": "电电虫",
+    "name_zh_hant": "電電蟲",
+    "name_ja": "バチュル",
+    "name_en": "Joltik",
+    "form": null
+  },
+  {
+    "number": "0596",
+    "name_zh_hans": "电蜘蛛",
+    "name_zh_hant": "電蜘蛛",
+    "name_ja": "デンチュラ",
+    "name_en": "Galvantula",
+    "form": null
+  },
+  {
+    "number": "0597",
+    "name_zh_hans": "种子铁球",
+    "name_zh_hant": "種子鐵球",
+    "name_ja": "テッシード",
+    "name_en": "Ferroseed",
+    "form": null
+  },
+  {
+    "number": "0598",
+    "name_zh_hans": "坚果哑铃",
+    "name_zh_hant": "堅果啞鈴",
+    "name_ja": "ナットレイ",
+    "name_en": "Ferrothorn",
+    "form": null
+  },
+  {
+    "number": "0599",
+    "name_zh_hans": "齿轮儿",
+    "name_zh_hant": "齒輪兒",
+    "name_ja": "ギアル",
+    "name_en": "Klink",
+    "form": null
+  },
+  {
+    "number": "0600",
+    "name_zh_hans": "齿轮组",
+    "name_zh_hant": "齒輪組",
+    "name_ja": "ギギアル",
+    "name_en": "Klang",
+    "form": null
+  },
+  {
+    "number": "0601",
+    "name_zh_hans": "齿轮怪",
+    "name_zh_hant": "齒輪怪",
+    "name_ja": "ギギギアル",
+    "name_en": "Klinklang",
+    "form": null
+  },
+  {
+    "number": "0602",
+    "name_zh_hans": "麻麻小鱼",
+    "name_zh_hant": "麻麻小魚",
+    "name_ja": "シビシラス",
+    "name_en": "Tynamo",
+    "form": null
+  },
+  {
+    "number": "0603",
+    "name_zh_hans": "麻麻鳗",
+    "name_zh_hant": "麻麻鰻",
+    "name_ja": "シビビール",
+    "name_en": "Eelektrik",
+    "form": null
+  },
+  {
+    "number": "0604",
+    "name_zh_hans": "麻麻鳗鱼王",
+    "name_zh_hant": "麻麻鰻魚王",
+    "name_ja": "シビルドン",
+    "name_en": "Eelektross",
+    "form": null
+  },
+  {
+    "number": "0605",
+    "name_zh_hans": "小灰怪",
+    "name_zh_hant": "小灰怪",
+    "name_ja": "リグレー",
+    "name_en": "Elgyem",
+    "form": null
+  },
+  {
+    "number": "0606",
+    "name_zh_hans": "大宇怪",
+    "name_zh_hant": "大宇怪",
+    "name_ja": "オーベム",
+    "name_en": "Beheeyem",
+    "form": null
+  },
+  {
+    "number": "0607",
+    "name_zh_hans": "烛光灵",
+    "name_zh_hant": "燭光靈",
+    "name_ja": "ヒトモシ",
+    "name_en": "Litwick",
+    "form": null
+  },
+  {
+    "number": "0608",
+    "name_zh_hans": "灯火幽灵",
+    "name_zh_hant": "燈火幽靈",
+    "name_ja": "ランプラー",
+    "name_en": "Lampent",
+    "form": null
+  },
+  {
+    "number": "0609",
+    "name_zh_hans": "水晶灯火灵",
+    "name_zh_hant": "水晶燈火靈",
+    "name_ja": "シャンデラ",
+    "name_en": "Chandelure",
+    "form": null
+  },
+  {
+    "number": "0610",
+    "name_zh_hans": "牙牙",
+    "name_zh_hant": "牙牙",
+    "name_ja": "キバゴ",
+    "name_en": "Axew",
+    "form": null
+  },
+  {
+    "number": "0611",
+    "name_zh_hans": "斧牙龙",
+    "name_zh_hant": "斧牙龍",
+    "name_ja": "オノンド",
+    "name_en": "Fraxure",
+    "form": null
+  },
+  {
+    "number": "0612",
+    "name_zh_hans": "双斧战龙",
+    "name_zh_hant": "雙斧戰龍",
+    "name_ja": "オノノクス",
+    "name_en": "Haxorus",
+    "form": null
+  },
+  {
+    "number": "0613",
+    "name_zh_hans": "喷嚏熊",
+    "name_zh_hant": "噴嚏熊",
+    "name_ja": "クマシュン",
+    "name_en": "Cubchoo",
+    "form": null
+  },
+  {
+    "number": "0614",
+    "name_zh_hans": "冻原熊",
+    "name_zh_hant": "凍原熊",
+    "name_ja": "ツンベアー",
+    "name_en": "Beartic",
+    "form": null
+  },
+  {
+    "number": "0615",
+    "name_zh_hans": "几何雪花",
+    "name_zh_hant": "幾何雪花",
+    "name_ja": "フリージオ",
+    "name_en": "Cryogonal",
+    "form": null
+  },
+  {
+    "number": "0616",
+    "name_zh_hans": "小嘴蜗",
+    "name_zh_hant": "小嘴蝸",
+    "name_ja": "チョボマキ",
+    "name_en": "Shelmet",
+    "form": null
+  },
+  {
+    "number": "0617",
+    "name_zh_hans": "敏捷虫",
+    "name_zh_hant": "敏捷蟲",
+    "name_ja": "アギルダー",
+    "name_en": "Accelgor",
+    "form": null
+  },
+  {
+    "number": "0618",
+    "name_zh_hans": "泥巴鱼",
+    "name_zh_hant": "泥巴魚",
+    "name_ja": "マッギョ",
+    "name_en": "Stunfisk",
+    "form": null
+  },
+  {
+    "number": "0618",
+    "name_zh_hans": "泥巴鱼",
+    "name_zh_hant": "泥巴魚",
+    "name_ja": "マッギョ",
+    "name_en": "Stunfisk",
+    "form": "伽勒尔的样子"
+  },
+  {
+    "number": "0619",
+    "name_zh_hans": "功夫鼬",
+    "name_zh_hant": "功夫鼬",
+    "name_ja": "コジョフー",
+    "name_en": "Mienfoo",
+    "form": null
+  },
+  {
+    "number": "0620",
+    "name_zh_hans": "师父鼬",
+    "name_zh_hant": "師父鼬",
+    "name_ja": "コジョンド",
+    "name_en": "Mienshao",
+    "form": null
+  },
+  {
+    "number": "0621",
+    "name_zh_hans": "赤面龙",
+    "name_zh_hant": "赤面龍",
+    "name_ja": "クリムガン",
+    "name_en": "Druddigon",
+    "form": null
+  },
+  {
+    "number": "0622",
+    "name_zh_hans": "泥偶小人",
+    "name_zh_hant": "泥偶小人",
+    "name_ja": "ゴビット",
+    "name_en": "Golett",
+    "form": null
+  },
+  {
+    "number": "0623",
+    "name_zh_hans": "泥偶巨人",
+    "name_zh_hant": "泥偶巨人",
+    "name_ja": "ゴルーグ",
+    "name_en": "Golurk",
+    "form": null
+  },
+  {
+    "number": "0624",
+    "name_zh_hans": "驹刀小兵",
+    "name_zh_hant": "駒刀小兵",
+    "name_ja": "コマタナ",
+    "name_en": "Pawniard",
+    "form": null
+  },
+  {
+    "number": "0625",
+    "name_zh_hans": "劈斩司令",
+    "name_zh_hant": "劈斬司令",
+    "name_ja": "キリキザン",
+    "name_en": "Bisharp",
+    "form": null
+  },
+  {
+    "number": "0626",
+    "name_zh_hans": "爆炸头水牛",
+    "name_zh_hant": "爆炸頭水牛",
+    "name_ja": "バッフロン",
+    "name_en": "Bouffalant",
+    "form": null
+  },
+  {
+    "number": "0627",
+    "name_zh_hans": "毛头小鹰",
+    "name_zh_hant": "毛頭小鷹",
+    "name_ja": "ワシボン",
+    "name_en": "Rufflet",
+    "form": null
+  },
+  {
+    "number": "0628",
+    "name_zh_hans": "勇士雄鹰",
+    "name_zh_hant": "勇士雄鷹",
+    "name_ja": "ウォーグル",
+    "name_en": "Braviary",
+    "form": null
+  },
+  {
+    "number": "0628",
+    "name_zh_hans": "勇士雄鹰",
+    "name_zh_hant": "勇士雄鷹",
+    "name_ja": "ウォーグル",
+    "name_en": "Braviary",
+    "form": "洗翠的样子"
+  },
+  {
+    "number": "0629",
+    "name_zh_hans": "秃鹰丫头",
+    "name_zh_hant": "禿鷹丫頭",
+    "name_ja": "バルチャイ",
+    "name_en": "Vullaby",
+    "form": null
+  },
+  {
+    "number": "0630",
+    "name_zh_hans": "秃鹰娜",
+    "name_zh_hant": "禿鷹娜",
+    "name_ja": "バルジーナ",
+    "name_en": "Mandibuzz",
+    "form": null
+  },
+  {
+    "number": "0631",
+    "name_zh_hans": "熔蚁兽",
+    "name_zh_hant": "熔蟻獸",
+    "name_ja": "クイタラン",
+    "name_en": "Heatmor",
+    "form": null
+  },
+  {
+    "number": "0632",
+    "name_zh_hans": "铁蚁",
+    "name_zh_hant": "鐵蟻",
+    "name_ja": "アイアント",
+    "name_en": "Durant",
+    "form": null
+  },
+  {
+    "number": "0633",
+    "name_zh_hans": "单首龙",
+    "name_zh_hant": "單首龍",
+    "name_ja": "モノズ",
+    "name_en": "Deino",
+    "form": null
+  },
+  {
+    "number": "0634",
+    "name_zh_hans": "双首暴龙",
+    "name_zh_hant": "雙首暴龍",
+    "name_ja": "ジヘッド",
+    "name_en": "Zweilous",
+    "form": null
+  },
+  {
+    "number": "0635",
+    "name_zh_hans": "三首恶龙",
+    "name_zh_hant": "三首惡龍",
+    "name_ja": "サザンドラ",
+    "name_en": "Hydreigon",
+    "form": null
+  },
+  {
+    "number": "0636",
+    "name_zh_hans": "燃烧虫",
+    "name_zh_hant": "燃燒蟲",
+    "name_ja": "メラルバ",
+    "name_en": "Larvesta",
+    "form": null
+  },
+  {
+    "number": "0637",
+    "name_zh_hans": "火神蛾",
+    "name_zh_hant": "火神蛾",
+    "name_ja": "ウルガモス",
+    "name_en": "Volcarona",
+    "form": null
+  },
+  {
+    "number": "0638",
+    "name_zh_hans": "勾帕路翁",
+    "name_zh_hant": "勾帕路翁",
+    "name_ja": "コバルオン",
+    "name_en": "Cobalion",
+    "form": null
+  },
+  {
+    "number": "0639",
+    "name_zh_hans": "代拉基翁",
+    "name_zh_hant": "代拉基翁",
+    "name_ja": "テラキオン",
+    "name_en": "Terrakion",
+    "form": null
+  },
+  {
+    "number": "0640",
+    "name_zh_hans": "毕力吉翁",
+    "name_zh_hant": "畢力吉翁",
+    "name_ja": "ビリジオン",
+    "name_en": "Virizion",
+    "form": null
+  },
+  {
+    "number": "0641",
+    "name_zh_hans": "龙卷云",
+    "name_zh_hant": "龍捲雲",
+    "name_ja": "トルネロス",
+    "name_en": "Tornadus",
+    "form": null
+  },
+  {
+    "number": "0642",
+    "name_zh_hans": "雷电云",
+    "name_zh_hant": "雷電雲",
+    "name_ja": "ボルトロス",
+    "name_en": "Thundurus",
+    "form": null
+  },
+  {
+    "number": "0643",
+    "name_zh_hans": "莱希拉姆",
+    "name_zh_hant": "萊希拉姆",
+    "name_ja": "レシラム",
+    "name_en": "Reshiram",
+    "form": null
+  },
+  {
+    "number": "0644",
+    "name_zh_hans": "捷克罗姆",
+    "name_zh_hant": "捷克羅姆",
+    "name_ja": "ゼクロム",
+    "name_en": "Zekrom",
+    "form": null
+  },
+  {
+    "number": "0645",
+    "name_zh_hans": "土地云",
+    "name_zh_hant": "土地雲",
+    "name_ja": "ランドロス",
+    "name_en": "Landorus",
+    "form": null
+  },
+  {
+    "number": "0646",
+    "name_zh_hans": "酋雷姆",
+    "name_zh_hant": "酋雷姆",
+    "name_ja": "キュレム",
+    "name_en": "Kyurem",
+    "form": null
+  },
+  {
+    "number": "0647",
+    "name_zh_hans": "凯路迪欧",
+    "name_zh_hant": "凱路迪歐",
+    "name_ja": "ケルディオ",
+    "name_en": "Keldeo",
+    "form": null
+  },
+  {
+    "number": "0648",
+    "name_zh_hans": "美洛耶塔",
+    "name_zh_hant": "美洛耶塔",
+    "name_ja": "メロエッタ",
+    "name_en": "Meloetta",
+    "form": null
+  },
+  {
+    "number": "0649",
+    "name_zh_hans": "盖诺赛克特",
+    "name_zh_hant": "蓋諾賽克特",
+    "name_ja": "ゲノセクト",
+    "name_en": "Genesect",
+    "form": null
+  },
+  {
+    "number": "0650",
+    "name_zh_hans": "哈力栗",
+    "name_zh_hant": "哈力栗",
+    "name_ja": "ハリマロン",
+    "name_en": "Chespin",
+    "form": null
+  },
+  {
+    "number": "0651",
+    "name_zh_hans": "胖胖哈力",
+    "name_zh_hant": "胖胖哈力",
+    "name_ja": "ハリボーグ",
+    "name_en": "Quilladin",
+    "form": null
+  },
+  {
+    "number": "0652",
+    "name_zh_hans": "布里卡隆",
+    "name_zh_hant": "布里卡隆",
+    "name_ja": "ブリガロン",
+    "name_en": "Chesnaught",
+    "form": null
+  },
+  {
+    "number": "0653",
+    "name_zh_hans": "火狐狸",
+    "name_zh_hant": "火狐狸",
+    "name_ja": "フォッコ",
+    "name_en": "Fennekin",
+    "form": null
+  },
+  {
+    "number": "0654",
+    "name_zh_hans": "长尾火狐",
+    "name_zh_hant": "長尾火狐",
+    "name_ja": "テールナー",
+    "name_en": "Braixen",
+    "form": null
+  },
+  {
+    "number": "0655",
+    "name_zh_hans": "妖火红狐",
+    "name_zh_hant": "妖火紅狐",
+    "name_ja": "マフォクシー",
+    "name_en": "Delphox",
+    "form": null
+  },
+  {
+    "number": "0656",
+    "name_zh_hans": "呱呱泡蛙",
+    "name_zh_hant": "呱呱泡蛙",
+    "name_ja": "ケロマツ",
+    "name_en": "Froakie",
+    "form": null
+  },
+  {
+    "number": "0657",
+    "name_zh_hans": "呱头蛙",
+    "name_zh_hant": "呱頭蛙",
+    "name_ja": "ゲコガシラ",
+    "name_en": "Frogadier",
+    "form": null
+  },
+  {
+    "number": "0658",
+    "name_zh_hans": "甲贺忍蛙",
+    "name_zh_hant": "甲賀忍蛙",
+    "name_ja": "ゲッコウガ",
+    "name_en": "Greninja",
+    "form": null
+  },
+  {
+    "number": "0659",
+    "name_zh_hans": "掘掘兔",
+    "name_zh_hant": "掘掘兔",
+    "name_ja": "ホルビー",
+    "name_en": "Bunnelby",
+    "form": null
+  },
+  {
+    "number": "0660",
+    "name_zh_hans": "掘地兔",
+    "name_zh_hant": "掘地兔",
+    "name_ja": "ホルード",
+    "name_en": "Diggersby",
+    "form": null
+  },
+  {
+    "number": "0661",
+    "name_zh_hans": "小箭雀",
+    "name_zh_hant": "小箭雀",
+    "name_ja": "ヤヤコマ",
+    "name_en": "Fletchling",
+    "form": null
+  },
+  {
+    "number": "0662",
+    "name_zh_hans": "火箭雀",
+    "name_zh_hant": "火箭雀",
+    "name_ja": "ヒノヤコマ",
+    "name_en": "Fletchinder",
+    "form": null
+  },
+  {
+    "number": "0663",
+    "name_zh_hans": "烈箭鹰",
+    "name_zh_hant": "烈箭鷹",
+    "name_ja": "ファイアロー",
+    "name_en": "Talonflame",
+    "form": null
+  },
+  {
+    "number": "0664",
+    "name_zh_hans": "粉蝶虫",
+    "name_zh_hant": "粉蝶蟲",
+    "name_ja": "コフキムシ",
+    "name_en": "Scatterbug",
+    "form": null
+  },
+  {
+    "number": "0665",
+    "name_zh_hans": "粉蝶蛹",
+    "name_zh_hant": "粉蝶蛹",
+    "name_ja": "コフーライ",
+    "name_en": "Spewpa",
+    "form": null
+  },
+  {
+    "number": "0666",
+    "name_zh_hans": "彩粉蝶",
+    "name_zh_hant": "彩粉蝶",
+    "name_ja": "ビビヨン",
+    "name_en": "Vivillon",
+    "form": null
+  },
+  {
+    "number": "0667",
+    "name_zh_hans": "小狮狮",
+    "name_zh_hant": "小獅獅",
+    "name_ja": "シシコ",
+    "name_en": "Litleo",
+    "form": null
+  },
+  {
+    "number": "0668",
+    "name_zh_hans": "火炎狮",
+    "name_zh_hant": "火炎獅",
+    "name_ja": "カエンジシ",
+    "name_en": "Pyroar",
+    "form": null
+  },
+  {
+    "number": "0669",
+    "name_zh_hans": "花蓓蓓",
+    "name_zh_hant": "花蓓蓓",
+    "name_ja": "フラベベ",
+    "name_en": "Flabébé",
+    "form": null
+  },
+  {
+    "number": "0670",
+    "name_zh_hans": "花叶蒂",
+    "name_zh_hant": "花葉蒂",
+    "name_ja": "フラエッテ",
+    "name_en": "Floette",
+    "form": null
+  },
+  {
+    "number": "0671",
+    "name_zh_hans": "花洁夫人",
+    "name_zh_hant": "花潔夫人",
+    "name_ja": "フラージェス",
+    "name_en": "Florges",
+    "form": null
+  },
+  {
+    "number": "0672",
+    "name_zh_hans": "坐骑小羊",
+    "name_zh_hant": "坐騎小羊",
+    "name_ja": "メェークル",
+    "name_en": "Skiddo",
+    "form": null
+  },
+  {
+    "number": "0673",
+    "name_zh_hans": "坐骑山羊",
+    "name_zh_hant": "坐騎山羊",
+    "name_ja": "ゴーゴート",
+    "name_en": "Gogoat",
+    "form": null
+  },
+  {
+    "number": "0674",
+    "name_zh_hans": "顽皮熊猫",
+    "name_zh_hant": "頑皮熊貓",
+    "name_ja": "ヤンチャム",
+    "name_en": "Pancham",
+    "form": null
+  },
+  {
+    "number": "0675",
+    "name_zh_hans": "霸道熊猫",
+    "name_zh_hant": "流氓熊貓",
+    "name_ja": "ゴロンダ",
+    "name_en": "Pangoro",
+    "form": null
+  },
+  {
+    "number": "0676",
+    "name_zh_hans": "多丽米亚",
+    "name_zh_hant": "多麗米亞",
+    "name_ja": "トリミアン",
+    "name_en": "Furfrou",
+    "form": null
+  },
+  {
+    "number": "0677",
+    "name_zh_hans": "妙喵",
+    "name_zh_hant": "妙喵",
+    "name_ja": "ニャスパー",
+    "name_en": "Espurr",
+    "form": null
+  },
+  {
+    "number": "0678",
+    "name_zh_hans": "超能妙喵",
+    "name_zh_hant": "超能妙喵",
+    "name_ja": "ニャオニクス",
+    "name_en": "Meowstic",
+    "form": null
+  },
+  {
+    "number": "0679",
+    "name_zh_hans": "独剑鞘",
+    "name_zh_hant": "獨劍鞘",
+    "name_ja": "ヒトツキ",
+    "name_en": "Honedge",
+    "form": null
+  },
+  {
+    "number": "0680",
+    "name_zh_hans": "双剑鞘",
+    "name_zh_hant": "雙劍鞘",
+    "name_ja": "ニダンギル",
+    "name_en": "Doublade",
+    "form": null
+  },
+  {
+    "number": "0681",
+    "name_zh_hans": "坚盾剑怪",
+    "name_zh_hant": "堅盾劍怪",
+    "name_ja": "ギルガルド",
+    "name_en": "Aegislash",
+    "form": null
+  },
+  {
+    "number": "0682",
+    "name_zh_hans": "粉香香",
+    "name_zh_hant": "粉香香",
+    "name_ja": "シュシュプ",
+    "name_en": "Spritzee",
+    "form": null
+  },
+  {
+    "number": "0683",
+    "name_zh_hans": "芳香精",
+    "name_zh_hant": "芳香精",
+    "name_ja": "フレフワン",
+    "name_en": "Aromatisse",
+    "form": null
+  },
+  {
+    "number": "0684",
+    "name_zh_hans": "绵绵泡芙",
+    "name_zh_hant": "綿綿泡芙",
+    "name_ja": "ペロッパフ",
+    "name_en": "Swirlix",
+    "form": null
+  },
+  {
+    "number": "0685",
+    "name_zh_hans": "胖甜妮",
+    "name_zh_hant": "胖甜妮",
+    "name_ja": "ペロリーム",
+    "name_en": "Slurpuff",
+    "form": null
+  },
+  {
+    "number": "0686",
+    "name_zh_hans": "好啦鱿",
+    "name_zh_hant": "好啦魷",
+    "name_ja": "マーイーカ",
+    "name_en": "Inkay",
+    "form": null
+  },
+  {
+    "number": "0687",
+    "name_zh_hans": "乌贼王",
+    "name_zh_hant": "烏賊王",
+    "name_ja": "カラマネロ",
+    "name_en": "Malamar",
+    "form": null
+  },
+  {
+    "number": "0688",
+    "name_zh_hans": "龟脚脚",
+    "name_zh_hant": "龜腳腳",
+    "name_ja": "カメテテ",
+    "name_en": "Binacle",
+    "form": null
+  },
+  {
+    "number": "0689",
+    "name_zh_hans": "龟足巨铠",
+    "name_zh_hant": "龜足巨鎧",
+    "name_ja": "ガメノデス",
+    "name_en": "Barbaracle",
+    "form": null
+  },
+  {
+    "number": "0690",
+    "name_zh_hans": "垃垃藻",
+    "name_zh_hant": "垃垃藻",
+    "name_ja": "クズモー",
+    "name_en": "Skrelp",
+    "form": null
+  },
+  {
+    "number": "0691",
+    "name_zh_hans": "毒藻龙",
+    "name_zh_hant": "毒藻龍",
+    "name_ja": "ドラミドロ",
+    "name_en": "Dragalge",
+    "form": null
+  },
+  {
+    "number": "0692",
+    "name_zh_hans": "铁臂枪虾",
+    "name_zh_hant": "鐵臂槍蝦",
+    "name_ja": "ウデッポウ",
+    "name_en": "Clauncher",
+    "form": null
+  },
+  {
+    "number": "0693",
+    "name_zh_hans": "钢炮臂虾",
+    "name_zh_hant": "鋼炮臂蝦",
+    "name_ja": "ブロスター",
+    "name_en": "Clawitzer",
+    "form": null
+  },
+  {
+    "number": "0694",
+    "name_zh_hans": "伞电蜥",
+    "name_zh_hant": "傘電蜥",
+    "name_ja": "エリキテル",
+    "name_en": "Helioptile",
+    "form": null
+  },
+  {
+    "number": "0695",
+    "name_zh_hans": "光电伞蜥",
+    "name_zh_hant": "光電傘蜥",
+    "name_ja": "エレザード",
+    "name_en": "Heliolisk",
+    "form": null
+  },
+  {
+    "number": "0696",
+    "name_zh_hans": "宝宝暴龙",
+    "name_zh_hant": "寶寶暴龍",
+    "name_ja": "チゴラス",
+    "name_en": "Tyrunt",
+    "form": null
+  },
+  {
+    "number": "0697",
+    "name_zh_hans": "怪颚龙",
+    "name_zh_hant": "怪顎龍",
+    "name_ja": "ガチゴラス",
+    "name_en": "Tyrantrum",
+    "form": null
+  },
+  {
+    "number": "0698",
+    "name_zh_hans": "冰雪龙",
+    "name_zh_hant": "冰雪龍",
+    "name_ja": "アマルス",
+    "name_en": "Amaura",
+    "form": null
+  },
+  {
+    "number": "0699",
+    "name_zh_hans": "冰雪巨龙",
+    "name_zh_hant": "冰雪巨龍",
+    "name_ja": "アマルルガ",
+    "name_en": "Aurorus",
+    "form": null
+  },
+  {
+    "number": "0700",
+    "name_zh_hans": "仙子伊布",
+    "name_zh_hant": "仙子伊布",
+    "name_ja": "ニンフィア",
+    "name_en": "Sylveon",
+    "form": null
+  },
+  {
+    "number": "0701",
+    "name_zh_hans": "摔角鹰人",
+    "name_zh_hant": "摔角鷹人",
+    "name_ja": "ルチャブル",
+    "name_en": "Hawlucha",
+    "form": null
+  },
+  {
+    "number": "0702",
+    "name_zh_hans": "咚咚鼠",
+    "name_zh_hant": "咚咚鼠",
+    "name_ja": "デデンネ",
+    "name_en": "Dedenne",
+    "form": null
+  },
+  {
+    "number": "0703",
+    "name_zh_hans": "小碎钻",
+    "name_zh_hant": "小碎鑽",
+    "name_ja": "メレシー",
+    "name_en": "Carbink",
+    "form": null
+  },
+  {
+    "number": "0704",
+    "name_zh_hans": "黏黏宝",
+    "name_zh_hant": "黏黏寶",
+    "name_ja": "ヌメラ",
+    "name_en": "Goomy",
+    "form": null
+  },
+  {
+    "number": "0705",
+    "name_zh_hans": "黏美儿",
+    "name_zh_hant": "黏美兒",
+    "name_ja": "ヌメイル",
+    "name_en": "Sliggoo",
+    "form": null
+  },
+  {
+    "number": "0705",
+    "name_zh_hans": "黏美儿",
+    "name_zh_hant": "黏美兒",
+    "name_ja": "ヌメイル",
+    "name_en": "Sliggoo",
+    "form": "洗翠的样子"
+  },
+  {
+    "number": "0706",
+    "name_zh_hans": "黏美龙",
+    "name_zh_hant": "黏美龍",
+    "name_ja": "ヌメルゴン",
+    "name_en": "Goodra",
+    "form": null
+  },
+  {
+    "number": "0706",
+    "name_zh_hans": "黏美龙",
+    "name_zh_hant": "黏美龍",
+    "name_ja": "ヌメルゴン",
+    "name_en": "Goodra",
+    "form": "洗翠的样子"
+  },
+  {
+    "number": "0707",
+    "name_zh_hans": "钥圈儿",
+    "name_zh_hant": "鑰圈兒",
+    "name_ja": "クレッフィ",
+    "name_en": "Klefki",
+    "form": null
+  },
+  {
+    "number": "0708",
+    "name_zh_hans": "小木灵",
+    "name_zh_hant": "小木靈",
+    "name_ja": "ボクレー",
+    "name_en": "Phantump",
+    "form": null
+  },
+  {
+    "number": "0709",
+    "name_zh_hans": "朽木妖",
+    "name_zh_hant": "朽木妖",
+    "name_ja": "オーロット",
+    "name_en": "Trevenant",
+    "form": null
+  },
+  {
+    "number": "0710",
+    "name_zh_hans": "南瓜精",
+    "name_zh_hant": "南瓜精",
+    "name_ja": "バケッチャ",
+    "name_en": "Pumpkaboo",
+    "form": null
+  },
+  {
+    "number": "0711",
+    "name_zh_hans": "南瓜怪人",
+    "name_zh_hant": "南瓜怪人",
+    "name_ja": "パンプジン",
+    "name_en": "Gourgeist",
+    "form": null
+  },
+  {
+    "number": "0712",
+    "name_zh_hans": "冰宝",
+    "name_zh_hant": "冰寶",
+    "name_ja": "カチコール",
+    "name_en": "Bergmite",
+    "form": null
+  },
+  {
+    "number": "0713",
+    "name_zh_hans": "冰岩怪",
+    "name_zh_hant": "冰岩怪",
+    "name_ja": "クレベース",
+    "name_en": "Avalugg",
+    "form": null
+  },
+  {
+    "number": "0713",
+    "name_zh_hans": "冰岩怪",
+    "name_zh_hant": "冰岩怪",
+    "name_ja": "クレベース",
+    "name_en": "Avalugg",
+    "form": "洗翠的样子"
+  },
+  {
+    "number": "0714",
+    "name_zh_hans": "嗡蝠",
+    "name_zh_hant": "嗡蝠",
+    "name_ja": "オンバット",
+    "name_en": "Noibat",
+    "form": null
+  },
+  {
+    "number": "0715",
+    "name_zh_hans": "音波龙",
+    "name_zh_hant": "音波龍",
+    "name_ja": "オンバーン",
+    "name_en": "Noivern",
+    "form": null
+  },
+  {
+    "number": "0716",
+    "name_zh_hans": "哲尔尼亚斯",
+    "name_zh_hant": "哲爾尼亞斯",
+    "name_ja": "ゼルネアス",
+    "name_en": "Xerneas",
+    "form": null
+  },
+  {
+    "number": "0717",
+    "name_zh_hans": "伊裴尔塔尔",
+    "name_zh_hant": "伊裴爾塔爾",
+    "name_ja": "イベルタル",
+    "name_en": "Yveltal",
+    "form": null
+  },
+  {
+    "number": "0718",
+    "name_zh_hans": "基格尔德",
+    "name_zh_hant": "基格爾德",
+    "name_ja": "ジガルデ",
+    "name_en": "Zygarde",
+    "form": null
+  },
+  {
+    "number": "0719",
+    "name_zh_hans": "蒂安希",
+    "name_zh_hant": "蒂安希",
+    "name_ja": "ディアンシー",
+    "name_en": "Diancie",
+    "form": null
+  },
+  {
+    "number": "0720",
+    "name_zh_hans": "胡帕",
+    "name_zh_hant": "胡帕",
+    "name_ja": "フーパ",
+    "name_en": "Hoopa",
+    "form": null
+  },
+  {
+    "number": "0721",
+    "name_zh_hans": "波尔凯尼恩",
+    "name_zh_hant": "波爾凱尼恩",
+    "name_ja": "ボルケニオン",
+    "name_en": "Volcanion",
+    "form": null
+  },
+  {
+    "number": "0722",
+    "name_zh_hans": "木木枭",
+    "name_zh_hant": "木木梟",
+    "name_ja": "モクロー",
+    "name_en": "Rowlet",
+    "form": null
+  },
+  {
+    "number": "0723",
+    "name_zh_hans": "投羽枭",
+    "name_zh_hant": "投羽梟",
+    "name_ja": "フクスロー",
+    "name_en": "Dartrix",
+    "form": null
+  },
+  {
+    "number": "0724",
+    "name_zh_hans": "狙射树枭",
+    "name_zh_hant": "狙射樹梟",
+    "name_ja": "ジュナイパー",
+    "name_en": "Decidueye",
+    "form": null
+  },
+  {
+    "number": "0724",
+    "name_zh_hans": "狙射树枭",
+    "name_zh_hant": "狙射樹梟",
+    "name_ja": "ジュナイパー",
+    "name_en": "Decidueye",
+    "form": "洗翠的样子"
+  },
+  {
+    "number": "0725",
+    "name_zh_hans": "火斑喵",
+    "name_zh_hant": "火斑喵",
+    "name_ja": "ニャビー",
+    "name_en": "Litten",
+    "form": null
+  },
+  {
+    "number": "0726",
+    "name_zh_hans": "炎热喵",
+    "name_zh_hant": "炎熱喵",
+    "name_ja": "ニャヒート",
+    "name_en": "Torracat",
+    "form": null
+  },
+  {
+    "number": "0727",
+    "name_zh_hans": "炽焰咆哮虎",
+    "name_zh_hant": "熾焰咆哮虎",
+    "name_ja": "ガオガエン",
+    "name_en": "Incineroar",
+    "form": null
+  },
+  {
+    "number": "0728",
+    "name_zh_hans": "球球海狮",
+    "name_zh_hant": "球球海獅",
+    "name_ja": "アシマリ",
+    "name_en": "Popplio",
+    "form": null
+  },
+  {
+    "number": "0729",
+    "name_zh_hans": "花漾海狮",
+    "name_zh_hant": "花漾海獅",
+    "name_ja": "オシャマリ",
+    "name_en": "Brionne",
+    "form": null
+  },
+  {
+    "number": "0730",
+    "name_zh_hans": "西狮海壬",
+    "name_zh_hant": "西獅海壬",
+    "name_ja": "アシレーヌ",
+    "name_en": "Primarina",
+    "form": null
+  },
+  {
+    "number": "0731",
+    "name_zh_hans": "小笃儿",
+    "name_zh_hant": "小篤兒",
+    "name_ja": "ツツケラ",
+    "name_en": "Pikipek",
+    "form": null
+  },
+  {
+    "number": "0732",
+    "name_zh_hans": "喇叭啄鸟",
+    "name_zh_hant": "喇叭啄鳥",
+    "name_ja": "ケララッパ",
+    "name_en": "Trumbeak",
+    "form": null
+  },
+  {
+    "number": "0733",
+    "name_zh_hans": "铳嘴大鸟",
+    "name_zh_hant": "銃嘴大鳥",
+    "name_ja": "ドデカバシ",
+    "name_en": "Toucannon",
+    "form": null
+  },
+  {
+    "number": "0734",
+    "name_zh_hans": "猫鼬少",
+    "name_zh_hant": "貓鼬少",
+    "name_ja": "ヤングース",
+    "name_en": "Yungoos",
+    "form": null
+  },
+  {
+    "number": "0735",
+    "name_zh_hans": "猫鼬探长",
+    "name_zh_hant": "貓鼬探長",
+    "name_ja": "デカグース",
+    "name_en": "Gumshoos",
+    "form": null
+  },
+  {
+    "number": "0736",
+    "name_zh_hans": "强颚鸡母虫",
+    "name_zh_hant": "強顎雞母蟲",
+    "name_ja": "アゴジムシ",
+    "name_en": "Grubbin",
+    "form": null
+  },
+  {
+    "number": "0737",
+    "name_zh_hans": "虫电宝",
+    "name_zh_hant": "蟲電寶",
+    "name_ja": "デンヂムシ",
+    "name_en": "Charjabug",
+    "form": null
+  },
+  {
+    "number": "0738",
+    "name_zh_hans": "锹农炮虫",
+    "name_zh_hant": "鍬農炮蟲",
+    "name_ja": "クワガノン",
+    "name_en": "Vikavolt",
+    "form": null
+  },
+  {
+    "number": "0739",
+    "name_zh_hans": "好胜蟹",
+    "name_zh_hant": "好勝蟹",
+    "name_ja": "マケンカニ",
+    "name_en": "Crabrawler",
+    "form": null
+  },
+  {
+    "number": "0740",
+    "name_zh_hans": "好胜毛蟹",
+    "name_zh_hant": "好勝毛蟹",
+    "name_ja": "ケケンカニ",
+    "name_en": "Crabominable",
+    "form": null
+  },
+  {
+    "number": "0741",
+    "name_zh_hans": "花舞鸟",
+    "name_zh_hant": "花舞鳥",
+    "name_ja": "オドリドリ",
+    "name_en": "Oricorio",
+    "form": null
+  },
+  {
+    "number": "0742",
+    "name_zh_hans": "萌虻",
+    "name_zh_hant": "萌虻",
+    "name_ja": "アブリー",
+    "name_en": "Cutiefly",
+    "form": null
+  },
+  {
+    "number": "0743",
+    "name_zh_hans": "蝶结萌虻",
+    "name_zh_hant": "蝶結萌虻",
+    "name_ja": "アブリボン",
+    "name_en": "Ribombee",
+    "form": null
+  },
+  {
+    "number": "0744",
+    "name_zh_hans": "岩狗狗",
+    "name_zh_hant": "岩狗狗",
+    "name_ja": "イワンコ",
+    "name_en": "Rockruff",
+    "form": null
+  },
+  {
+    "number": "0745",
+    "name_zh_hans": "鬃岩狼人",
+    "name_zh_hant": "鬃岩狼人",
+    "name_ja": "ルガルガン",
+    "name_en": "Lycanroc",
+    "form": null
+  },
+  {
+    "number": "0746",
+    "name_zh_hans": "弱丁鱼",
+    "name_zh_hant": "弱丁魚",
+    "name_ja": "ヨワシ",
+    "name_en": "Wishiwashi",
+    "form": null
+  },
+  {
+    "number": "0747",
+    "name_zh_hans": "好坏星",
+    "name_zh_hant": "好壞星",
+    "name_ja": "ヒドイデ",
+    "name_en": "Mareanie",
+    "form": null
+  },
+  {
+    "number": "0748",
+    "name_zh_hans": "超坏星",
+    "name_zh_hant": "超壞星",
+    "name_ja": "ドヒドイデ",
+    "name_en": "Toxapex",
+    "form": null
+  },
+  {
+    "number": "0749",
+    "name_zh_hans": "泥驴仔",
+    "name_zh_hant": "泥驢仔",
+    "name_ja": "ドロバンコ",
+    "name_en": "Mudbray",
+    "form": null
+  },
+  {
+    "number": "0750",
+    "name_zh_hans": "重泥挽马",
+    "name_zh_hant": "重泥挽馬",
+    "name_ja": "バンバドロ",
+    "name_en": "Mudsdale",
+    "form": null
+  },
+  {
+    "number": "0751",
+    "name_zh_hans": "滴蛛",
+    "name_zh_hant": "滴蛛",
+    "name_ja": "シズクモ",
+    "name_en": "Dewpider",
+    "form": null
+  },
+  {
+    "number": "0752",
+    "name_zh_hans": "滴蛛霸",
+    "name_zh_hant": "滴蛛霸",
+    "name_ja": "オニシズクモ",
+    "name_en": "Araquanid",
+    "form": null
+  },
+  {
+    "number": "0753",
+    "name_zh_hans": "伪螳草",
+    "name_zh_hant": "偽螳草",
+    "name_ja": "カリキリ",
+    "name_en": "Fomantis",
+    "form": null
+  },
+  {
+    "number": "0754",
+    "name_zh_hans": "兰螳花",
+    "name_zh_hant": "蘭螳花",
+    "name_ja": "ラランテス",
+    "name_en": "Lurantis",
+    "form": null
+  },
+  {
+    "number": "0755",
+    "name_zh_hans": "睡睡菇",
+    "name_zh_hant": "睡睡菇",
+    "name_ja": "ネマシュ",
+    "name_en": "Morelull",
+    "form": null
+  },
+  {
+    "number": "0756",
+    "name_zh_hans": "灯罩夜菇",
+    "name_zh_hant": "燈罩夜菇",
+    "name_ja": "マシェード",
+    "name_en": "Shiinotic",
+    "form": null
+  },
+  {
+    "number": "0757",
+    "name_zh_hans": "夜盗火蜥",
+    "name_zh_hant": "夜盜火蜥",
+    "name_ja": "ヤトウモリ",
+    "name_en": "Salandit",
+    "form": null
+  },
+  {
+    "number": "0758",
+    "name_zh_hans": "焰后蜥",
+    "name_zh_hant": "焰后蜥",
+    "name_ja": "エンニュート",
+    "name_en": "Salazzle",
+    "form": null
+  },
+  {
+    "number": "0759",
+    "name_zh_hans": "童偶熊",
+    "name_zh_hant": "童偶熊",
+    "name_ja": "ヌイコグマ",
+    "name_en": "Stufful",
+    "form": null
+  },
+  {
+    "number": "0760",
+    "name_zh_hans": "穿着熊",
+    "name_zh_hant": "穿著熊",
+    "name_ja": "キテルグマ",
+    "name_en": "Bewear",
+    "form": null
+  },
+  {
+    "number": "0761",
+    "name_zh_hans": "甜竹竹",
+    "name_zh_hant": "甜竹竹",
+    "name_ja": "アマカジ",
+    "name_en": "Bounsweet",
+    "form": null
+  },
+  {
+    "number": "0762",
+    "name_zh_hans": "甜舞妮",
+    "name_zh_hant": "甜舞妮",
+    "name_ja": "アママイコ",
+    "name_en": "Steenee",
+    "form": null
+  },
+  {
+    "number": "0763",
+    "name_zh_hans": "甜冷美后",
+    "name_zh_hant": "甜冷美后",
+    "name_ja": "アマージョ",
+    "name_en": "Tsareena",
+    "form": null
+  },
+  {
+    "number": "0764",
+    "name_zh_hans": "花疗环环",
+    "name_zh_hant": "花療環環",
+    "name_ja": "キュワワー",
+    "name_en": "Comfey",
+    "form": null
+  },
+  {
+    "number": "0765",
+    "name_zh_hans": "智挥猩",
+    "name_zh_hant": "智揮猩",
+    "name_ja": "ヤレユータン",
+    "name_en": "Oranguru",
+    "form": null
+  },
+  {
+    "number": "0766",
+    "name_zh_hans": "投掷猴",
+    "name_zh_hant": "投擲猴",
+    "name_ja": "ナゲツケサル",
+    "name_en": "Passimian",
+    "form": null
+  },
+  {
+    "number": "0767",
+    "name_zh_hans": "胆小虫",
+    "name_zh_hant": "膽小蟲",
+    "name_ja": "コソクムシ",
+    "name_en": "Wimpod",
+    "form": null
+  },
+  {
+    "number": "0768",
+    "name_zh_hans": "具甲武者",
+    "name_zh_hant": "具甲武者",
+    "name_ja": "グソクムシャ",
+    "name_en": "Golisopod",
+    "form": null
+  },
+  {
+    "number": "0769",
+    "name_zh_hans": "沙丘娃",
+    "name_zh_hant": "沙丘娃",
+    "name_ja": "スナバァ",
+    "name_en": "Sandygast",
+    "form": null
+  },
+  {
+    "number": "0770",
+    "name_zh_hans": "噬沙堡爷",
+    "name_zh_hant": "噬沙堡爺",
+    "name_ja": "シロデスナ",
+    "name_en": "Palossand",
+    "form": null
+  },
+  {
+    "number": "0771",
+    "name_zh_hans": "拳海参",
+    "name_zh_hant": "拳海參",
+    "name_ja": "ナマコブシ",
+    "name_en": "Pyukumuku",
+    "form": null
+  },
+  {
+    "number": "0772",
+    "name_zh_hans": "属性：空",
+    "name_zh_hant": "屬性：空",
+    "name_ja": "タイプ：ヌル",
+    "name_en": "Type: Null",
+    "form": null
+  },
+  {
+    "number": "0773",
+    "name_zh_hans": "银伴战兽",
+    "name_zh_hant": "銀伴戰獸",
+    "name_ja": "シルヴァディ",
+    "name_en": "Silvally",
+    "form": null
+  },
+  {
+    "number": "0774",
+    "name_zh_hans": "小陨星",
+    "name_zh_hant": "小隕星",
+    "name_ja": "メテノ",
+    "name_en": "Minior",
+    "form": null
+  },
+  {
+    "number": "0775",
+    "name_zh_hans": "树枕尾熊",
+    "name_zh_hant": "樹枕尾熊",
+    "name_ja": "ネッコアラ",
+    "name_en": "Komala",
+    "form": null
+  },
+  {
+    "number": "0776",
+    "name_zh_hans": "爆焰龟兽",
+    "name_zh_hant": "爆焰龜獸",
+    "name_ja": "バクガメス",
+    "name_en": "Turtonator",
+    "form": null
+  },
+  {
+    "number": "0777",
+    "name_zh_hans": "托戈德玛尔",
+    "name_zh_hant": "托戈德瑪爾",
+    "name_ja": "トゲデマル",
+    "name_en": "Togedemaru",
+    "form": null
+  },
+  {
+    "number": "0778",
+    "name_zh_hans": "谜拟丘",
+    "name_zh_hant": "謎擬Ｑ",
+    "name_ja": "ミミッキュ",
+    "name_en": "Mimikyu",
+    "form": null
+  },
+  {
+    "number": "0779",
+    "name_zh_hans": "磨牙彩皮鱼",
+    "name_zh_hant": "磨牙彩皮魚",
+    "name_ja": "ハギギシリ",
+    "name_en": "Bruxish",
+    "form": null
+  },
+  {
+    "number": "0780",
+    "name_zh_hans": "老翁龙",
+    "name_zh_hant": "老翁龍",
+    "name_ja": "ジジーロン",
+    "name_en": "Drampa",
+    "form": null
+  },
+  {
+    "number": "0781",
+    "name_zh_hans": "破破舵轮",
+    "name_zh_hant": "破破舵輪",
+    "name_ja": "ダダリン",
+    "name_en": "Dhelmise",
+    "form": null
+  },
+  {
+    "number": "0782",
+    "name_zh_hans": "心鳞宝",
+    "name_zh_hant": "心鱗寶",
+    "name_ja": "ジャラコ",
+    "name_en": "Jangmo-o",
+    "form": null
+  },
+  {
+    "number": "0783",
+    "name_zh_hans": "鳞甲龙",
+    "name_zh_hant": "鱗甲龍",
+    "name_ja": "ジャランゴ",
+    "name_en": "Hakamo-o",
+    "form": null
+  },
+  {
+    "number": "0784",
+    "name_zh_hans": "杖尾鳞甲龙",
+    "name_zh_hant": "杖尾鱗甲龍",
+    "name_ja": "ジャラランガ",
+    "name_en": "Kommo-o",
+    "form": null
+  },
+  {
+    "number": "0785",
+    "name_zh_hans": "卡璞・鸣鸣",
+    "name_zh_hant": "卡璞・鳴鳴",
+    "name_ja": "カプ・コケコ",
+    "name_en": "Tapu Koko",
+    "form": null
+  },
+  {
+    "number": "0786",
+    "name_zh_hans": "卡璞・蝶蝶",
+    "name_zh_hant": "卡璞・蝶蝶",
+    "name_ja": "カプ・テテフ",
+    "name_en": "Tapu Lele",
+    "form": null
+  },
+  {
+    "number": "0787",
+    "name_zh_hans": "卡璞・哞哞",
+    "name_zh_hant": "卡璞・哞哞",
+    "name_ja": "カプ・ブルル",
+    "name_en": "Tapu Bulu",
+    "form": null
+  },
+  {
+    "number": "0788",
+    "name_zh_hans": "卡璞・鳍鳍",
+    "name_zh_hant": "卡璞・鰭鰭",
+    "name_ja": "カプ・レヒレ",
+    "name_en": "Tapu Fini",
+    "form": null
+  },
+  {
+    "number": "0789",
+    "name_zh_hans": "科斯莫古",
+    "name_zh_hant": "科斯莫古",
+    "name_ja": "コスモッグ",
+    "name_en": "Cosmog",
+    "form": null
+  },
+  {
+    "number": "0790",
+    "name_zh_hans": "科斯莫姆",
+    "name_zh_hant": "科斯莫姆",
+    "name_ja": "コスモウム",
+    "name_en": "Cosmoem",
+    "form": null
+  },
+  {
+    "number": "0791",
+    "name_zh_hans": "索尔迦雷欧",
+    "name_zh_hant": "索爾迦雷歐",
+    "name_ja": "ソルガレオ",
+    "name_en": "Solgaleo",
+    "form": null
+  },
+  {
+    "number": "0792",
+    "name_zh_hans": "露奈雅拉",
+    "name_zh_hant": "露奈雅拉",
+    "name_ja": "ルナアーラ",
+    "name_en": "Lunala",
+    "form": null
+  },
+  {
+    "number": "0793",
+    "name_zh_hans": "虚吾伊德",
+    "name_zh_hant": "虛吾伊德",
+    "name_ja": "ウツロイド",
+    "name_en": "Nihilego",
+    "form": null
+  },
+  {
+    "number": "0794",
+    "name_zh_hans": "爆肌蚊",
+    "name_zh_hant": "爆肌蚊",
+    "name_ja": "マッシブーン",
+    "name_en": "Buzzwole",
+    "form": null
+  },
+  {
+    "number": "0795",
+    "name_zh_hans": "费洛美螂",
+    "name_zh_hant": "費洛美螂",
+    "name_ja": "フェローチェ",
+    "name_en": "Pheromosa",
+    "form": null
+  },
+  {
+    "number": "0796",
+    "name_zh_hans": "电束木",
+    "name_zh_hant": "電束木",
+    "name_ja": "デンジュモク",
+    "name_en": "Xurkitree",
+    "form": null
+  },
+  {
+    "number": "0797",
+    "name_zh_hans": "铁火辉夜",
+    "name_zh_hant": "鐵火輝夜",
+    "name_ja": "テッカグヤ",
+    "name_en": "Celesteela",
+    "form": null
+  },
+  {
+    "number": "0798",
+    "name_zh_hans": "纸御剑",
+    "name_zh_hant": "紙御劍",
+    "name_ja": "カミツルギ",
+    "name_en": "Kartana",
+    "form": null
+  },
+  {
+    "number": "0799",
+    "name_zh_hans": "恶食大王",
+    "name_zh_hant": "惡食大王",
+    "name_ja": "アクジキング",
+    "name_en": "Guzzlord",
+    "form": null
+  },
+  {
+    "number": "0800",
+    "name_zh_hans": "奈克洛兹玛",
+    "name_zh_hant": "奈克洛茲瑪",
+    "name_ja": "ネクロズマ",
+    "name_en": "Necrozma",
+    "form": null
+  },
+  {
+    "number": "0801",
+    "name_zh_hans": "玛机雅娜",
+    "name_zh_hant": "瑪機雅娜",
+    "name_ja": "マギアナ",
+    "name_en": "Magearna",
+    "form": null
+  },
+  {
+    "number": "0802",
+    "name_zh_hans": "玛夏多",
+    "name_zh_hant": "瑪夏多",
+    "name_ja": "マーシャドー",
+    "name_en": "Marshadow",
+    "form": null
+  },
+  {
+    "number": "0803",
+    "name_zh_hans": "毒贝比",
+    "name_zh_hant": "毒貝比",
+    "name_ja": "ベベノム",
+    "name_en": "Poipole",
+    "form": null
+  },
+  {
+    "number": "0804",
+    "name_zh_hans": "四颚针龙",
+    "name_zh_hant": "四顎針龍",
+    "name_ja": "アーゴヨン",
+    "name_en": "Naganadel",
+    "form": null
+  },
+  {
+    "number": "0805",
+    "name_zh_hans": "垒磊石",
+    "name_zh_hant": "壘磊石",
+    "name_ja": "ツンデツンデ",
+    "name_en": "Stakataka",
+    "form": null
+  },
+  {
+    "number": "0806",
+    "name_zh_hans": "砰头小丑",
+    "name_zh_hant": "砰頭小丑",
+    "name_ja": "ズガドーン",
+    "name_en": "Blacephalon",
+    "form": null
+  },
+  {
+    "number": "0807",
+    "name_zh_hans": "捷拉奥拉",
+    "name_zh_hant": "捷拉奧拉",
+    "name_ja": "ゼラオラ",
+    "name_en": "Zeraora",
+    "form": null
+  },
+  {
+    "number": "0808",
+    "name_zh_hans": "美录坦",
+    "name_zh_hant": "美錄坦",
+    "name_ja": "メルタン",
+    "name_en": "Meltan",
+    "form": null
+  },
+  {
+    "number": "0809",
+    "name_zh_hans": "美录梅塔",
+    "name_zh_hant": "美錄梅塔",
+    "name_ja": "メルメタル",
+    "name_en": "Melmetal",
+    "form": null
+  },
+  {
+    "number": "0810",
+    "name_zh_hans": "敲音猴",
+    "name_zh_hant": "敲音猴",
+    "name_ja": "サルノリ",
+    "name_en": "Grookey",
+    "form": null
+  },
+  {
+    "number": "0811",
+    "name_zh_hans": "啪咚猴",
+    "name_zh_hant": "啪咚猴",
+    "name_ja": "バチンキー",
+    "name_en": "Thwackey",
+    "form": null
+  },
+  {
+    "number": "0812",
+    "name_zh_hans": "轰擂金刚猩",
+    "name_zh_hant": "轟擂金剛猩",
+    "name_ja": "ゴリランダー",
+    "name_en": "Rillaboom",
+    "form": null
+  },
+  {
+    "number": "0813",
+    "name_zh_hans": "炎兔儿",
+    "name_zh_hant": "炎兔兒",
+    "name_ja": "ヒバニー",
+    "name_en": "Scorbunny",
+    "form": null
+  },
+  {
+    "number": "0814",
+    "name_zh_hans": "腾蹴小将",
+    "name_zh_hant": "騰蹴小將",
+    "name_ja": "ラビフット",
+    "name_en": "Raboot",
+    "form": null
+  },
+  {
+    "number": "0815",
+    "name_zh_hans": "闪焰王牌",
+    "name_zh_hant": "閃焰王牌",
+    "name_ja": "エースバーン",
+    "name_en": "Cinderace",
+    "form": null
+  },
+  {
+    "number": "0816",
+    "name_zh_hans": "泪眼蜥",
+    "name_zh_hant": "淚眼蜥",
+    "name_ja": "メッソン",
+    "name_en": "Sobble",
+    "form": null
+  },
+  {
+    "number": "0817",
+    "name_zh_hans": "变涩蜥",
+    "name_zh_hant": "變澀蜥",
+    "name_ja": "ジメレオン",
+    "name_en": "Drizzile",
+    "form": null
+  },
+  {
+    "number": "0818",
+    "name_zh_hans": "千面避役",
+    "name_zh_hant": "千面避役",
+    "name_ja": "インテレオン",
+    "name_en": "Inteleon",
+    "form": null
+  },
+  {
+    "number": "0819",
+    "name_zh_hans": "贪心栗鼠",
+    "name_zh_hant": "貪心栗鼠",
+    "name_ja": "ホシガリス",
+    "name_en": "Skwovet",
+    "form": null
+  },
+  {
+    "number": "0820",
+    "name_zh_hans": "藏饱栗鼠",
+    "name_zh_hant": "藏飽栗鼠",
+    "name_ja": "ヨクバリス",
+    "name_en": "Greedent",
+    "form": null
+  },
+  {
+    "number": "0821",
+    "name_zh_hans": "稚山雀",
+    "name_zh_hant": "稚山雀",
+    "name_ja": "ココガラ",
+    "name_en": "Rookidee",
+    "form": null
+  },
+  {
+    "number": "0822",
+    "name_zh_hans": "蓝鸦",
+    "name_zh_hant": "藍鴉",
+    "name_ja": "アオガラス",
+    "name_en": "Corvisquire",
+    "form": null
+  },
+  {
+    "number": "0823",
+    "name_zh_hans": "钢铠鸦",
+    "name_zh_hant": "鋼鎧鴉",
+    "name_ja": "アーマーガア",
+    "name_en": "Corviknight",
+    "form": null
+  },
+  {
+    "number": "0824",
+    "name_zh_hans": "索侦虫",
+    "name_zh_hant": "索偵蟲",
+    "name_ja": "サッチムシ",
+    "name_en": "Blipbug",
+    "form": null
+  },
+  {
+    "number": "0825",
+    "name_zh_hans": "天罩虫",
+    "name_zh_hant": "天罩蟲",
+    "name_ja": "レドームシ",
+    "name_en": "Dottler",
+    "form": null
+  },
+  {
+    "number": "0826",
+    "name_zh_hans": "以欧路普",
+    "name_zh_hant": "以歐路普",
+    "name_ja": "イオルブ",
+    "name_en": "Orbeetle",
+    "form": null
+  },
+  {
+    "number": "0827",
+    "name_zh_hans": "狡小狐",
+    "name_zh_hant": "偷兒狐",
+    "name_ja": "クスネ",
+    "name_en": "Nickit",
+    "form": null
+  },
+  {
+    "number": "0828",
+    "name_zh_hans": "猾大狐",
+    "name_zh_hant": "狐大盜",
+    "name_ja": "フォクスライ",
+    "name_en": "Thievul",
+    "form": null
+  },
+  {
+    "number": "0829",
+    "name_zh_hans": "幼棉棉",
+    "name_zh_hant": "幼棉棉",
+    "name_ja": "ヒメンカ",
+    "name_en": "Gossifleur",
+    "form": null
+  },
+  {
+    "number": "0830",
+    "name_zh_hans": "白蓬蓬",
+    "name_zh_hant": "白蓬蓬",
+    "name_ja": "ワタシラガ",
+    "name_en": "Eldegoss",
+    "form": null
+  },
+  {
+    "number": "0831",
+    "name_zh_hans": "毛辫羊",
+    "name_zh_hant": "毛辮羊",
+    "name_ja": "ウールー",
+    "name_en": "Wooloo",
+    "form": null
+  },
+  {
+    "number": "0832",
+    "name_zh_hans": "毛毛角羊",
+    "name_zh_hant": "毛毛角羊",
+    "name_ja": "バイウールー",
+    "name_en": "Dubwool",
+    "form": null
+  },
+  {
+    "number": "0833",
+    "name_zh_hans": "咬咬龟",
+    "name_zh_hant": "咬咬龜",
+    "name_ja": "カムカメ",
+    "name_en": "Chewtle",
+    "form": null
+  },
+  {
+    "number": "0834",
+    "name_zh_hans": "暴噬龟",
+    "name_zh_hant": "暴噬龜",
+    "name_ja": "カジリガメ",
+    "name_en": "Drednaw",
+    "form": null
+  },
+  {
+    "number": "0835",
+    "name_zh_hans": "来电汪",
+    "name_zh_hant": "來電汪",
+    "name_ja": "ワンパチ",
+    "name_en": "Yamper",
+    "form": null
+  },
+  {
+    "number": "0836",
+    "name_zh_hans": "逐电犬",
+    "name_zh_hant": "逐電犬",
+    "name_ja": "パルスワン",
+    "name_en": "Boltund",
+    "form": null
+  },
+  {
+    "number": "0837",
+    "name_zh_hans": "小炭仔",
+    "name_zh_hant": "小炭仔",
+    "name_ja": "タンドン",
+    "name_en": "Rolycoly",
+    "form": null
+  },
+  {
+    "number": "0838",
+    "name_zh_hans": "大炭车",
+    "name_zh_hant": "大炭車",
+    "name_ja": "トロッゴン",
+    "name_en": "Carkol",
+    "form": null
+  },
+  {
+    "number": "0839",
+    "name_zh_hans": "巨炭山",
+    "name_zh_hant": "巨炭山",
+    "name_ja": "セキタンザン",
+    "name_en": "Coalossal",
+    "form": null
+  },
+  {
+    "number": "0840",
+    "name_zh_hans": "啃果虫",
+    "name_zh_hant": "啃果蟲",
+    "name_ja": "カジッチュ",
+    "name_en": "Applin",
+    "form": null
+  },
+  {
+    "number": "0841",
+    "name_zh_hans": "苹裹龙",
+    "name_zh_hant": "蘋裹龍",
+    "name_ja": "アップリュー",
+    "name_en": "Flapple",
+    "form": null
+  },
+  {
+    "number": "0842",
+    "name_zh_hans": "丰蜜龙",
+    "name_zh_hant": "豐蜜龍",
+    "name_ja": "タルップル",
+    "name_en": "Appletun",
+    "form": null
+  },
+  {
+    "number": "0843",
+    "name_zh_hans": "沙包蛇",
+    "name_zh_hant": "沙包蛇",
+    "name_ja": "スナヘビ",
+    "name_en": "Silicobra",
+    "form": null
+  },
+  {
+    "number": "0844",
+    "name_zh_hans": "沙螺蟒",
+    "name_zh_hant": "沙螺蟒",
+    "name_ja": "サダイジャ",
+    "name_en": "Sandaconda",
+    "form": null
+  },
+  {
+    "number": "0845",
+    "name_zh_hans": "古月鸟",
+    "name_zh_hant": "古月鳥",
+    "name_ja": "ウッウ",
+    "name_en": "Cramorant",
+    "form": null
+  },
+  {
+    "number": "0846",
+    "name_zh_hans": "刺梭鱼",
+    "name_zh_hant": "刺梭魚",
+    "name_ja": "サシカマス",
+    "name_en": "Arrokuda",
+    "form": null
+  },
+  {
+    "number": "0847",
+    "name_zh_hans": "戽斗尖梭",
+    "name_zh_hant": "戽斗尖梭",
+    "name_ja": "カマスジョー",
+    "name_en": "Barraskewda",
+    "form": null
+  },
+  {
+    "number": "0848",
+    "name_zh_hans": "电音婴",
+    "name_zh_hant": "毒電嬰",
+    "name_ja": "エレズン",
+    "name_en": "Toxel",
+    "form": null
+  },
+  {
+    "number": "0849",
+    "name_zh_hans": "颤弦蝾螈",
+    "name_zh_hant": "顫弦蠑螈",
+    "name_ja": "ストリンダー",
+    "name_en": "Toxtricity",
+    "form": null
+  },
+  {
+    "number": "0850",
+    "name_zh_hans": "烧火蚣",
+    "name_zh_hant": "燒火蚣",
+    "name_ja": "ヤクデ",
+    "name_en": "Sizzlipede",
+    "form": null
+  },
+  {
+    "number": "0851",
+    "name_zh_hans": "焚焰蚣",
+    "name_zh_hant": "焚焰蚣",
+    "name_ja": "マルヤクデ",
+    "name_en": "Centiskorch",
+    "form": null
+  },
+  {
+    "number": "0852",
+    "name_zh_hans": "拳拳蛸",
+    "name_zh_hant": "拳拳蛸",
+    "name_ja": "タタッコ",
+    "name_en": "Clobbopus",
+    "form": null
+  },
+  {
+    "number": "0853",
+    "name_zh_hans": "八爪武师",
+    "name_zh_hant": "八爪武師",
+    "name_ja": "オトスパス",
+    "name_en": "Grapploct",
+    "form": null
+  },
+  {
+    "number": "0854",
+    "name_zh_hans": "来悲茶",
+    "name_zh_hant": "來悲茶",
+    "name_ja": "ヤバチャ",
+    "name_en": "Sinistea",
+    "form": null
+  },
+  {
+    "number": "0855",
+    "name_zh_hans": "怖思壶",
+    "name_zh_hant": "怖思壺",
+    "name_ja": "ポットデス",
+    "name_en": "Polteageist",
+    "form": null
+  },
+  {
+    "number": "0856",
+    "name_zh_hans": "迷布莉姆",
+    "name_zh_hant": "迷布莉姆",
+    "name_ja": "ミブリム",
+    "name_en": "Hatenna",
+    "form": null
+  },
+  {
+    "number": "0857",
+    "name_zh_hans": "提布莉姆",
+    "name_zh_hant": "提布莉姆",
+    "name_ja": "テブリム",
+    "name_en": "Hattrem",
+    "form": null
+  },
+  {
+    "number": "0858",
+    "name_zh_hans": "布莉姆温",
+    "name_zh_hant": "布莉姆溫",
+    "name_ja": "ブリムオン",
+    "name_en": "Hatterene",
+    "form": null
+  },
+  {
+    "number": "0859",
+    "name_zh_hans": "捣蛋小妖",
+    "name_zh_hant": "搗蛋小妖",
+    "name_ja": "ベロバー",
+    "name_en": "Impidimp",
+    "form": null
+  },
+  {
+    "number": "0860",
+    "name_zh_hans": "诈唬魔",
+    "name_zh_hant": "詐唬魔",
+    "name_ja": "ギモー",
+    "name_en": "Morgrem",
+    "form": null
+  },
+  {
+    "number": "0861",
+    "name_zh_hans": "长毛巨魔",
+    "name_zh_hant": "長毛巨魔",
+    "name_ja": "オーロンゲ",
+    "name_en": "Grimmsnarl",
+    "form": null
+  },
+  {
+    "number": "0862",
+    "name_zh_hans": "堵拦熊",
+    "name_zh_hant": "堵攔熊",
+    "name_ja": "タチフサグマ",
+    "name_en": "Obstagoon",
+    "form": null
+  },
+  {
+    "number": "0863",
+    "name_zh_hans": "喵头目",
+    "name_zh_hant": "喵頭目",
+    "name_ja": "ニャイキング",
+    "name_en": "Perrserker",
+    "form": null
+  },
+  {
+    "number": "0864",
+    "name_zh_hans": "魔灵珊瑚",
+    "name_zh_hant": "魔靈珊瑚",
+    "name_ja": "サニゴーン",
+    "name_en": "Cursola",
+    "form": null
+  },
+  {
+    "number": "0865",
+    "name_zh_hans": "葱游兵",
+    "name_zh_hant": "蔥遊兵",
+    "name_ja": "ネギガナイト",
+    "name_en": "Sirfetch'd",
+    "form": null
+  },
+  {
+    "number": "0866",
+    "name_zh_hans": "踏冰人偶",
+    "name_zh_hant": "踏冰人偶",
+    "name_ja": "バリコオル",
+    "name_en": "Mr. Rime",
+    "form": null
+  },
+  {
+    "number": "0867",
+    "name_zh_hans": "迭失板",
+    "name_zh_hant": "死神板",
+    "name_ja": "デスバーン",
+    "name_en": "Runerigus",
+    "form": null
+  },
+  {
+    "number": "0868",
+    "name_zh_hans": "小仙奶",
+    "name_zh_hant": "小仙奶",
+    "name_ja": "マホミル",
+    "name_en": "Milcery",
+    "form": null
+  },
+  {
+    "number": "0869",
+    "name_zh_hans": "霜奶仙",
+    "name_zh_hant": "霜奶仙",
+    "name_ja": "マホイップ",
+    "name_en": "Alcremie",
+    "form": null
+  },
+  {
+    "number": "0870",
+    "name_zh_hans": "列阵兵",
+    "name_zh_hant": "列陣兵",
+    "name_ja": "タイレーツ",
+    "name_en": "Falinks",
+    "form": null
+  },
+  {
+    "number": "0871",
+    "name_zh_hans": "啪嚓海胆",
+    "name_zh_hant": "啪嚓海膽",
+    "name_ja": "バチンウニ",
+    "name_en": "Pincurchin",
+    "form": null
+  },
+  {
+    "number": "0872",
+    "name_zh_hans": "雪吞虫",
+    "name_zh_hant": "雪吞蟲",
+    "name_ja": "ユキハミ",
+    "name_en": "Snom",
+    "form": null
+  },
+  {
+    "number": "0873",
+    "name_zh_hans": "雪绒蛾",
+    "name_zh_hant": "雪絨蛾",
+    "name_ja": "モスノウ",
+    "name_en": "Frosmoth",
+    "form": null
+  },
+  {
+    "number": "0874",
+    "name_zh_hans": "巨石丁",
+    "name_zh_hant": "巨石丁",
+    "name_ja": "イシヘンジン",
+    "name_en": "Stonjourner",
+    "form": null
+  },
+  {
+    "number": "0875",
+    "name_zh_hans": "冰砌鹅",
+    "name_zh_hant": "冰砌鵝",
+    "name_ja": "コオリッポ",
+    "name_en": "Eiscue",
+    "form": null
+  },
+  {
+    "number": "0876",
+    "name_zh_hans": "爱管侍",
+    "name_zh_hant": "愛管侍",
+    "name_ja": "イエッサン",
+    "name_en": "Indeedee",
+    "form": null
+  },
+  {
+    "number": "0877",
+    "name_zh_hans": "莫鲁贝可",
+    "name_zh_hant": "莫魯貝可",
+    "name_ja": "モルペコ",
+    "name_en": "Morpeko",
+    "form": null
+  },
+  {
+    "number": "0878",
+    "name_zh_hans": "铜象",
+    "name_zh_hant": "銅象",
+    "name_ja": "ゾウドウ",
+    "name_en": "Cufant",
+    "form": null
+  },
+  {
+    "number": "0879",
+    "name_zh_hans": "大王铜象",
+    "name_zh_hant": "大王銅象",
+    "name_ja": "ダイオウドウ",
+    "name_en": "Copperajah",
+    "form": null
+  },
+  {
+    "number": "0880",
+    "name_zh_hans": "雷鸟龙",
+    "name_zh_hant": "雷鳥龍",
+    "name_ja": "パッチラゴン",
+    "name_en": "Dracozolt",
+    "form": null
+  },
+  {
+    "number": "0881",
+    "name_zh_hans": "雷鸟海兽",
+    "name_zh_hant": "雷鳥海獸",
+    "name_ja": "パッチルドン",
+    "name_en": "Arctozolt",
+    "form": null
+  },
+  {
+    "number": "0882",
+    "name_zh_hans": "鳃鱼龙",
+    "name_zh_hant": "鰓魚龍",
+    "name_ja": "ウオノラゴン",
+    "name_en": "Dracovish",
+    "form": null
+  },
+  {
+    "number": "0883",
+    "name_zh_hans": "鳃鱼海兽",
+    "name_zh_hant": "鰓魚海獸",
+    "name_ja": "ウオチルドン",
+    "name_en": "Arctovish",
+    "form": null
+  },
+  {
+    "number": "0884",
+    "name_zh_hans": "铝钢龙",
+    "name_zh_hant": "鋁鋼龍",
+    "name_ja": "ジュラルドン",
+    "name_en": "Duraludon",
+    "form": null
+  },
+  {
+    "number": "0885",
+    "name_zh_hans": "多龙梅西亚",
+    "name_zh_hant": "多龍梅西亞",
+    "name_ja": "ドラメシヤ",
+    "name_en": "Dreepy",
+    "form": null
+  },
+  {
+    "number": "0886",
+    "name_zh_hans": "多龙奇",
+    "name_zh_hant": "多龍奇",
+    "name_ja": "ドロンチ",
+    "name_en": "Drakloak",
+    "form": null
+  },
+  {
+    "number": "0887",
+    "name_zh_hans": "多龙巴鲁托",
+    "name_zh_hant": "多龍巴魯托",
+    "name_ja": "ドラパルト",
+    "name_en": "Dragapult",
+    "form": null
+  },
+  {
+    "number": "0888",
+    "name_zh_hans": "苍响",
+    "name_zh_hant": "蒼響",
+    "name_ja": "ザシアン",
+    "name_en": "Zacian",
+    "form": null
+  },
+  {
+    "number": "0889",
+    "name_zh_hans": "藏玛然特",
+    "name_zh_hant": "藏瑪然特",
+    "name_ja": "ザマゼンタ",
+    "name_en": "Zamazenta",
+    "form": null
+  },
+  {
+    "number": "0890",
+    "name_zh_hans": "无极汰那",
+    "name_zh_hant": "無極汰那",
+    "name_ja": "ムゲンダイナ",
+    "name_en": "Eternatus",
+    "form": null
+  },
+  {
+    "number": "0891",
+    "name_zh_hans": "熊徒弟",
+    "name_zh_hant": "熊徒弟",
+    "name_ja": "ダクマ",
+    "name_en": "Kubfu",
+    "form": null
+  },
+  {
+    "number": "0892",
+    "name_zh_hans": "武道熊师",
+    "name_zh_hant": "武道熊師",
+    "name_ja": "ウーラオス",
+    "name_en": "Urshifu",
+    "form": null
+  },
+  {
+    "number": "0893",
+    "name_zh_hans": "萨戮德",
+    "name_zh_hant": "薩戮德",
+    "name_ja": "ザルード",
+    "name_en": "Zarude",
+    "form": null
+  },
+  {
+    "number": "0894",
+    "name_zh_hans": "雷吉艾勒奇",
+    "name_zh_hant": "雷吉艾勒奇",
+    "name_ja": "レジエレキ",
+    "name_en": "Regieleki",
+    "form": null
+  },
+  {
+    "number": "0895",
+    "name_zh_hans": "雷吉铎拉戈",
+    "name_zh_hant": "雷吉鐸拉戈",
+    "name_ja": "レジドラゴ",
+    "name_en": "Regidrago",
+    "form": null
+  },
+  {
+    "number": "0896",
+    "name_zh_hans": "雪暴马",
+    "name_zh_hant": "雪暴馬",
+    "name_ja": "ブリザポス",
+    "name_en": "Glastrier",
+    "form": null
+  },
+  {
+    "number": "0897",
+    "name_zh_hans": "灵幽马",
+    "name_zh_hant": "靈幽馬",
+    "name_ja": "レイスポス",
+    "name_en": "Spectrier",
+    "form": null
+  },
+  {
+    "number": "0898",
+    "name_zh_hans": "蕾冠王",
+    "name_zh_hant": "蕾冠王",
+    "name_ja": "バドレックス",
+    "name_en": "Calyrex",
+    "form": null
+  },
+  {
+    "number": "0899",
+    "name_zh_hans": "诡角鹿",
+    "name_zh_hant": "詭角鹿",
+    "name_ja": "アヤシシ",
+    "name_en": "Wyrdeer",
+    "form": null
+  },
+  {
+    "number": "0900",
+    "name_zh_hans": "劈斧螳螂",
+    "name_zh_hant": "劈斧螳螂",
+    "name_ja": "バサギリ",
+    "name_en": "Kleavor",
+    "form": null
+  },
+  {
+    "number": "0901",
+    "name_zh_hans": "月月熊",
+    "name_zh_hant": "月月熊",
+    "name_ja": "ガチグマ",
+    "name_en": "Ursaluna",
+    "form": null
+  },
+  {
+    "number": "0902",
+    "name_zh_hans": "幽尾玄鱼",
+    "name_zh_hant": "幽尾玄魚",
+    "name_ja": "イダイトウ",
+    "name_en": "Basculegion",
+    "form": null
+  },
+  {
+    "number": "0903",
+    "name_zh_hans": "大狃拉",
+    "name_zh_hant": "大狃拉",
+    "name_ja": "オオニューラ",
+    "name_en": "Sneasler",
+    "form": null
+  },
+  {
+    "number": "0904",
+    "name_zh_hans": "万针鱼",
+    "name_zh_hant": "萬針魚",
+    "name_ja": "ハリーマン",
+    "name_en": "Overqwil",
+    "form": null
+  },
+  {
+    "number": "0905",
+    "name_zh_hans": "眷恋云",
+    "name_zh_hant": "眷戀雲",
+    "name_ja": "ラブトロス",
+    "name_en": "Enamorus",
+    "form": null
+  },
+  {
+    "number": "0906",
+    "name_zh_hans": "新叶喵",
+    "name_zh_hant": "新葉喵",
+    "name_ja": "ニャオハ",
+    "name_en": "Sprigatito",
+    "form": null
+  },
+  {
+    "number": "0907",
+    "name_zh_hans": "蒂蕾喵",
+    "name_zh_hant": "蒂蕾喵",
+    "name_ja": "ニャローテ",
+    "name_en": "Floragato",
+    "form": null
+  },
+  {
+    "number": "0908",
+    "name_zh_hans": "魔幻假面喵",
+    "name_zh_hant": "魔幻假面喵",
+    "name_ja": "マスカーニャ",
+    "name_en": "Meowscarada",
+    "form": null
+  },
+  {
+    "number": "0909",
+    "name_zh_hans": "呆火鳄",
+    "name_zh_hant": "呆火鱷",
+    "name_ja": "ホゲータ",
+    "name_en": "Fuecoco",
+    "form": null
+  },
+  {
+    "number": "0910",
+    "name_zh_hans": "炙烫鳄",
+    "name_zh_hant": "炙燙鱷",
+    "name_ja": "アチゲータ",
+    "name_en": "Crocalor",
+    "form": null
+  },
+  {
+    "number": "0911",
+    "name_zh_hans": "骨纹巨声鳄",
+    "name_zh_hant": "骨紋巨聲鱷",
+    "name_ja": "ラウドボーン",
+    "name_en": "Skeledirge",
+    "form": null
+  },
+  {
+    "number": "0912",
+    "name_zh_hans": "润水鸭",
+    "name_zh_hant": "潤水鴨",
+    "name_ja": "クワッス",
+    "name_en": "Quaxly",
+    "form": null
+  },
+  {
+    "number": "0913",
+    "name_zh_hans": "涌跃鸭",
+    "name_zh_hant": "湧躍鴨",
+    "name_ja": "ウェルカモ",
+    "name_en": "Quaxwell",
+    "form": null
+  },
+  {
+    "number": "0914",
+    "name_zh_hans": "狂欢浪舞鸭",
+    "name_zh_hant": "狂歡浪舞鴨",
+    "name_ja": "ウェーニバル",
+    "name_en": "Quaquaval",
+    "form": null
+  },
+  {
+    "number": "0915",
+    "name_zh_hans": "爱吃豚",
+    "name_zh_hant": "愛吃豚",
+    "name_ja": "グルトン",
+    "name_en": "Lechonk",
+    "form": null
+  },
+  {
+    "number": "0916",
+    "name_zh_hans": "飘香豚",
+    "name_zh_hant": "飄香豚",
+    "name_ja": "パフュートン",
+    "name_en": "Oinkologne",
+    "form": null
+  },
+  {
+    "number": "0917",
+    "name_zh_hans": "团珠蛛",
+    "name_zh_hant": "團珠蛛",
+    "name_ja": "タマンチュラ",
+    "name_en": "Tarountula",
+    "form": null
+  },
+  {
+    "number": "0918",
+    "name_zh_hans": "操陷蛛",
+    "name_zh_hant": "操陷蛛",
+    "name_ja": "ワナイダー",
+    "name_en": "Spidops",
+    "form": null
+  },
+  {
+    "number": "0919",
+    "name_zh_hans": "豆蟋蟀",
+    "name_zh_hant": "豆蟋蟀",
+    "name_ja": "マメバッタ",
+    "name_en": "Nymble",
+    "form": null
+  },
+  {
+    "number": "0920",
+    "name_zh_hans": "烈腿蝗",
+    "name_zh_hant": "烈腿蝗",
+    "name_ja": "エクスレッグ",
+    "name_en": "Lokix",
+    "form": null
+  },
+  {
+    "number": "0921",
+    "name_zh_hans": "布拨",
+    "name_zh_hant": "布撥",
+    "name_ja": "パモ",
+    "name_en": "Pawmi",
+    "form": null
+  },
+  {
+    "number": "0922",
+    "name_zh_hans": "布土拨",
+    "name_zh_hant": "布土撥",
+    "name_ja": "パモット",
+    "name_en": "Pawmo",
+    "form": null
+  },
+  {
+    "number": "0923",
+    "name_zh_hans": "巴布土拨",
+    "name_zh_hant": "巴布土撥",
+    "name_ja": "パーモット",
+    "name_en": "Pawmot",
+    "form": null
+  },
+  {
+    "number": "0924",
+    "name_zh_hans": "一对鼠",
+    "name_zh_hant": "一對鼠",
+    "name_ja": "ワッカネズミ",
+    "name_en": "Tandemaus",
+    "form": null
+  },
+  {
+    "number": "0925",
+    "name_zh_hans": "一家鼠",
+    "name_zh_hant": "一家鼠",
+    "name_ja": "イッカネズミ",
+    "name_en": "Maushold",
+    "form": null
+  },
+  {
+    "number": "0926",
+    "name_zh_hans": "狗仔包",
+    "name_zh_hant": "狗仔包",
+    "name_ja": "パピモッチ",
+    "name_en": "Fidough",
+    "form": null
+  },
+  {
+    "number": "0927",
+    "name_zh_hans": "麻花犬",
+    "name_zh_hant": "麻花犬",
+    "name_ja": "バウッツェル",
+    "name_en": "Dachsbun",
+    "form": null
+  },
+  {
+    "number": "0928",
+    "name_zh_hans": "迷你芙",
+    "name_zh_hant": "迷你芙",
+    "name_ja": "ミニーブ",
+    "name_en": "Smoliv",
+    "form": null
+  },
+  {
+    "number": "0929",
+    "name_zh_hans": "奥利纽",
+    "name_zh_hant": "奧利紐",
+    "name_ja": "オリーニョ",
+    "name_en": "Dolliv",
+    "form": null
+  },
+  {
+    "number": "0930",
+    "name_zh_hans": "奥利瓦",
+    "name_zh_hant": "奧利瓦",
+    "name_ja": "オリーヴァ",
+    "name_en": "Arboliva",
+    "form": null
+  },
+  {
+    "number": "0931",
+    "name_zh_hans": "怒鹦哥",
+    "name_zh_hant": "怒鸚哥",
+    "name_ja": "イキリンコ",
+    "name_en": "Squawkabilly",
+    "form": null
+  },
+  {
+    "number": "0932",
+    "name_zh_hans": "盐石宝",
+    "name_zh_hant": "鹽石寶",
+    "name_ja": "コジオ",
+    "name_en": "Nacli",
+    "form": null
+  },
+  {
+    "number": "0933",
+    "name_zh_hans": "盐石垒",
+    "name_zh_hant": "鹽石壘",
+    "name_ja": "ジオヅム",
+    "name_en": "Naclstack",
+    "form": null
+  },
+  {
+    "number": "0934",
+    "name_zh_hans": "盐石巨灵",
+    "name_zh_hant": "鹽石巨靈",
+    "name_ja": "キョジオーン",
+    "name_en": "Garganacl",
+    "form": null
+  },
+  {
+    "number": "0935",
+    "name_zh_hans": "炭小侍",
+    "name_zh_hant": "炭小侍",
+    "name_ja": "カルボウ",
+    "name_en": "Charcadet",
+    "form": null
+  },
+  {
+    "number": "0936",
+    "name_zh_hans": "红莲铠骑",
+    "name_zh_hant": "紅蓮鎧騎",
+    "name_ja": "グレンアルマ",
+    "name_en": "Armarouge",
+    "form": null
+  },
+  {
+    "number": "0937",
+    "name_zh_hans": "苍炎刃鬼",
+    "name_zh_hant": "蒼炎刃鬼",
+    "name_ja": "ソウブレイズ",
+    "name_en": "Ceruledge",
+    "form": null
+  },
+  {
+    "number": "0938",
+    "name_zh_hans": "光蚪仔",
+    "name_zh_hant": "光蚪仔",
+    "name_ja": "ズピカ",
+    "name_en": "Tadbulb",
+    "form": null
+  },
+  {
+    "number": "0939",
+    "name_zh_hans": "电肚蛙",
+    "name_zh_hant": "電肚蛙",
+    "name_ja": "ハラバリー",
+    "name_en": "Bellibolt",
+    "form": null
+  },
+  {
+    "number": "0940",
+    "name_zh_hans": "电海燕",
+    "name_zh_hant": "電海燕",
+    "name_ja": "カイデン",
+    "name_en": "Wattrel",
+    "form": null
+  },
+  {
+    "number": "0941",
+    "name_zh_hans": "大电海燕",
+    "name_zh_hant": "大電海燕",
+    "name_ja": "タイカイデン",
+    "name_en": "Kilowattrel",
+    "form": null
+  },
+  {
+    "number": "0942",
+    "name_zh_hans": "偶叫獒",
+    "name_zh_hant": "偶叫獒",
+    "name_ja": "オラチフ",
+    "name_en": "Maschiff",
+    "form": null
+  },
+  {
+    "number": "0943",
+    "name_zh_hans": "獒教父",
+    "name_zh_hant": "獒教父",
+    "name_ja": "マフィティフ",
+    "name_en": "Mabosstiff",
+    "form": null
+  },
+  {
+    "number": "0944",
+    "name_zh_hans": "滋汁鼹",
+    "name_zh_hant": "滋汁鼴",
+    "name_ja": "シルシュルー",
+    "name_en": "Shroodle",
+    "form": null
+  },
+  {
+    "number": "0945",
+    "name_zh_hans": "涂标客",
+    "name_zh_hant": "塗標客",
+    "name_ja": "タギングル",
+    "name_en": "Grafaiai",
+    "form": null
+  },
+  {
+    "number": "0946",
+    "name_zh_hans": "纳噬草",
+    "name_zh_hant": "納噬草",
+    "name_ja": "アノクサ",
+    "name_en": "Bramblin",
+    "form": null
+  },
+  {
+    "number": "0947",
+    "name_zh_hans": "怖纳噬草",
+    "name_zh_hant": "怖納噬草",
+    "name_ja": "アノホラグサ",
+    "name_en": "Brambleghast",
+    "form": null
+  },
+  {
+    "number": "0948",
+    "name_zh_hans": "原野水母",
+    "name_zh_hant": "原野水母",
+    "name_ja": "ノノクラゲ",
+    "name_en": "Toedscool",
+    "form": null
+  },
+  {
+    "number": "0949",
+    "name_zh_hans": "陆地水母",
+    "name_zh_hant": "陸地水母",
+    "name_ja": "リククラゲ",
+    "name_en": "Toedscruel",
+    "form": null
+  },
+  {
+    "number": "0950",
+    "name_zh_hans": "毛崖蟹",
+    "name_zh_hant": "毛崖蟹",
+    "name_ja": "ガケガニ",
+    "name_en": "Klawf",
+    "form": null
+  },
+  {
+    "number": "0951",
+    "name_zh_hans": "热辣娃",
+    "name_zh_hant": "熱辣娃",
+    "name_ja": "カプサイジ",
+    "name_en": "Capsakid",
+    "form": null
+  },
+  {
+    "number": "0952",
+    "name_zh_hans": "狠辣椒",
+    "name_zh_hant": "狠辣椒",
+    "name_ja": "スコヴィラン",
+    "name_en": "Scovillain",
+    "form": null
+  },
+  {
+    "number": "0953",
+    "name_zh_hans": "虫滚泥",
+    "name_zh_hant": "蟲滾泥",
+    "name_ja": "シガロコ",
+    "name_en": "Rellor",
+    "form": null
+  },
+  {
+    "number": "0954",
+    "name_zh_hans": "虫甲圣",
+    "name_zh_hant": "蟲甲聖",
+    "name_ja": "ベラカス",
+    "name_en": "Rabsca",
+    "form": null
+  },
+  {
+    "number": "0955",
+    "name_zh_hans": "飘飘雏",
+    "name_zh_hant": "飄飄雛",
+    "name_ja": "ヒラヒナ",
+    "name_en": "Flittle",
+    "form": null
+  },
+  {
+    "number": "0956",
+    "name_zh_hans": "超能艳鸵",
+    "name_zh_hant": "超能豔鴕",
+    "name_ja": "クエスパトラ",
+    "name_en": "Espathra",
+    "form": null
+  },
+  {
+    "number": "0957",
+    "name_zh_hans": "小锻匠",
+    "name_zh_hant": "小鍛匠",
+    "name_ja": "カヌチャン",
+    "name_en": "Tinkatink",
+    "form": null
+  },
+  {
+    "number": "0958",
+    "name_zh_hans": "巧锻匠",
+    "name_zh_hant": "巧鍛匠",
+    "name_ja": "ナカヌチャン",
+    "name_en": "Tinkatuff",
+    "form": null
+  },
+  {
+    "number": "0959",
+    "name_zh_hans": "巨锻匠",
+    "name_zh_hant": "巨鍛匠",
+    "name_ja": "デカヌチャン",
+    "name_en": "Tinkaton",
+    "form": null
+  },
+  {
+    "number": "0960",
+    "name_zh_hans": "海地鼠",
+    "name_zh_hant": "海地鼠",
+    "name_ja": "ウミディグダ",
+    "name_en": "Wiglett",
+    "form": null
+  },
+  {
+    "number": "0961",
+    "name_zh_hans": "三海地鼠",
+    "name_zh_hant": "三海地鼠",
+    "name_ja": "ウミトリオ",
+    "name_en": "Wugtrio",
+    "form": null
+  },
+  {
+    "number": "0962",
+    "name_zh_hans": "下石鸟",
+    "name_zh_hant": "下石鳥",
+    "name_ja": "オトシドリ",
+    "name_en": "Bombirdier",
+    "form": null
+  },
+  {
+    "number": "0963",
+    "name_zh_hans": "波普海豚",
+    "name_zh_hant": "波普海豚",
+    "name_ja": "ナミイルカ",
+    "name_en": "Finizen",
+    "form": null
+  },
+  {
+    "number": "0964",
+    "name_zh_hans": "海豚侠",
+    "name_zh_hant": "海豚俠",
+    "name_ja": "イルカマン",
+    "name_en": "Palafin",
+    "form": null
+  },
+  {
+    "number": "0965",
+    "name_zh_hans": "噗隆隆",
+    "name_zh_hant": "噗隆隆",
+    "name_ja": "ブロロン",
+    "name_en": "Varoom",
+    "form": null
+  },
+  {
+    "number": "0966",
+    "name_zh_hans": "普隆隆姆",
+    "name_zh_hant": "普隆隆姆",
+    "name_ja": "ブロロローム",
+    "name_en": "Revavroom",
+    "form": null
+  },
+  {
+    "number": "0967",
+    "name_zh_hans": "摩托蜥",
+    "name_zh_hant": "摩托蜥",
+    "name_ja": "モトトカゲ",
+    "name_en": "Cyclizar",
+    "form": null
+  },
+  {
+    "number": "0968",
+    "name_zh_hans": "拖拖蚓",
+    "name_zh_hant": "拖拖蚓",
+    "name_ja": "ミミズズ",
+    "name_en": "Orthworm",
+    "form": null
+  },
+  {
+    "number": "0969",
+    "name_zh_hans": "晶光芽",
+    "name_zh_hant": "晶光芽",
+    "name_ja": "キラーメ",
+    "name_en": "Glimmet",
+    "form": null
+  },
+  {
+    "number": "0970",
+    "name_zh_hans": "晶光花",
+    "name_zh_hant": "晶光花",
+    "name_ja": "キラフロル",
+    "name_en": "Glimmora",
+    "form": null
+  },
+  {
+    "number": "0971",
+    "name_zh_hans": "墓仔狗",
+    "name_zh_hant": "墓仔狗",
+    "name_ja": "ボチ",
+    "name_en": "Greavard",
+    "form": null
+  },
+  {
+    "number": "0972",
+    "name_zh_hans": "墓扬犬",
+    "name_zh_hant": "墓揚犬",
+    "name_ja": "ハカドッグ",
+    "name_en": "Houndstone",
+    "form": null
+  },
+  {
+    "number": "0973",
+    "name_zh_hans": "缠红鹤",
+    "name_zh_hant": "纏紅鶴",
+    "name_ja": "カラミンゴ",
+    "name_en": "Flamigo",
+    "form": null
+  },
+  {
+    "number": "0974",
+    "name_zh_hans": "走鲸",
+    "name_zh_hant": "走鯨",
+    "name_ja": "アルクジラ",
+    "name_en": "Cetoddle",
+    "form": null
+  },
+  {
+    "number": "0975",
+    "name_zh_hans": "浩大鲸",
+    "name_zh_hant": "浩大鯨",
+    "name_ja": "ハルクジラ",
+    "name_en": "Cetitan",
+    "form": null
+  },
+  {
+    "number": "0976",
+    "name_zh_hans": "轻身鳕",
+    "name_zh_hant": "輕身鱈",
+    "name_ja": "ミガルーサ",
+    "name_en": "Veluza",
+    "form": null
+  },
+  {
+    "number": "0977",
+    "name_zh_hans": "吃吼霸",
+    "name_zh_hant": "吃吼霸",
+    "name_ja": "ヘイラッシャ",
+    "name_en": "Dondozo",
+    "form": null
+  },
+  {
+    "number": "0978",
+    "name_zh_hans": "米立龙",
+    "name_zh_hant": "米立龍",
+    "name_ja": "シャリタツ",
+    "name_en": "Tatsugiri",
+    "form": null
+  },
+  {
+    "number": "0979",
+    "name_zh_hans": "弃世猴",
+    "name_zh_hant": "棄世猴",
+    "name_ja": "コノヨザル",
+    "name_en": "Annihilape",
+    "form": null
+  },
+  {
+    "number": "0980",
+    "name_zh_hans": "土王",
+    "name_zh_hant": "土王",
+    "name_ja": "ドオー",
+    "name_en": "Clodsire",
+    "form": null
+  },
+  {
+    "number": "0981",
+    "name_zh_hans": "奇麒麟",
+    "name_zh_hant": "奇麒麟",
+    "name_ja": "リキキリン",
+    "name_en": "Farigiraf",
+    "form": null
+  },
+  {
+    "number": "0982",
+    "name_zh_hans": "土龙节节",
+    "name_zh_hant": "土龍節節",
+    "name_ja": "ノココッチ",
+    "name_en": "Dudunsparce",
+    "form": null
+  },
+  {
+    "number": "0983",
+    "name_zh_hans": "仆刀将军",
+    "name_zh_hant": "仆斬將軍",
+    "name_ja": "ドドゲザン",
+    "name_en": "Kingambit",
+    "form": null
+  },
+  {
+    "number": "0984",
+    "name_zh_hans": "雄伟牙",
+    "name_zh_hant": "雄偉牙",
+    "name_ja": "イダイナキバ",
+    "name_en": "Great Tusk",
+    "form": null
+  },
+  {
+    "number": "0985",
+    "name_zh_hans": "吼叫尾",
+    "name_zh_hant": "吼叫尾",
+    "name_ja": "サケブシッポ",
+    "name_en": "Scream Tail",
+    "form": null
+  },
+  {
+    "number": "0986",
+    "name_zh_hans": "猛恶菇",
+    "name_zh_hant": "猛惡菇",
+    "name_ja": "アラブルタケ",
+    "name_en": "Brute Bonnet",
+    "form": null
+  },
+  {
+    "number": "0987",
+    "name_zh_hans": "振翼发",
+    "name_zh_hant": "振翼髮",
+    "name_ja": "ハバタクカミ",
+    "name_en": "Flutter Mane",
+    "form": null
+  },
+  {
+    "number": "0988",
+    "name_zh_hans": "爬地翅",
+    "name_zh_hant": "爬地翅",
+    "name_ja": "チヲハウハネ",
+    "name_en": "Slither Wing",
+    "form": null
+  },
+  {
+    "number": "0989",
+    "name_zh_hans": "沙铁皮",
+    "name_zh_hant": "沙鐵皮",
+    "name_ja": "スナノケガワ",
+    "name_en": "Sandy Shocks",
+    "form": null
+  },
+  {
+    "number": "0990",
+    "name_zh_hans": "铁辙迹",
+    "name_zh_hant": "鐵轍跡",
+    "name_ja": "テツノワダチ",
+    "name_en": "Iron Treads",
+    "form": null
+  },
+  {
+    "number": "0991",
+    "name_zh_hans": "铁包袱",
+    "name_zh_hant": "鐵包袱",
+    "name_ja": "テツノツツミ",
+    "name_en": "Iron Bundle",
+    "form": null
+  },
+  {
+    "number": "0992",
+    "name_zh_hans": "铁臂膀",
+    "name_zh_hant": "鐵臂膀",
+    "name_ja": "テツノカイナ",
+    "name_en": "Iron Hands",
+    "form": null
+  },
+  {
+    "number": "0993",
+    "name_zh_hans": "铁脖颈",
+    "name_zh_hant": "鐵脖頸",
+    "name_ja": "テツノコウベ",
+    "name_en": "Iron Jugulis",
+    "form": null
+  },
+  {
+    "number": "0994",
+    "name_zh_hans": "铁毒蛾",
+    "name_zh_hant": "鐵毒蛾",
+    "name_ja": "テツノドクガ",
+    "name_en": "Iron Moth",
+    "form": null
+  },
+  {
+    "number": "0995",
+    "name_zh_hans": "铁荆棘",
+    "name_zh_hant": "鐵荊棘",
+    "name_ja": "テツノイバラ",
+    "name_en": "Iron Thorns",
+    "form": null
+  },
+  {
+    "number": "0996",
+    "name_zh_hans": "凉脊龙",
+    "name_zh_hant": "涼脊龍",
+    "name_ja": "セビエ",
+    "name_en": "Frigibax",
+    "form": null
+  },
+  {
+    "number": "0997",
+    "name_zh_hans": "冻脊龙",
+    "name_zh_hant": "凍脊龍",
+    "name_ja": "セゴール",
+    "name_en": "Arctibax",
+    "form": null
+  },
+  {
+    "number": "0998",
+    "name_zh_hans": "戟脊龙",
+    "name_zh_hant": "戟脊龍",
+    "name_ja": "セグレイブ",
+    "name_en": "Baxcalibur",
+    "form": null
+  },
+  {
+    "number": "0999",
+    "name_zh_hans": "索财灵",
+    "name_zh_hant": "索財靈",
+    "name_ja": "コレクレー",
+    "name_en": "Gimmighoul",
+    "form": null
+  },
+  {
+    "number": "1000",
+    "name_zh_hans": "赛富豪",
+    "name_zh_hant": "賽富豪",
+    "name_ja": "サーフゴー",
+    "name_en": "Gholdengo",
+    "form": null
+  },
+  {
+    "number": "1001",
+    "name_zh_hans": "古简蜗",
+    "name_zh_hant": "古簡蝸",
+    "name_ja": "チオンジェン",
+    "name_en": "Wo-Chien",
+    "form": null
+  },
+  {
+    "number": "1002",
+    "name_zh_hans": "古剑豹",
+    "name_zh_hant": "古劍豹",
+    "name_ja": "パオジアン",
+    "name_en": "Chien-Pao",
+    "form": null
+  },
+  {
+    "number": "1003",
+    "name_zh_hans": "古鼎鹿",
+    "name_zh_hant": "古鼎鹿",
+    "name_ja": "ディンルー",
+    "name_en": "Ting-Lu",
+    "form": null
+  },
+  {
+    "number": "1004",
+    "name_zh_hans": "古玉鱼",
+    "name_zh_hant": "古玉魚",
+    "name_ja": "イーユイ",
+    "name_en": "Chi-Yu",
+    "form": null
+  },
+  {
+    "number": "1005",
+    "name_zh_hans": "轰鸣月",
+    "name_zh_hant": "轟鳴月",
+    "name_ja": "トドロクツキ",
+    "name_en": "Roaring Moon",
+    "form": null
+  },
+  {
+    "number": "1006",
+    "name_zh_hans": "铁武者",
+    "name_zh_hant": "鐵武者",
+    "name_ja": "テツノブジン",
+    "name_en": "Iron Valiant",
+    "form": null
+  },
+  {
+    "number": "1007",
+    "name_zh_hans": "故勒顿",
+    "name_zh_hant": "故勒頓",
+    "name_ja": "コライドン",
+    "name_en": "Koraidon",
+    "form": null
+  },
+  {
+    "number": "1008",
+    "name_zh_hans": "密勒顿",
+    "name_zh_hant": "密勒頓",
+    "name_ja": "ミライドン",
+    "name_en": "Miraidon",
+    "form": null
+  },
+  {
+    "number": "1009",
+    "name_zh_hans": "波荡水",
+    "name_zh_hant": "波盪水",
+    "name_ja": "ウネルミナモ",
+    "name_en": "Walking Wake",
+    "form": null
+  },
+  {
+    "number": "1010",
+    "name_zh_hans": "铁斑叶",
+    "name_zh_hant": "鐵斑葉",
+    "name_ja": "テツノイサハ",
+    "name_en": "Iron Leaves",
+    "form": null
+  },
+  {
+    "number": "1011",
+    "name_zh_hans": "裹蜜虫",
+    "name_zh_hant": "裹蜜蟲",
+    "name_ja": "カミッチュ",
+    "name_en": "Dipplin",
+    "form": null
+  },
+  {
+    "number": "1012",
+    "name_zh_hans": "斯魔茶",
+    "name_zh_hant": "斯魔茶",
+    "name_ja": "チャデス",
+    "name_en": "Poltchageist",
+    "form": null
+  },
+  {
+    "number": "1013",
+    "name_zh_hans": "来悲粗茶",
+    "name_zh_hant": "來悲粗茶",
+    "name_ja": "ヤバソチャ",
+    "name_en": "Sinistcha",
+    "form": null
+  },
+  {
+    "number": "1014",
+    "name_zh_hans": "够赞狗",
+    "name_zh_hant": "夠讚狗",
+    "name_ja": "イイネイヌ",
+    "name_en": "Okidogi",
+    "form": null
+  },
+  {
+    "number": "1015",
+    "name_zh_hans": "愿增猿",
+    "name_zh_hant": "願增猿",
+    "name_ja": "マシマシラ",
+    "name_en": "Munkidori",
+    "form": null
+  },
+  {
+    "number": "1016",
+    "name_zh_hans": "吉雉鸡",
+    "name_zh_hant": "吉雉雞",
+    "name_ja": "キチキギス",
+    "name_en": "Fezandipiti",
+    "form": null
+  },
+  {
+    "number": "1017",
+    "name_zh_hans": "厄诡椪",
+    "name_zh_hant": "厄鬼椪",
+    "name_ja": "オーガポン",
+    "name_en": "Ogerpon",
+    "form": null
+  },
+  {
+    "number": "1018",
+    "name_zh_hans": "铝钢桥龙",
+    "name_zh_hant": "鋁鋼橋龍",
+    "name_ja": "ブリジュラス",
+    "name_en": "Archaludon",
+    "form": null
+  },
+  {
+    "number": "1019",
+    "name_zh_hans": "蜜集大蛇",
+    "name_zh_hant": "蜜集大蛇",
+    "name_ja": "カミツオロチ",
+    "name_en": "Hydrapple",
+    "form": null
+  },
+  {
+    "number": "1020",
+    "name_zh_hans": "破空焰",
+    "name_zh_hant": "破空焰",
+    "name_ja": "ウガツホムラ",
+    "name_en": "Gouging Fire",
+    "form": null
+  },
+  {
+    "number": "1021",
+    "name_zh_hans": "猛雷鼓",
+    "name_zh_hant": "猛雷鼓",
+    "name_ja": "タケルライコ",
+    "name_en": "Raging Bolt",
+    "form": null
+  },
+  {
+    "number": "1022",
+    "name_zh_hans": "铁磐岩",
+    "name_zh_hant": "鐵磐岩",
+    "name_ja": "テツノイワオ",
+    "name_en": "Iron Boulder",
+    "form": null
+  },
+  {
+    "number": "1023",
+    "name_zh_hans": "铁头壳",
+    "name_zh_hant": "鐵頭殼",
+    "name_ja": "テツノカシラ",
+    "name_en": "Iron Crown",
+    "form": null
+  },
+  {
+    "number": "1024",
+    "name_zh_hans": "太乐巴戈斯",
+    "name_zh_hant": "太樂巴戈斯",
+    "name_ja": "テラパゴス",
+    "name_en": "Terapagos",
+    "form": null
+  },
+  {
+    "number": "1025",
+    "name_zh_hans": "桃歹郎",
+    "name_zh_hant": "桃歹郎",
+    "name_ja": "モモワロウ",
+    "name_en": "Pecharunt",
+    "form": null
+  }
+]

@@ -45,6 +45,15 @@ interface CardDetail {
       nameEn: string;
       releaseDate: string | null;
     } | null;
+    pokemonSpecies: {
+      id: string;
+      dexNumber: string;
+      form: string;
+      nameZhHans: string;
+      nameZhHant: string;
+      nameJa: string;
+      nameEn: string;
+    } | null;
   };
   regionalExpansion: {
     id: string;
@@ -71,6 +80,26 @@ interface CardDetail {
         code: string;
         nameEn: string;
       };
+    } | null;
+  }>;
+  sameSpeciesCards: Array<{
+    id: string;
+    webCardId: string;
+    name: string;
+    language: string;
+    variantType: string;
+    imageUrl: string | null;
+    rarity: string | null;
+    primaryCard: {
+      id: string;
+      cardNumber: string | null;
+      primaryExpansion: { code: string; nameEn: string } | null;
+    };
+    regionalExpansion: {
+      code: string;
+      name: string;
+      region: string;
+      primaryExpansion: { code: string; nameEn: string };
     } | null;
   }>;
 }
@@ -563,6 +592,39 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
               </dl>
             </div>
 
+            {/* Pokémon Species — multilingual names */}
+            {card.primaryCard?.pokemonSpecies && (
+              <div className="bg-white rounded-lg p-6 shadow-sm">
+                <div className="flex items-center gap-2 mb-4">
+                  <h2 className="text-xl font-semibold text-gray-900">物種資訊</h2>
+                  <span className="text-sm text-gray-500">#{card.primaryCard.pokemonSpecies.dexNumber}</span>
+                  {card.primaryCard.pokemonSpecies.form && (
+                    <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-xs rounded-full">
+                      {card.primaryCard.pokemonSpecies.form}
+                    </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex items-center gap-3 bg-gray-50 rounded-lg px-4 py-3">
+                    <span className="text-xs font-semibold text-gray-400 w-16 shrink-0">繁體中文</span>
+                    <span className="font-medium text-gray-900">{card.primaryCard.pokemonSpecies.nameZhHant}</span>
+                  </div>
+                  <div className="flex items-center gap-3 bg-gray-50 rounded-lg px-4 py-3">
+                    <span className="text-xs font-semibold text-gray-400 w-16 shrink-0">簡體中文</span>
+                    <span className="font-medium text-gray-900">{card.primaryCard.pokemonSpecies.nameZhHans}</span>
+                  </div>
+                  <div className="flex items-center gap-3 bg-gray-50 rounded-lg px-4 py-3">
+                    <span className="text-xs font-semibold text-gray-400 w-16 shrink-0">日文</span>
+                    <span className="font-medium text-gray-900">{card.primaryCard.pokemonSpecies.nameJa}</span>
+                  </div>
+                  <div className="flex items-center gap-3 bg-gray-50 rounded-lg px-4 py-3">
+                    <span className="text-xs font-semibold text-gray-400 w-16 shrink-0">English</span>
+                    <span className="font-medium text-gray-900">{card.primaryCard.pokemonSpecies.nameEn}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Trainer Card Text/Description */}
             {card?.supertype === 'TRAINER' && card?.text && card?.text.trim().length > 0 && (
               <div className="bg-white rounded-lg p-3 shadow-sm">
@@ -943,6 +1005,59 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Same Species Cards — cross-language versions of this Pokémon */}
+            {card.sameSpeciesCards && card.sameSpeciesCards.length > 0 && (
+              <div className="bg-white rounded-lg p-3 shadow-sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <h2 className="text-xl font-semibold text-gray-900">同物種其他版本</h2>
+                  <span className="text-sm text-gray-500">({card.sameSpeciesCards.length} 張)</span>
+                  {card.primaryCard?.pokemonSpecies && (
+                    <span className="text-sm text-gray-400">
+                      · {card.primaryCard.pokemonSpecies.nameEn} / {card.primaryCard.pokemonSpecies.nameZhHant}
+                    </span>
+                  )}
+                </div>
+                {/* Group by language */}
+                {(['JA_JP', 'ZH_TW', 'EN_US'] as const).map((lang) => {
+                  const langCards = card.sameSpeciesCards.filter((c) => c.language === lang);
+                  if (langCards.length === 0) return null;
+                  const langLabel = LANGUAGE_LABELS[lang] || lang;
+                  return (
+                    <div key={lang} className="mb-4 last:mb-0">
+                      <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                        {langLabel} ({langCards.length})
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {langCards.slice(0, 20).map((sc) => (
+                          <Link
+                            key={sc.webCardId}
+                            href={`/cards/${sc.webCardId}`}
+                            className="flex items-center gap-2 bg-gray-50 hover:bg-blue-50 border border-gray-200 hover:border-blue-300 rounded-lg px-3 py-2 transition-all"
+                          >
+                            {sc.imageUrl && (
+                              <img src={sc.imageUrl} alt={sc.name} className="w-8 h-10 object-contain rounded" />
+                            )}
+                            <div className="min-w-0">
+                              <div className="text-xs font-medium text-gray-900 truncate max-w-[140px]" title={sc.name}>
+                                {sc.name}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {sc.primaryCard?.primaryExpansion?.code || sc.regionalExpansion?.code || '—'}
+                                {sc.primaryCard?.cardNumber && ` #${sc.primaryCard.cardNumber}`}
+                              </div>
+                              {sc.rarity && (
+                                <div className="text-xs text-blue-600">{sc.rarity.replace(/_/g, ' ')}</div>
+                              )}
+                            </div>
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
 

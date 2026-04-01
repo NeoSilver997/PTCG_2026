@@ -80,20 +80,42 @@ model RegionalExpansion {
   @@map("regional_expansions")
 }
 
+model PokemonSpecies {
+  id           String        @id @default(cuid())
+  dexNumber    String        // 4-digit national Pokédex number e.g. "0001"
+  form         String        @default("") // "" = base form; "阿罗拉的样子" = Alolan form, etc.
+  nameZhHans   String        // Simplified Chinese
+  nameZhHant   String        // Traditional Chinese (used by ZH_TW cards)
+  nameJa       String        // Japanese katakana (used by JA_JP cards)
+  nameEn       String        // English (used by EN_US cards)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  primaryCards PrimaryCard[]
+
+  @@unique([dexNumber, form])
+  @@index([nameJa])
+  @@index([nameZhHant])
+  @@index([nameEn])
+  @@map("pokemon_species")
+}
+
 model PrimaryCard {
-  id                 String            @id @default(cuid())
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
+  id                 String           @id @default(cuid())
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
   name               String
   skillsSignature    String
   cardNumber         String?
   primaryExpansionId String?
+  pokemonSpeciesId   String?
   cards              Card[]
   primaryExpansion   PrimaryExpansion? @relation(fields: [primaryExpansionId], references: [id])
+  pokemonSpecies     PokemonSpecies?  @relation(fields: [pokemonSpeciesId], references: [id])
 
   @@unique([name, skillsSignature])
   @@index([name])
   @@index([primaryExpansionId])
+  @@index([pokemonSpeciesId])
   @@map("primary_cards")
 }
 

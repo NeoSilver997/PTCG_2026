@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException, Logger, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger, OnModuleDestroy } from '@nestjs/common';
+import * as fs from 'fs';
 import { PrismaService } from '../common/prisma.service';
 import { CreateScraperJobDto, JobType } from './dto/create-scraper-job.dto';
 import { spawn, ChildProcess } from 'child_process';
@@ -283,5 +284,40 @@ export class ScrapersService implements OnModuleDestroy {
       where: { id },
       data: { status: 'FAILED', completedAt: new Date() },
     });
+  }
+
+  async fileAction(
+    action: 'verify' | 'move',
+    filePath: string,
+    destDir?: string,
+  ): Promise<Record<string, unknown>> {
+    const workspaceRoot = path.resolve(__dirname, '../../../..');
+    const resolved = path.isAbsolute(filePath) ? filePath : path.resolve(workspaceRoot, filePath);
+
+    if (action === 'verify') {
+      if (!fs.existsSync(resolved)) {
+        return { exists: false, filePath: resolved };
+      }
+      const stat = fs.statSync(resolved);
+      let cardCount = 0;
+      try {
+        const data = JSON.parse(fs.readFileSync(resolved, 'utf-8'));
+        cardCount = Array.isArray(data) ? data.length : 0;
+      } catch { /* malformed json */ }
+      return { exists: true, filePath: resolved, fileSize: stat.size, cardCount, lastModified: stat.mtime };
+    }
+
+    if (action === 'move') {
+      if (!destDir) throw new BadRequestException('destDir is required for move action');
+      if (!fs.existsSync(resolved)) throw new NotFoundException(`File not found: ${resolved}`);
+      const resolvedDest = path.isAbsolute(destDir) ? destDir : path.resolve(workspaceRoot, destDir);
+      const fileName = path.basename(resolved);
+      const destPath = path.join(resolvedDest, fileName);
+      fs.mkdirSync(resolvedDest, { recursive: true });
+      fs.renameSync(resolved, destPath);
+      return { moved: true, srcPath: resolved, destPath };
+    }
+
+    throw new BadRequestException(`Unknown action: ${action}`);
   }
 }
