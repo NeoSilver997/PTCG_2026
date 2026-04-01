@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 
 const navLinks = [
   { href: '/cards',       label: 'Cards' },
+  { href: '/pokemon',     label: 'Pokédex' },
   { href: '/tournaments', label: 'Tournaments' },
   { href: '/deck-builder', label: 'Deck Builder' },
   { href: '/deck-studio', label: 'Deck Studio' },
