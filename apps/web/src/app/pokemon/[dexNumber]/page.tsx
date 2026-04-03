@@ -1,9 +1,9 @@
 'use client';
 
-import { use, useMemo } from 'react';
+import { use, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ImageIcon } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 import Link from 'next/link';
 import { type SpeciesSummary } from '../page';
@@ -80,6 +80,25 @@ const TYPE_COLORS: Record<string, string> = {
   PSYCHIC: 'bg-purple-500 text-white',
   WATER: 'bg-blue-500 text-white',
 };
+
+const TYPE_LABEL: Record<string, string> = {
+  GRASS:     '草',
+  FIRE:      '火',
+  WATER:     '水',
+  LIGHTNING: '雷',
+  PSYCHIC:   '超能力',
+  FIGHTING:  '格鬥',
+  DARKNESS:  '惡',
+  METAL:     '鋼',
+  DRAGON:    '龍',
+  COLORLESS: '無色',
+  FAIRY:     '妖精',
+};
+
+const TYPE_ORDER = [
+  'GRASS','FIRE','WATER','LIGHTNING','PSYCHIC',
+  'FIGHTING','DARKNESS','METAL','DRAGON','COLORLESS','FAIRY',
+];
 
 const STAGE_LABEL: Record<string, { label: string; color: string }> = {
   BASIC:    { label: 'たね',    color: 'bg-green-100 text-green-700 border-green-300' },
@@ -287,9 +306,34 @@ export default function PokemonDetailPage({
     });
   }, [zhCardsData, enCardsData, jaCardsData]);
 
+  // Group cards by primary type
+  const cardsByType = useMemo(() => {
+    const groups = new Map<string, CardItem[]>();
+    for (const card of allCards) {
+      const type = card.types?.[0] ?? 'COLORLESS';
+      if (!groups.has(type)) groups.set(type, []);
+      groups.get(type)!.push(card);
+    }
+    // Sort groups by TYPE_ORDER
+    return Array.from(groups.entries()).sort(
+      ([a], [b]) =>
+        (TYPE_ORDER.indexOf(a) === -1 ? 99 : TYPE_ORDER.indexOf(a)) -
+        (TYPE_ORDER.indexOf(b) === -1 ? 99 : TYPE_ORDER.indexOf(b)),
+    );
+  }, [allCards]);
+
   const handleCardClick = (card: CardItem) => {
     router.push(`/cards/${card.webCardId}`);
   };
+
+  // --- Selected display image (header portrait) ---
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  // Resolve: explicit pick > species thumbnail > first card image
+  const headerImage =
+    selectedImage ??
+    species?.latestZhImage ??
+    allCards.find((c) => c.imageUrl)?.imageUrl ??
+    null;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -306,10 +350,32 @@ export default function PokemonDetailPage({
         {/* Header */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mb-4">
           <div className="flex items-start gap-4">
-            <div className="bg-blue-50 rounded-lg px-3 py-2 font-mono text-blue-700 font-bold text-lg flex-shrink-0">
-              #{dexNumber}
+            {/* Portrait image */}
+            <div className="w-24 h-32 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 border border-gray-200 relative group">
+              {headerImage ? (
+                <img src={headerImage} alt={species?.nameZhHant ?? dexNumber} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center gap-1">
+                  <span className="text-3xl opacity-20">⚪</span>
+                  <span className="font-mono text-xs text-gray-400">#{dexNumber}</span>
+                </div>
+              )}
+              {/* Reset to species default */}
+              {selectedImage && (
+                <button
+                  onClick={() => setSelectedImage(null)}
+                  className="absolute bottom-1 right-1 bg-black/50 hover:bg-black/70 text-white rounded p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="重設圖片"
+                >
+                  <ImageIcon className="w-3 h-3" />
+                </button>
+              )}
             </div>
             <div className="min-w-0 flex-1">
+              {/* Dex number badge */}
+              <div className="bg-blue-50 rounded-lg px-3 py-1.5 font-mono text-blue-700 font-bold text-base inline-block mb-2">
+                #{dexNumber}
+              </div>
               {species ? (
                 <>
                   <div className="flex items-center flex-wrap gap-2">
@@ -372,8 +438,17 @@ export default function PokemonDetailPage({
             <p className="text-sm mt-1">資料庫中找不到相關卡牌</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-4">
-            {allCards.map((card) => (
+          <div className="space-y-6">
+            {cardsByType.map(([type, cards]) => (
+              <div key={type}>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className={`px-2.5 py-1 rounded-lg text-sm font-bold ${TYPE_COLORS[type] ?? 'bg-gray-300 text-gray-700'}`}>
+                    {TYPE_LABEL[type] ?? type}
+                  </span>
+                  <span className="text-sm text-gray-400">{cards.length} 張</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-4">
+            {cards.map((card) => (
               <div
                 key={card.webCardId}
                 onClick={() => handleCardClick(card)}
@@ -393,6 +468,20 @@ export default function PokemonDetailPage({
                       <span className="text-3xl opacity-20">⚪</span>
                       <span className="text-[9px] text-gray-400">{card.name}</span>
                     </div>
+                  )}
+                  {/* Select as header image button */}
+                  {card.imageUrl && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setSelectedImage(card.imageUrl); }}
+                      className={`absolute bottom-1.5 left-1.5 rounded px-1.5 py-0.5 text-[9px] font-bold transition-all ${
+                        selectedImage === card.imageUrl
+                          ? 'bg-blue-500 text-white opacity-100'
+                          : 'bg-black/50 text-white opacity-0 group-hover:opacity-100'
+                      }`}
+                      title="設為代表圖片"
+                    >
+                      {selectedImage === card.imageUrl ? '✓' : '設圖'}
+                    </button>
                   )}
                   {/* Rarity badge */}
                   {card.rarity && (
@@ -434,6 +523,9 @@ export default function PokemonDetailPage({
                       ''}
                     {card.primaryCard?.cardNumber ? ` #${card.primaryCard.cardNumber}` : ''}
                   </div>
+                </div>
+              </div>
+            ))}
                 </div>
               </div>
             ))}

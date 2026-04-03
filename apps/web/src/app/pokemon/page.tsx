@@ -184,15 +184,12 @@ function ChainBlock({
   onClickSpecies: (s: SpeciesSummary) => void;
 }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-3 flex items-start gap-2 overflow-x-auto">
-      {chain.members.map((s, i) => (
-        <div key={s.id} className="flex items-center gap-2 flex-shrink-0">
-          {i > 0 && (
-            <span className="text-gray-300 text-lg self-center flex-shrink-0">→</span>
-          )}
-          <SpeciesCard s={s} compact onClick={() => onClickSpecies(s)} />
-        </div>
-      ))}
+    <div className="bg-white rounded-xl border border-gray-200 p-3">
+      <div className="grid grid-cols-3 gap-2">
+        {chain.members.map((s) => (
+          <SpeciesCard key={s.id} s={s} onClick={() => onClickSpecies(s)} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -201,7 +198,7 @@ export default function PokemonPage() {
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [showForms, setShowForms] = useState(false);
-  const [viewMode, setViewMode] = useState<'chain' | 3 | 6 | 9 | 12>('chain');
+  const [viewMode, setViewMode] = useState<'chain' | 3 | 6 | 9 | 12>(6);
 
   const { data: speciesList, isLoading, error } = useQuery<SpeciesSummary[]>({
     queryKey: ['pokemon-species-summary'],
@@ -249,7 +246,7 @@ export default function PokemonPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto px-4 py-6 max-w-7xl">
+      <div className="w-full px-4 py-6">
         {/* Header */}
         <div className="mb-4">
           <h1 className="text-2xl font-bold text-gray-900 mb-1">寶可夢圖鑑</h1>

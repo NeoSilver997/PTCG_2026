@@ -1266,7 +1266,7 @@ export class CardsService {
         orderBy: [{ dexNumber: 'asc' }, { form: 'asc' }],
       }),
 
-      // 2. Best image per species: highest rarity ZH_TW card, falling back to JA_JP
+      // 2. Best image per species: ZH_TW > JA_JP > EN_US, then variantType AR > SAR > SR > UR > CHR
       this.prisma.$queryRaw<Array<{ speciesId: string; imageUrl: string; webCardId: string }>>`
         SELECT DISTINCT ON (pc."pokemonSpeciesId")
           pc."pokemonSpeciesId" as "speciesId",
@@ -1276,21 +1276,32 @@ export class CardsService {
         JOIN primary_cards pc ON pc.id = c."primaryCardId"
         WHERE pc."pokemonSpeciesId" IS NOT NULL
           AND c."imageUrl" IS NOT NULL
-          AND c.language IN ('ZH_TW', 'JA_JP')
+          AND c.language IN ('ZH_TW', 'JA_JP', 'EN_US')
         ORDER BY pc."pokemonSpeciesId",
-          CASE c.language::text WHEN 'ZH_TW' THEN 0 ELSE 1 END,
+          CASE c.language::text
+            WHEN 'ZH_TW' THEN 0
+            WHEN 'JA_JP' THEN 1
+            ELSE 2
+          END,
+          CASE c."variantType"::text
+            WHEN 'AR'  THEN 0
+            WHEN 'SAR' THEN 1
+            WHEN 'SR'  THEN 2
+            WHEN 'UR'  THEN 3
+            WHEN 'CHR' THEN 4
+            ELSE 5
+          END,
           CASE c.rarity::text
-            WHEN 'SPECIAL_ILLUSTRATION_RARE' THEN 0
-            WHEN 'ILLUSTRATION_RARE' THEN 1
-            WHEN 'HYPER_RARE' THEN 2
-            WHEN 'ULTRA_RARE' THEN 3
-            WHEN 'ACE_SPEC_RARE' THEN 4
-            WHEN 'DOUBLE_RARE' THEN 5
-            WHEN 'RARE' THEN 6
-            WHEN 'PROMO' THEN 7
-            WHEN 'UNCOMMON' THEN 8
-            WHEN 'COMMON' THEN 9
-            ELSE 10
+            WHEN 'ILLUSTRATION_RARE'         THEN 0
+            WHEN 'SPECIAL_ILLUSTRATION_RARE' THEN 1
+            WHEN 'HYPER_RARE'                THEN 2
+            WHEN 'ULTRA_RARE'                THEN 3
+            WHEN 'DOUBLE_RARE'               THEN 4
+            WHEN 'RARE'                      THEN 5
+            WHEN 'PROMO'                     THEN 6
+            WHEN 'UNCOMMON'                  THEN 7
+            WHEN 'COMMON'                    THEN 8
+            ELSE 9
           END
       `,
 
@@ -1364,11 +1375,32 @@ export class CardsService {
     for (const s of allSpecies) {
       if (s.form !== '') continue; // only base forms
       if (imageMap.has(s.id)) continue; // already has image
-      // Find any form variant with an image
       const formVariant = allSpecies.find(
         (f) => f.dexNumber === s.dexNumber && f.form !== '' && imageMap.has(f.id),
       );
       if (formVariant) imageMap.set(s.id, imageMap.get(formVariant.id)!);
+    }
+
+    // evolutionStage fallback: base forms whose JA cards have no stage borrow from form variant
+    // (e.g. base Slowpoke has no stage data but Galarian Slowpoke does)
+    for (const s of allSpecies) {
+      if (s.form !== '') continue;
+      if (evolutionStageMap.has(s.id)) continue;
+      const formVariant = allSpecies.find(
+        (f) => f.dexNumber === s.dexNumber && f.form !== '' && evolutionStageMap.has(f.id),
+      );
+      if (formVariant) evolutionStageMap.set(s.id, evolutionStageMap.get(formVariant.id)!);
+    }
+
+    // evolvesFrom fallback: base forms with no link borrow from form variant
+    // (e.g. base Slowbro has no evolvesFrom but Galarian Slowbro does)
+    for (const s of allSpecies) {
+      if (s.form !== '') continue;
+      if (evolvesFromMap.has(s.id)) continue;
+      const formVariant = allSpecies.find(
+        (f) => f.dexNumber === s.dexNumber && f.form !== '' && evolvesFromMap.has(f.id),
+      );
+      if (formVariant) evolvesFromMap.set(s.id, evolvesFromMap.get(formVariant.id)!);
     }
 
     // Build initial result
@@ -1384,7 +1416,11 @@ export class CardsService {
     // Stage-inference fallback for evolvesFrom (when card-level data is missing)
     // Infers: STAGE_1 evolves from the nearest BASIC species with a lower dex number (within 25 steps)
     const STAGE_ORDER: Record<string, number> = { BABY: -1, BASIC: 0, STAGE_1: 1, STAGE_2: 2, STAGE_3: 3 };
-    const resultByDex = new Map(result.map((s) => [s.dexNumber, s]));
+    // Use first-entry-wins so base form (form='', sorted first) always wins over form variants
+    const resultByDex = new Map<string, (typeof result)[0]>();
+    for (const s of result) {
+      if (!resultByDex.has(s.dexNumber)) resultByDex.set(s.dexNumber, s);
+    }
     for (const s of result) {
       if (s.evolvesFrom !== null) continue;
       const sStage = STAGE_ORDER[s.evolutionStage ?? ''] ?? -2;
@@ -1399,8 +1435,59 @@ export class CardsService {
           s.evolvesFrom = candidate.nameJa;
           break;
         }
-        // Stop if we hit equal or higher stage (different chain)
-        if (cStage >= sStage) break;
+        // Skip same-stage (branching evolutions like Eeveelutions); break only on strictly higher
+        if (cStage > sStage) break;
+      }
+    }
+
+    // Static override map — applied AFTER heuristic to fix cross-gen evolutions
+    // and overwrite false positives. Key: evolved Pokémon dex; Value: pre-evo dex or null (standalone).
+    const STATIC_EVO_OVERRIDES: Record<string, string | null> = {
+      // Gen 1 → 2 branches / false-positive fixes
+      '0182': null,    // Bellossom — alt branch from Gloom, standalone chain
+      '0186': '0061',  // Politoed ← Poliwhirl (not Marill)
+      '0196': '0133',  // Espeon ← Eevee
+      '0197': '0133',  // Umbreon ← Eevee
+      '0199': '0079',  // Slowking ← Slowpoke (not Murkrow)
+      '0208': '0095',  // Steelix ← Onix
+      '0212': '0123',  // Scizor ← Scyther
+      '0230': '0117',  // Kingdra ← Seadra
+      '0233': '0137',  // Porygon2 ← Porygon
+      '0242': '0113',  // Blissey ← Chansey
+      // Gen 2 → 4 cross-gen
+      '0407': '0315',  // Roserade ← Roselia
+      '0424': '0190',  // Ambipom ← Aipom
+      '0429': '0200',  // Mismagius ← Misdreavus
+      '0430': '0198',  // Honchkrow ← Murkrow
+      '0461': '0215',  // Weavile ← Sneasel
+      '0463': '0108',  // Lickilicky ← Lickitung
+      '0465': '0114',  // Tangrowth ← Tangela
+      '0466': '0125',  // Electivire ← Electabuzz
+      '0467': '0126',  // Magmortar ← Magmar
+      '0468': '0176',  // Togekiss ← Togetic
+      '0469': '0193',  // Yanmega ← Yanma
+      '0470': '0133',  // Leafeon ← Eevee
+      '0471': '0133',  // Glaceon ← Eevee
+      '0472': '0207',  // Gliscor ← Gligar
+      '0473': '0221',  // Mamoswine ← Piloswine
+      '0474': '0233',  // Porygon-Z ← Porygon2
+      // Gen 6
+      '0700': '0133',  // Sylveon ← Eevee
+      // Gen 8 cross-gen (DLC additions)
+      '1011': '0840',  // Dipplin ← Applin (not Iron Leaves)
+      '1018': '0884',  // Archaludon ← Duraludon (not Ogerpon)
+      // Gen 9 DLC
+      '1019': '1011',  // Hydrapple ← Dipplin
+    };
+
+    for (const s of result) {
+      if (!(s.dexNumber in STATIC_EVO_OVERRIDES)) continue;
+      const preEvoDex = STATIC_EVO_OVERRIDES[s.dexNumber];
+      if (preEvoDex === null) {
+        s.evolvesFrom = null;
+      } else {
+        const preEvo = resultByDex.get(preEvoDex);
+        if (preEvo) s.evolvesFrom = preEvo.nameJa;
       }
     }
 
