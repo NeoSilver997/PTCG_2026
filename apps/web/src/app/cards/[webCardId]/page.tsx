@@ -337,7 +337,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
         : '';
 
     const fallbackSpecies = (() => {
-      if (!speciesList || !card) return null;
+      if (!speciesList || !card || card.supertype !== 'POKEMON') return null;
       const primaryName = card.primaryCard?.name || card.name || '';
       const base = normalize(primaryName).split(/\s+/).slice(-2).join(' ');
       const exact = speciesList.find((s: any) => normalize(s.nameEn) === normalize(primaryName) || normalize(s.nameEn) === base);
@@ -345,7 +345,9 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
       return speciesList.find((s: any) => normalize(s.nameEn).includes(base) || base.includes(normalize(s.nameEn)));
     })();
 
-    const species = (card?.primaryCard as any)?.pokemonSpecies ?? fallbackSpecies;
+    const species = card?.supertype === 'POKEMON'
+      ? ((card?.primaryCard as any)?.pokemonSpecies ?? fallbackSpecies)
+      : null;
 
   // Find cards with same name (other variants)
   const { data: sameNameCards = [] } = useQuery({
@@ -639,7 +641,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
             </div>
 
             {/* Pokémon Species — multilingual names */}
-            {species && (
+            {card.supertype === 'POKEMON' && species && (
               <div className="bg-white rounded-lg p-6 shadow-sm">
                 <div className="flex items-center gap-2 mb-4">
                   <h2 className="text-xl font-semibold text-gray-900">物種資訊</h2>
