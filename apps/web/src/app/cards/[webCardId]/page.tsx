@@ -597,11 +597,36 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
               <div className="bg-white rounded-lg p-6 shadow-sm">
                 <div className="flex items-center gap-2 mb-4">
                   <h2 className="text-xl font-semibold text-gray-900">物種資訊</h2>
-                  <span className="text-sm text-gray-500">#{card.primaryCard.pokemonSpecies.dexNumber}</span>
+                  {card.primaryCard.pokemonSpecies.dexNumber ? (
+                    <a
+                      href={`https://ptcg002.tcghk.trade/pokemon/${String(card.primaryCard.pokemonSpecies.dexNumber).padStart(4, '0')}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-gray-500 hover:underline"
+                      title={`View #${card.primaryCard.pokemonSpecies.dexNumber} on internal Pokédex`}
+                    >
+                      #{String(card.primaryCard.pokemonSpecies.dexNumber).padStart(4, '0')}
+                    </a>
+                  ) : (
+                    <span className="text-sm text-gray-500">#—</span>
+                  )}
+
                   {card.primaryCard.pokemonSpecies.form && (
                     <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-xs rounded-full">
                       {card.primaryCard.pokemonSpecies.form}
                     </span>
+                  )}
+
+                  {card.primaryCard.pokemonSpecies.nameEn && (
+                    <a
+                      href={`https://www.pokemon.com/us/pokedex/${card.primaryCard.pokemonSpecies.nameEn.toLowerCase().replace(/\s+/g, '-')}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 bg-red-50 text-red-600 hover:bg-red-100 text-xs rounded-full transition-colors"
+                      title={`View ${card.primaryCard.pokemonSpecies.nameEn} on official Pokédex`}
+                    >
+                      Pokédex
+                    </a>
                   )}
                 </div>
                 <div className="grid grid-cols-2 gap-3">
