@@ -1,7 +1,28 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { execSync } from 'child_process';
 import { AppModule } from './app.module';
+
+function killPortProcess(port: number): void {
+  try {
+    if (process.platform === 'win32') {
+      const result = execSync(`netstat -ano | findstr :${port}`, { encoding: 'utf8' });
+      const pids = [...new Set(
+        result.split('\n')
+          .map(line => line.trim().split(/\s+/).pop())
+          .filter(pid => pid && /^\d+$/.test(pid) && pid !== '0')
+      )];
+      for (const pid of pids) {
+        try { execSync(`taskkill /F /PID ${pid}`, { stdio: 'ignore' }); } catch {}
+      }
+    } else {
+      execSync(`fuser -k ${port}/tcp`, { stdio: 'ignore' });
+    }
+  } catch {}
+}
+
+const DEFAULT_PORT = 4200;
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -55,11 +76,21 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
-  const port = process.env.PORT || 4000;
+  const port = process.env.PORT || DEFAULT_PORT;
   await app.listen(port);
 
   console.log(`🚀 API server running on http://localhost:${port}`);
   console.log(`📚 API documentation available at http://localhost:${port}/api/docs`);
 }
 
-bootstrap();
+bootstrap().catch((err) => {
+  if (err?.code === 'EADDRINUSE') {
+    const port = Number(process.env.PORT || DEFAULT_PORT);
+    console.warn(`⚠️  Port ${port} in use — killing existing process and retrying...`);
+    killPortProcess(port);
+    setTimeout(() => bootstrap().catch((e) => { console.error(e); process.exit(1); }), 500);
+  } else {
+    console.error(err);
+    process.exit(1);
+  }
+});

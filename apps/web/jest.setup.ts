@@ -1,7 +1,8 @@
 import '@testing-library/jest-dom';
 
 // Mock environment variables
-process.env.NEXT_PUBLIC_API_URL = 'http://localhost:4000/api/v1';
+const apiPort = process.env.API_PORT || '4200';
+process.env.NEXT_PUBLIC_API_URL = `http://localhost:${apiPort}/api/v1`;
 
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {

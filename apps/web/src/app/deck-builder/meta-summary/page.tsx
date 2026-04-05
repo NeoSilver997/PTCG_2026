@@ -83,7 +83,7 @@ export default function DeckMetaSummaryPage() {
       if (sinceDate) params.append('sinceDate', sinceDate);
       params.append('limit', '25');
       const res = await fetch(
-        `http://localhost:4000/api/v1/tournaments/meta/deck-summary?${params}`,
+        `/api/v1/tournaments/meta/deck-summary?${params}`,
       );
       if (!res.ok) throw new Error('Failed to fetch meta summary');
       return (await res.json()) as DeckMetaSummary;

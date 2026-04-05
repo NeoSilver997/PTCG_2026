@@ -1,5 +1,8 @@
 import type { NextConfig } from "next";
 
+const API_PORT = process.env.API_PORT || '4200';
+const apiBaseUrl = process.env.INTERNAL_API_URL || `http://localhost:${API_PORT}`;
+
 const nextConfig: NextConfig = {
   /* config options here */
   reactCompiler: true,
@@ -11,7 +14,7 @@ const nextConfig: NextConfig = {
       {
         protocol: 'http',
         hostname: 'localhost',
-        port: '4000',
+        port: API_PORT,
         pathname: '/api/v1/storage/cards/**',
       },
       {
@@ -27,11 +30,10 @@ const nextConfig: NextConfig = {
     ],
   },
   async rewrites() {
-    const apiDestination = process.env.INTERNAL_API_URL || 'http://localhost:4000';
     return [
       {
         source: '/api/v1/:path*',
-        destination: `${apiDestination}/api/v1/:path*`,
+        destination: `${apiBaseUrl}/api/v1/:path*`,
       },
     ];
   },

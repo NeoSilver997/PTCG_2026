@@ -1279,8 +1279,8 @@ export class CardsService {
           AND c.language IN ('ZH_TW', 'JA_JP', 'EN_US')
         ORDER BY pc."pokemonSpeciesId",
           CASE c.language::text
-            WHEN 'ZH_TW' THEN 0
-            WHEN 'JA_JP' THEN 1
+            WHEN 'ZH_TW' THEN 1
+            WHEN 'JA_JP' THEN 0
             ELSE 2
           END,
           CASE c."variantType"::text
