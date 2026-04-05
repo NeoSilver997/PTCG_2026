@@ -317,6 +317,36 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
     enabled: !!card?.name,
   });
 
+    // Load species summary for fallback linking when PrimaryCard.pokemonSpecies is missing
+    const { data: speciesList } = useQuery<any[]>({
+      queryKey: ['pokemon-species-summary'],
+      queryFn: async () => {
+        const res = await apiClient.get('/cards/species-summary');
+        return res.data;
+      },
+      staleTime: 5 * 60 * 1000,
+    });
+
+    const normalize = (s?: string) =>
+      s
+        ? s
+            .toLowerCase()
+            .replace(/[^a-z0-9\s]/g, '')
+            .replace(/\b(mega|ex|gx|v|vstar)\b/g, '')
+            .trim()
+        : '';
+
+    const fallbackSpecies = (() => {
+      if (!speciesList || !card) return null;
+      const primaryName = card.primaryCard?.name || card.name || '';
+      const base = normalize(primaryName).split(/\s+/).slice(-2).join(' ');
+      const exact = speciesList.find((s: any) => normalize(s.nameEn) === normalize(primaryName) || normalize(s.nameEn) === base);
+      if (exact) return exact;
+      return speciesList.find((s: any) => normalize(s.nameEn).includes(base) || base.includes(normalize(s.nameEn)));
+    })();
+
+    const species = (card?.primaryCard as any)?.pokemonSpecies ?? fallbackSpecies;
+
   // Find cards with same name (other variants)
   const { data: sameNameCards = [] } = useQuery({
     queryKey: ['sameName', card?.name, card?.webCardId],
@@ -519,7 +549,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
               <dl className="grid grid-cols-2 gap-4">
                 <div>
                   <dt className="text-sm text-gray-600">卡號</dt>
-                  <dd className="font-medium text-gray-900">
+                  <dd className="font-medium text-gray-900 flex flex-wrap items-center gap-2">
                     {card.sourceUrl ? (
                       <a
                         href={card.sourceUrl}
@@ -532,6 +562,22 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                     ) : (
                       currentVariant?.webCardId || card.webCardId
                     )}
+                    {(currentVariant?.language || card.language) === 'EN_US' && (() => {
+                      const cardName = currentVariant?.name || card.name;
+                      const setCode = card.regionalExpansion?.code?.toLowerCase();
+                      const url = `https://www.pokemon.com/us/pokemon-tcg/pokemon-cards?cardName=${encodeURIComponent(cardName)}${setCode ? `&${setCode}=on` : ''}`;
+                      return (
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-50 text-red-600 hover:bg-red-100 text-xs rounded-full transition-colors font-normal"
+                          title="Verify card data on official Pokémon.com TCG"
+                        >
+                          Pokémon.com TCG
+                        </a>
+                      );
+                    })()}
                   </dd>
                 </div>
                 {currentVariant?.regionalExpansion && (
@@ -593,37 +639,37 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
             </div>
 
             {/* Pokémon Species — multilingual names */}
-            {card.primaryCard?.pokemonSpecies && (
+            {species && (
               <div className="bg-white rounded-lg p-6 shadow-sm">
                 <div className="flex items-center gap-2 mb-4">
                   <h2 className="text-xl font-semibold text-gray-900">物種資訊</h2>
-                  {card.primaryCard.pokemonSpecies.dexNumber ? (
+                  {species.dexNumber ? (
                     <a
-                      href={`https://ptcg002.tcghk.trade/pokemon/${String(card.primaryCard.pokemonSpecies.dexNumber).padStart(4, '0')}`}
+                      href={`https://ptcg002.tcghk.trade/pokemon/${species.dexNumber}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-sm text-gray-500 hover:underline"
-                      title={`View #${card.primaryCard.pokemonSpecies.dexNumber} on internal Pokédex`}
+                      title={`View #${species.dexNumber} on internal Pokédex`}
                     >
-                      #{String(card.primaryCard.pokemonSpecies.dexNumber).padStart(4, '0')}
+                      #{String(species.dexNumber).padStart(4, '0')}
                     </a>
                   ) : (
                     <span className="text-sm text-gray-500">#—</span>
                   )}
 
-                  {card.primaryCard.pokemonSpecies.form && (
+                  {species.form && (
                     <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-xs rounded-full">
-                      {card.primaryCard.pokemonSpecies.form}
+                      {species.form}
                     </span>
                   )}
 
-                  {card.primaryCard.pokemonSpecies.nameEn && (
+                  {species.nameEn && (
                     <a
-                      href={`https://www.pokemon.com/us/pokedex/${card.primaryCard.pokemonSpecies.nameEn.toLowerCase().replace(/\s+/g, '-')}`}
+                      href={`https://www.pokemon.com/us/pokedex/${species.nameEn.toLowerCase().replace(/\s+/g, '-')}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 bg-red-50 text-red-600 hover:bg-red-100 text-xs rounded-full transition-colors"
-                      title={`View ${card.primaryCard.pokemonSpecies.nameEn} on official Pokédex`}
+                      title={`View ${species.nameEn} on official Pokédex`}
                     >
                       Pokédex
                     </a>
@@ -632,19 +678,19 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex items-center gap-3 bg-gray-50 rounded-lg px-4 py-3">
                     <span className="text-xs font-semibold text-gray-400 w-16 shrink-0">繁體中文</span>
-                    <span className="font-medium text-gray-900">{card.primaryCard.pokemonSpecies.nameZhHant}</span>
+                    <span className="font-medium text-gray-900">{species?.nameZhHant}</span>
                   </div>
                   <div className="flex items-center gap-3 bg-gray-50 rounded-lg px-4 py-3">
                     <span className="text-xs font-semibold text-gray-400 w-16 shrink-0">簡體中文</span>
-                    <span className="font-medium text-gray-900">{card.primaryCard.pokemonSpecies.nameZhHans}</span>
+                    <span className="font-medium text-gray-900">{species?.nameZhHans}</span>
                   </div>
                   <div className="flex items-center gap-3 bg-gray-50 rounded-lg px-4 py-3">
                     <span className="text-xs font-semibold text-gray-400 w-16 shrink-0">日文</span>
-                    <span className="font-medium text-gray-900">{card.primaryCard.pokemonSpecies.nameJa}</span>
+                    <span className="font-medium text-gray-900">{species?.nameJa}</span>
                   </div>
                   <div className="flex items-center gap-3 bg-gray-50 rounded-lg px-4 py-3">
                     <span className="text-xs font-semibold text-gray-400 w-16 shrink-0">English</span>
-                    <span className="font-medium text-gray-900">{card.primaryCard.pokemonSpecies.nameEn}</span>
+                    <span className="font-medium text-gray-900">{species?.nameEn}</span>
                   </div>
                 </div>
               </div>
