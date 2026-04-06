@@ -64,8 +64,19 @@ export default function MarketPage() {
 
   // Browse all prices
   const browseQuery = useQuery({
-    queryKey: ['prices-recent', browseSkip],
-    queryFn: () => apiClient.get(`/prices?take=${PAGE_SIZE}&skip=${browseSkip}`),
+    queryKey: ['prices-recent', browseSkip, sortField, sortDir, nameFilter, stockFilter],
+    queryFn: () => {
+      const params = new URLSearchParams({
+        take: String(PAGE_SIZE),
+        skip: String(browseSkip),
+        sortBy: sortField,
+        sortDir: sortDir,
+      });
+      if (nameFilter) params.set('name', nameFilter);
+      if (stockFilter === 'in') params.set('inStock', 'true');
+      if (stockFilter === 'out') params.set('inStock', 'false');
+      return apiClient.get(`/prices?${params.toString()}`);
+    },
     staleTime: 5 * 60 * 1000,
   });
 
@@ -96,23 +107,14 @@ export default function MarketPage() {
   const cardInfo = priceQuery.data?.data?.card;
   const history: any[] = historyQuery.data?.data ?? [];
 
-  // Client-side filter + sort on the current page
-  const filteredRows = allRows
-    .filter((r) => {
-      if (nameFilter && !r.card.name.toLowerCase().includes(nameFilter.toLowerCase())) return false;
-      if (stockFilter === 'in' && !r.inStock) return false;
-      if (stockFilter === 'out' && r.inStock) return false;
-      return true;
-    })
-    .sort((a, b) => {
-      const v = sortField === 'price' ? a.price - b.price : new Date(a.fetchedAt).getTime() - new Date(b.fetchedAt).getTime();
-      return sortDir === 'asc' ? v : -v;
-    });
+  // Data comes pre-sorted/filtered from the server
+  const filteredRows = allRows;
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
   const currentPage = browseSkip / PAGE_SIZE + 1;
 
   function toggleSort(field: 'price' | 'fetchedAt') {
+    setBrowseSkip(0);
     if (sortField === field) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
     else { setSortField(field); setSortDir('asc'); }
   }
@@ -155,12 +157,12 @@ export default function MarketPage() {
                 type="text"
                 placeholder="Filter by card name…"
                 value={nameFilter}
-                onChange={(e) => setNameFilter(e.target.value)}
+                onChange={(e) => { setNameFilter(e.target.value); setBrowseSkip(0); }}
                 className="border rounded-md px-3 py-1.5 text-sm w-52 focus:outline-none focus:ring-2 focus:ring-amber-400"
               />
               <select
                 value={stockFilter}
-                onChange={(e) => setStockFilter(e.target.value as any)}
+                onChange={(e) => { setStockFilter(e.target.value as any); setBrowseSkip(0); }}
                 className="border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
               >
                 <option value="all">All stock</option>

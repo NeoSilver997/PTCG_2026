@@ -354,20 +354,17 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
 
     try {
       // Transform the data to match the API DTO
-      const updateData = {
+      // Omit empty strings for enum fields to avoid @IsEnum() validation failures
+      const updateData: Record<string, any> = {
         name: cardData.name,
         hp: cardData.hp ? parseInt(cardData.hp.toString()) : null,
         types: cardData.types,
-        supertype: cardData.supertype,
+        supertype: cardData.supertype || undefined,
         subtypes: cardData.subtypes,
-        rarity: cardData.rarity,
-        variantType: cardData.variantType,
-        language: cardData.language,
         imageUrl: cardData.imageUrl,
         sourceUrl: cardData.sourceUrl,
         artist: cardData.artist,
         regulationMark: cardData.regulationMark,
-        ruleBox: cardData.ruleBox,
         text: cardData.text,
         abilities: cardData.abilities,
         attacks: cardData.attacks,
@@ -376,10 +373,13 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
         retreatCost: cardData.retreatCost,
         evolvesFrom: cardData.evolvesFrom,
         evolvesTo: cardData.evolvesTo,
-        evolutionStage: cardData.evolutionStage,
-        region: cardData.region,
-        scrapedAt: cardData.scrapedAt
       };
+
+      // Only include enum fields if they have a non-empty value
+      if (cardData.rarity) updateData.rarity = cardData.rarity;
+      if (cardData.variantType) updateData.variantType = cardData.variantType;
+      if (cardData.ruleBox) updateData.ruleBox = cardData.ruleBox;
+      if (cardData.evolutionStage) updateData.evolutionStage = cardData.evolutionStage;
 
       await apiClient.patch(`/cards/web/${webCardId}`, updateData);
 

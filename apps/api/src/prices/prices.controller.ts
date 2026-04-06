@@ -25,10 +25,29 @@ export class PricesController {
   @ApiOperation({ summary: 'List cards with prices (paginated)' })
   @ApiQuery({ name: 'take', required: false, type: Number })
   @ApiQuery({ name: 'skip', required: false, type: Number })
-  listRecent(@Query('take') take?: string, @Query('skip') skip?: string) {
+  @ApiQuery({ name: 'sortBy', required: false, enum: ['price', 'fetchedAt'] })
+  @ApiQuery({ name: 'sortDir', required: false, enum: ['asc', 'desc'] })
+  @ApiQuery({ name: 'name', required: false, type: String })
+  @ApiQuery({ name: 'inStock', required: false, type: Boolean })
+  listRecent(
+    @Query('take') take?: string,
+    @Query('skip') skip?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortDir') sortDir?: string,
+    @Query('name') name?: string,
+    @Query('inStock') inStock?: string,
+  ) {
+    const validSortBy = sortBy === 'price' ? 'price' : 'fetchedAt';
+    const validSortDir = sortDir === 'asc' ? 'asc' : 'desc';
+    const inStockFilter =
+      inStock === 'true' ? true : inStock === 'false' ? false : undefined;
     return this.pricesService.listRecent(
       take ? parseInt(take, 10) : 50,
       skip ? parseInt(skip, 10) : 0,
+      validSortBy,
+      validSortDir,
+      name || undefined,
+      inStockFilter,
     );
   }
 

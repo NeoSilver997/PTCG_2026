@@ -207,6 +207,7 @@ export class ScrapersService implements OnModuleDestroy {
 
     const proc = spawn(command, args, {
       cwd,
+      shell: process.platform === 'win32',
       env: {
         ...process.env,
         PYTHONUNBUFFERED: '1',

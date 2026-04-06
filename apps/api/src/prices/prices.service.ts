@@ -91,25 +91,47 @@ export class PricesService {
     });
   }
 
-  async listRecent(take = 50, skip = 0) {
-    const rows = await this.prisma.cardPrice.findMany({
-      orderBy: { fetchedAt: 'desc' },
-      skip,
-      take,
-      select: {
-        id: true,
-        source: true,
-        price: true,
-        currency: true,
-        condition: true,
-        inStock: true,
-        fetchedAt: true,
-        card: {
-          select: { id: true, webCardId: true, name: true, imageUrl: true },
+  async listRecent(
+    take = 50,
+    skip = 0,
+    sortBy: 'price' | 'fetchedAt' = 'fetchedAt',
+    sortDir: 'asc' | 'desc' = 'desc',
+    nameFilter?: string,
+    inStock?: boolean,
+  ) {
+    const where: any = {};
+    if (nameFilter) {
+      where.card = { name: { contains: nameFilter, mode: 'insensitive' } };
+    }
+    if (inStock !== undefined) {
+      where.inStock = inStock;
+    }
+
+    const orderBy: any =
+      sortBy === 'price' ? { price: sortDir } : { fetchedAt: sortDir };
+
+    const [rows, total] = await Promise.all([
+      this.prisma.cardPrice.findMany({
+        where,
+        orderBy,
+        skip,
+        take,
+        select: {
+          id: true,
+          source: true,
+          price: true,
+          currency: true,
+          condition: true,
+          inStock: true,
+          fetchedAt: true,
+          card: {
+            select: { id: true, webCardId: true, name: true, imageUrl: true },
+          },
         },
-      },
-    });
-    const total = await this.prisma.cardPrice.count();
+      }),
+      this.prisma.cardPrice.count({ where }),
+    ]);
+
     return { data: rows, total, skip, take };
   }
 
