@@ -647,7 +647,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                   <h2 className="text-xl font-semibold text-gray-900">物種資訊</h2>
                   {species.dexNumber ? (
                     <a
-                      href={`https://ptcg002.tcghk.trade/pokemon/${species.dexNumber}`}
+                      href={`https://ptcg002.tcghk.trade/pokemon/${String(species.dexNumber).padStart(4, '0')}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-sm text-gray-500 hover:underline"
