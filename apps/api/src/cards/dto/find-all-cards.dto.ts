@@ -51,6 +51,11 @@ export class FindAllCardsDto {
   @IsString()
   name?: string;
 
+  @ApiProperty({ required: false, example: '瑪狃拉,Weavile', description: 'Comma-separated exact card names to exclude from results' })
+  @IsOptional()
+  @IsString()
+  excludeNames?: string;
+
   @ApiProperty({ required: false, example: 'POKEMON' })
   @IsOptional()
   @IsString()

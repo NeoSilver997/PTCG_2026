@@ -111,7 +111,8 @@ export class CardsService {
         stats.success++;
       } catch (error) {
         stats.failed++;
-        const errorMsg = `Failed to import ${cardData.webCardId}: ${error.message}`;
+        const message = error instanceof Error ? error.message : String(error);
+        const errorMsg = `Failed to import ${cardData.webCardId}: ${message}`;
         this.logger.error(errorMsg);
         stats.errors.push(errorMsg);
       }
@@ -384,6 +385,7 @@ export class CardsService {
     language?: LanguageCode;
     expansionCode?: string;
     name?: string;
+    excludeNames?: string;
     supertype?: string;
     types?: string;
     rarity?: string;
@@ -417,6 +419,7 @@ export class CardsService {
       language, 
       expansionCode, 
       name, 
+      excludeNames,
       supertype, 
       types, 
       rarity,
@@ -471,6 +474,20 @@ export class CardsService {
       where.name = {
         contains: name,
         mode: 'insensitive',
+      };
+    }
+    const excludedNames = (excludeNames || '')
+      .split(',')
+      .map((n: string) => n.trim())
+      .filter(Boolean);
+    if (excludedNames.length > 0) {
+      where.NOT = {
+        OR: excludedNames.map((n: string) => ({
+          name: {
+            equals: n,
+            mode: 'insensitive',
+          },
+        })),
       };
     }
     if (supertype) {
@@ -626,13 +643,23 @@ export class CardsService {
         ))`;
         jsonFieldConditions.push(attackNameCondition);
       }
-      
+
       const baseWhereConditions = Object.entries(where)
         .map(([key, value]) => {
           if (value === null || value === undefined) return null;
           if (key === 'supertype' && typeof value === 'string') return `c."${key}" = '${value}'`;
           if (key === 'name' && typeof value === 'object' && value !== null && 'contains' in value) 
             return `c."${key}" ILIKE '%${value.contains}%'`;
+          if (key === 'NOT' && typeof value === 'object' && value !== null && 'OR' in value && Array.isArray((value as any).OR)) {
+            const equalsConditions = (value as any).OR
+              .map((item: any) => {
+                const equalsVal = item?.name?.equals;
+                if (!equalsVal || typeof equalsVal !== 'string') return null;
+                return `LOWER(c."name") = LOWER('${equalsVal.replace(/'/g, "''")}')`;
+              })
+              .filter(Boolean);
+            return equalsConditions.length > 0 ? `NOT (${equalsConditions.join(' OR ')})` : null;
+          }
           if (key === 'types' && typeof value === 'object' && value !== null && 'has' in value)
             return `c."${key}" @> '["${value.has}"]'::jsonb`;
           if (key === 'evolutionStage' && typeof value === 'string') return `c."${key}" = '${value}'`;

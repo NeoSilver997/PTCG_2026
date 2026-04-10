@@ -31,6 +31,12 @@ interface CardItem {
   } | null;
 }
 
+interface ExcludedNamesByLang {
+  zh: string[];
+  en: string[];
+  ja: string[];
+}
+
 const RARITY_COLORS: Record<string, string> = {
   COMMON: 'bg-gray-500',
   UNCOMMON: 'bg-green-500',
@@ -226,8 +232,39 @@ export default function PokemonDetailPage({
 
   // Search by ZH name (primary)
   const searchName = species?.nameZhHant || '';
+  const excludedNamesByLang = useMemo<ExcludedNamesByLang>(() => {
+    if (!species || !speciesList) return { zh: [], en: [], ja: [] };
+
+    const buildSimilarNames = (targetNames: string[], candidateNames: string[]) => {
+      const targetSet = new Set(targetNames.map((n) => n.trim().toLowerCase()).filter(Boolean));
+      const result = new Set<string>();
+
+      for (const candidate of candidateNames) {
+        const candidateTrimmed = candidate.trim();
+        const candidateLower = candidateTrimmed.toLowerCase();
+        if (!candidateTrimmed || targetSet.has(candidateLower)) continue;
+
+        if (targetNames.some((target) => target && candidateTrimmed.includes(target))) {
+          result.add(candidateTrimmed);
+        }
+      }
+
+      return Array.from(result);
+    };
+
+    const targetZh = [species.nameZhHant, species.nameZhHans].filter(Boolean);
+    const targetEn = [species.nameEn].filter(Boolean);
+    const targetJa = [species.nameJa].filter(Boolean);
+
+    return {
+      zh: buildSimilarNames(targetZh, speciesList.map((s) => s.nameZhHant).concat(speciesList.map((s) => s.nameZhHans))),
+      en: buildSimilarNames(targetEn, speciesList.map((s) => s.nameEn)),
+      ja: buildSimilarNames(targetJa, speciesList.map((s) => s.nameJa)),
+    };
+  }, [species, speciesList]);
+
   const { data: zhCardsData, isLoading: zhLoading } = useQuery({
-    queryKey: ['pokemon-cards-zh', dexNumber, searchName],
+    queryKey: ['pokemon-cards-zh', dexNumber, searchName, excludedNamesByLang.zh.join('|')],
     queryFn: async () => {
       if (!searchName) return { data: [] };
       const p = new URLSearchParams({
@@ -238,6 +275,9 @@ export default function PokemonDetailPage({
         sortBy: 'webCardId',
         sortOrder: 'desc',
       });
+      if (excludedNamesByLang.zh.length > 0) {
+        p.set('excludeNames', excludedNamesByLang.zh.join(','));
+      }
       const res = await apiClient.get(`/cards?${p}`);
       return res.data;
     },
@@ -246,7 +286,7 @@ export default function PokemonDetailPage({
 
   // Also search EN name for EN_US cards
   const { data: enCardsData } = useQuery({
-    queryKey: ['pokemon-cards-en', dexNumber, species?.nameEn],
+    queryKey: ['pokemon-cards-en', dexNumber, species?.nameEn, excludedNamesByLang.en.join('|')],
     queryFn: async () => {
       if (!species?.nameEn || species.nameEn === searchName) return { data: [] };
       const p = new URLSearchParams({
@@ -258,6 +298,9 @@ export default function PokemonDetailPage({
         sortBy: 'webCardId',
         sortOrder: 'desc',
       });
+      if (excludedNamesByLang.en.length > 0) {
+        p.set('excludeNames', excludedNamesByLang.en.join(','));
+      }
       const res = await apiClient.get(`/cards?${p}`);
       return res.data;
     },
@@ -266,7 +309,7 @@ export default function PokemonDetailPage({
 
   // Also search JA name for JA_JP cards
   const { data: jaCardsData } = useQuery({
-    queryKey: ['pokemon-cards-ja', dexNumber, species?.nameJa],
+    queryKey: ['pokemon-cards-ja', dexNumber, species?.nameJa, excludedNamesByLang.ja.join('|')],
     queryFn: async () => {
       if (!species?.nameJa || species.nameJa === searchName) return { data: [] };
       const p = new URLSearchParams({
@@ -278,6 +321,9 @@ export default function PokemonDetailPage({
         sortBy: 'webCardId',
         sortOrder: 'desc',
       });
+      if (excludedNamesByLang.ja.length > 0) {
+        p.set('excludeNames', excludedNamesByLang.ja.join(','));
+      }
       const res = await apiClient.get(`/cards?${p}`);
       return res.data;
     },
@@ -288,6 +334,33 @@ export default function PokemonDetailPage({
 
   // Deduplicate then sort: language order (ZH→EN→JA), then webCardId desc within each group
   const allCards = useMemo((): CardItem[] => {
+    const canonicalNames = species
+      ? [species.nameZhHant, species.nameZhHans, species.nameJa, species.nameEn].filter(Boolean)
+      : [];
+    const excludedNameSet = new Set(
+      [
+        ...excludedNamesByLang.zh,
+        ...excludedNamesByLang.en,
+        ...excludedNamesByLang.ja,
+      ].map((n) => n.trim().toLowerCase()).filter(Boolean)
+    );
+
+    const nameMatches = (cardName: string): boolean => {
+      if (canonicalNames.length === 0) return true;
+      const normalizedCardName = cardName.trim().toLowerCase();
+      if (excludedNameSet.has(normalizedCardName)) return false;
+
+      return canonicalNames.some((n) => {
+        if (!n) return false;
+        const normalizedTarget = n.trim().toLowerCase();
+        if (normalizedCardName === normalizedTarget) return true;
+        if (normalizedCardName.endsWith(normalizedTarget)) return true;
+        if (normalizedCardName.startsWith(`${normalizedTarget} `)) return true;
+        if (normalizedCardName.startsWith(`${normalizedTarget}ex`)) return true;
+        return false;
+      });
+    };
+
     const seen = new Set<string>();
     const combined: CardItem[] = [
       ...(zhCardsData?.data ?? []),
@@ -297,14 +370,14 @@ export default function PokemonDetailPage({
     const deduped = combined.filter((c) => {
       if (seen.has(c.webCardId)) return false;
       seen.add(c.webCardId);
-      return true;
+      return nameMatches(c.name);
     });
     return deduped.sort((a, b) => {
       const langDiff = (LANG_ORDER[a.language] ?? 9) - (LANG_ORDER[b.language] ?? 9);
       if (langDiff !== 0) return langDiff;
       return b.webCardId.localeCompare(a.webCardId);
     });
-  }, [zhCardsData, enCardsData, jaCardsData]);
+  }, [zhCardsData, enCardsData, jaCardsData, species, excludedNamesByLang]);
 
   // Group cards by primary type
   const cardsByType = useMemo(() => {
