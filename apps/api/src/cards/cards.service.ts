@@ -1498,6 +1498,7 @@ export class CardsService {
       '0472': '0207',  // Gliscor ← Gligar
       '0473': '0221',  // Mamoswine ← Piloswine
       '0474': '0233',  // Porygon-Z ← Porygon2
+      '0477': '0356',  // Dusknoir ← Dusclops
       // Gen 6
       '0700': '0133',  // Sylveon ← Eevee
       // Gen 8 cross-gen (DLC additions)

@@ -235,6 +235,12 @@ export default function PokemonDetailPage({
   const excludedNamesByLang = useMemo<ExcludedNamesByLang>(() => {
     if (!species || !speciesList) return { zh: [], en: [], ja: [] };
 
+    const isMegaName = (name: string) => {
+      const lower = name.toLowerCase();
+      if (lower.includes('mega') || name.includes('超級') || name.includes('メガ')) return true;
+      return /^m\s?[a-z].*ex$/i.test(name.replace(/[-_]/g, ' '));
+    };
+
     const buildSimilarNames = (targetNames: string[], candidateNames: string[]) => {
       const targetSet = new Set(targetNames.map((n) => n.trim().toLowerCase()).filter(Boolean));
       const result = new Set<string>();
@@ -244,7 +250,10 @@ export default function PokemonDetailPage({
         const candidateLower = candidateTrimmed.toLowerCase();
         if (!candidateTrimmed || targetSet.has(candidateLower)) continue;
 
-        if (targetNames.some((target) => target && candidateTrimmed.includes(target))) {
+        if (
+          targetNames.some((target) => target && candidateTrimmed.includes(target))
+          && !isMegaName(candidateTrimmed)
+        ) {
           result.add(candidateTrimmed);
         }
       }
@@ -350,13 +359,22 @@ export default function PokemonDetailPage({
       const normalizedCardName = cardName.trim().toLowerCase();
       if (excludedNameSet.has(normalizedCardName)) return false;
 
+      const compactCardName = normalizedCardName.replace(/[\s\-_]/g, '');
+      const hasMegaMarker =
+        compactCardName.includes('mega') ||
+        compactCardName.includes('超級') ||
+        compactCardName.includes('メガ');
+
       return canonicalNames.some((n) => {
         if (!n) return false;
         const normalizedTarget = n.trim().toLowerCase();
+        const compactTarget = normalizedTarget.replace(/[\s\-_]/g, '');
         if (normalizedCardName === normalizedTarget) return true;
         if (normalizedCardName.endsWith(normalizedTarget)) return true;
         if (normalizedCardName.startsWith(`${normalizedTarget} `)) return true;
         if (normalizedCardName.startsWith(`${normalizedTarget}ex`)) return true;
+        if (hasMegaMarker && compactCardName.includes(compactTarget)) return true;
+        if (compactCardName.startsWith(`m${compactTarget}`) && compactCardName.endsWith('ex')) return true;
         return false;
       });
     };
