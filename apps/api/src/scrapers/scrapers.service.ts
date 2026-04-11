@@ -155,7 +155,8 @@ export class ScrapersService implements OnModuleDestroy {
         args = ['tsx', 'scrapers/import-market-prices.ts'];
         if (dto.dryRun)       args.push('--dry-run');
         if (dto.verbose)      args.push('--verbose');
-        if (dto.marketFile)   args.push(`--file=${dto.marketFile}`);
+        if (dto.marketDir)    args.push(`--dir=${dto.marketDir}`);
+        else if (dto.marketFile) args.push(`--file=${dto.marketFile}`);
         break;
 
       case JobType.SEED_TOURNAMENTS:

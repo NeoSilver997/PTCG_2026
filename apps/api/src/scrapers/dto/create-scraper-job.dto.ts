@@ -170,10 +170,15 @@ export class CreateScraperJobDto {
   verbose?: boolean = false;
 
   // ── Market Prices (import-market-prices.ts) ──────────────────────
-  @ApiPropertyOptional({ description: '--file= path to market-prices.json' })
+  @ApiPropertyOptional({ description: '--file= path to a single market-prices.json' })
   @IsOptional()
   @IsString()
   marketFile?: string;
+
+  @ApiPropertyOptional({ description: '--dir= directory containing market-prices-*.json files' })
+  @IsOptional()
+  @IsString()
+  marketDir?: string;
 
   // ── Deck Maintenance ─────────────────────────────────────────────
   @ApiPropertyOptional({ description: '--limit= max decks (resync)' })

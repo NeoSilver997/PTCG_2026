@@ -208,7 +208,7 @@ function CardsForm({ s, set }: { s: CardsState; set: (p: Partial<CardsState>) =>
 interface ImportState {
   tool: 'card_import' | 'market_prices';
   baseDir: string; regionOrPattern: string;
-  marketFile: string; dryRun: boolean; verbose: boolean;
+  marketFile: string; marketDir: string; dryRun: boolean; verbose: boolean;
 }
 
 function ImportForm({ s, set }: { s: ImportState; set: (p: Partial<ImportState>) => void }) {
@@ -234,8 +234,21 @@ function ImportForm({ s, set }: { s: ImportState; set: (p: Partial<ImportState>)
       </>}
       {s.tool === 'market_prices' && <>
         <p className="text-xs text-gray-500">Runs <code className="bg-gray-100 px-1 rounded">import-market-prices.ts</code></p>
-        <Field label="Market Prices File" hint="--file= (blank = auto-detect from PTCG_CardDB_Tc/)">
-          <Text value={s.marketFile} placeholder="Auto-detect" onChange={(v) => set({ marketFile: v })} />
+        <Field label="Directory (bulk)" hint="--dir= folder with market-prices-*.json files">
+          <div className="space-y-1">
+            <button
+              onClick={() => set({ marketDir: 'C:/AI_Server/Coding/PTCG_CardDB/data', marketFile: '' })}
+              className={`w-full text-left text-xs px-2 py-1 rounded border truncate ${
+                s.marketDir === 'C:/AI_Server/Coding/PTCG_CardDB/data'
+                  ? 'bg-slate-700 text-white border-slate-700'
+                  : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
+              📁 PTCG_CardDB/data (market-prices-*.json)
+            </button>
+            <Text value={s.marketDir} placeholder="C:/path/to/data" onChange={(v) => set({ marketDir: v, marketFile: '' })} />
+          </div>
+        </Field>
+        <Field label="Single File" hint="--file= override (clears directory)">
+          <Text value={s.marketFile} placeholder="Leave blank to use directory above" onChange={(v) => set({ marketFile: v, marketDir: '' })} />
         </Field>
       </>}
       <SectionDivider label="Options" />
@@ -379,7 +392,7 @@ export default function ScraperJobsPage() {
     expansions: '', compactJson: false, quiet: false, htmlCacheDir: '', outputFile: '',
   });
   const [importState, setImportStateRaw] = usePersistedState<ImportState>('scraper-jobs:import', {
-    tool: 'card_import', baseDir: '', regionOrPattern: '', marketFile: '', dryRun: false, verbose: false,
+    tool: 'card_import', baseDir: '', regionOrPattern: '', marketFile: '', marketDir: '', dryRun: false, verbose: false,
   });
   const [maintenanceState, setMaintenanceStateRaw] = usePersistedState<MaintenanceState>('scraper-jobs:maintenance', {
     tool: 'seed_tournaments', seedAll: false, seedLimit: '50', eventId: '',
@@ -427,7 +440,7 @@ export default function ScraperJobsPage() {
       case 'import': {
         const i = importState;
         if (i.tool === 'card_import') return { jobType: 'CARD_IMPORT', source: 'JP', ...(i.baseDir ? { baseDir: i.baseDir } : {}), ...(i.regionOrPattern ? { regionOrPattern: i.regionOrPattern } : {}), dryRun: i.dryRun, verbose: i.verbose };
-        return { jobType: 'MARKET_PRICES', source: 'JP', ...(i.marketFile ? { marketFile: i.marketFile } : {}), dryRun: i.dryRun, verbose: i.verbose };
+        return { jobType: 'MARKET_PRICES', source: 'JP', ...(i.marketDir ? { marketDir: i.marketDir } : i.marketFile ? { marketFile: i.marketFile } : {}), dryRun: i.dryRun, verbose: i.verbose };
       }
       case 'maintenance': {
         const m = maintenanceState;
