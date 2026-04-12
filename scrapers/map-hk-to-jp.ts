@@ -102,10 +102,11 @@ async function main() {
 
   console.log('Loading JP JSON files...');
   const jpCards40k = loadJsonFiles(path.join(jpDir), 'japanese_cards_40k_');
+  const jpCardsDir = loadJsonFiles(path.join(jpDir), 'japanese_cards_');  // non-40k files in data/cards/japan
   const jpCardsRoot = loadJsonFiles(jpRoot, 'japanese_cards_');
-  // 40k files take priority (more complete); root files as fallback
-  const jpCards = [...jpCards40k, ...jpCardsRoot];
-  console.log(`  Loaded ${jpCards.length} JP cards (${jpCards40k.length} from data/cards/japan, ${jpCardsRoot.length} from root)`);
+  // 40k files take priority (more complete); data/cards/japan non-40k next; root files as last fallback
+  const jpCards = [...jpCards40k, ...jpCardsDir, ...jpCardsRoot];
+  console.log(`  Loaded ${jpCards.length} JP cards (${jpCards40k.length} 40k + ${jpCardsDir.length} non-40k from data/cards/japan, ${jpCardsRoot.length} from root)`);
 
   // ── Build JP lookup: {EXPANSION}:{COLLECTOR_NUM}:{VARIANT} → SourceCard ──
   type LookupKey = string; // `${expansion}:${collectorNum}:${variantType}`
@@ -165,6 +166,7 @@ async function main() {
     if (matched100 === total) fullMatchExpansions.add(exp);
   }
   console.log(`\n100%-match expansions: ${fullMatchExpansions.size} of ${expTotal.size} total HK expansions`);
+
   console.log(`Skipping ${expTotal.size - fullMatchExpansions.size} expansions with partial JP coverage.`);
 
   // Stats
