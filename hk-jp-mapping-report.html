@@ -92659,5 +92659,46 @@
             <td style="padding:5px 10px;text-align:center"><span style="color:#ef4444;font-size:14px" title="No JP card found">✗</span></td>
           </tr></tbody></table></div></details></div>
 </div>
+<script>
+(() => {
+        try {
+                const details = Array.from(document.querySelectorAll('details'));
+                details.forEach(d => {
+                        const summary = d.querySelector('summary');
+                        if (!summary) return;
+                        const text = summary.textContent || '';
+                        if (!/100%\s*✓/.test(text)) return;
+                        const tbody = d.querySelector('tbody');
+                        if (!tbody) return;
+                        let hasMissing = false;
+                        Array.from(tbody.querySelectorAll('tr')).forEach(tr => {
+                                const hkCell = tr.children[1];
+                                const statusCell = tr.children[8];
+                                const hasHKLink = hkCell && hkCell.querySelector && hkCell.querySelector('a');
+                                const statusText = statusCell ? (statusCell.textContent || '') : '';
+                                const unmatched = !hasHKLink || /✗|No JP card found/.test(statusText) || /—/.test(hkCell.textContent || '');
+                                if (unmatched) {
+                                        hasMissing = true;
+                                        tr.style.outline = '2px solid #ef4444';
+                                        tr.style.background = '#fff7f7';
+                                }
+                        });
+                        if (hasMissing) {
+                                d.open = true;
+                                const note = document.createElement('div');
+                                note.style.padding = '8px 16px';
+                                note.style.background = '#fff7f7';
+                                note.style.borderTop = '1px solid #f1e1e1';
+                                note.style.color = '#b91c1c';
+                                note.style.fontWeight = '700';
+                                note.textContent = '⚠ Missing HK cards detected in this expansion (highlighted)';
+                                d.insertBefore(note, d.querySelector('div'));
+                        }
+                });
+        } catch (e) {
+                console.error('hk-jp report highlight script error', e);
+        }
+})();
+</script>
 </body>
 </html>

@@ -17,8 +17,11 @@
  *   npx tsx scrapers/map-hk-to-jp.ts --apply            # apply (interactive confirm)
  *   npx tsx scrapers/map-hk-to-jp.ts --apply --yes      # apply without prompt
  *
- * Field sync (JP → HK, only fills nulls/empty):
- *   rarity, artist, evolvesFrom, ruleBox, subtypes
+ * Field sync (JP → HK):
+ *   rarity, regulationMark, variantType  — always overwritten with JP value (JP is authoritative)
+ *   artist, evolvesFrom, ruleBox, subtypes — fill only when HK is null/empty
+ * Field sync (HK → JP):
+ *   regulationMark — HK scraper has it; fill JP when JP is null/empty
  */
 
 import { PrismaClient } from '../packages/database/node_modules/.prisma/client';
@@ -122,7 +125,7 @@ async function main() {
   const SYNC_SELECT = {
     id: true, webCardId: true, primaryCardId: true, variantType: true,
     // syncable fields:
-    rarity: true, subtypes: true, evolvesFrom: true, artist: true, ruleBox: true,
+    rarity: true, regulationMark: true, subtypes: true, evolvesFrom: true, artist: true, ruleBox: true,
     primaryCard: {
       select: { id: true, cardNumber: true, primaryExpansion: { select: { code: true } } },
     },
@@ -144,11 +147,32 @@ async function main() {
   const jpSrcByWebId = new Map<string, SourceCard>();
   for (const c of jpCards) jpSrcByWebId.set(c.webCardId, c);
 
+  // ── Compute per-expansion match rates (100%-only filter) ──
+  // Group all HK JSON cards by expansion code and count JP matches per expansion
+  const expTotal = new Map<string, number>();
+  const expMatched = new Map<string, number>();
+  for (const c of hkCards) {
+    const exp = c.expansionCode;
+    expTotal.set(exp, (expTotal.get(exp) ?? 0) + 1);
+    const keyBase = `${exp}:${c.collectorNumber}`;
+    if (jpLookupAny.has(keyBase)) {
+      expMatched.set(exp, (expMatched.get(exp) ?? 0) + 1);
+    }
+  }
+  const fullMatchExpansions = new Set<string>();
+  for (const [exp, total] of expTotal) {
+    const matched100 = expMatched.get(exp) ?? 0;
+    if (matched100 === total) fullMatchExpansions.add(exp);
+  }
+  console.log(`\n100%-match expansions: ${fullMatchExpansions.size} of ${expTotal.size} total HK expansions`);
+  console.log(`Skipping ${expTotal.size - fullMatchExpansions.size} expansions with partial JP coverage.`);
+
   // Stats
   let matched = 0;
   let matchedWithPokedexOK = 0;
   let matchedWithPokedexMismatch = 0;
   let unmatchedHK = 0;
+  let skippedNon100 = 0;
   let noJPInDB = 0;
   let alreadyLinked = 0;
 
@@ -157,9 +181,13 @@ async function main() {
     hkCardDbId: string;
     hkWebCardId: string;
     jpWebCardId: string;
+    jpCardDbId: string;
     jpPrimaryCardId: string;
     syncFields: Record<string, unknown>;
   }[] = [];
+  // Reverse sync: JP card updates from HK data
+  const jpUpdates: { jpCardDbId: string; jpWebCardId: string; syncFields: Record<string, unknown> }[] = [];
+  const jpUpdateSet = new Set<string>(); // avoid duplicate JP updates
   const pokedexMismatches: { hkWebId: string; jpWebId: string; hkDex: number | null; jpDex: number | null; expansion: string; collNum: string }[] = [];
   const notInJsonHK: string[] = [];
   const notMatchedInJP: { webId: string; expansion: string; collNum: string }[] = [];
@@ -168,6 +196,12 @@ async function main() {
     const hkSrc = hkSrcByWebId.get(dbHKCard.webCardId);
     if (!hkSrc) {
       notInJsonHK.push(dbHKCard.webCardId);
+      continue;
+    }
+
+    // Skip cards in expansions that don't have 100% JP coverage
+    if (!fullMatchExpansions.has(hkSrc.expansionCode)) {
+      skippedNon100++;
       continue;
     }
 
@@ -230,14 +264,26 @@ async function main() {
       }
     }
 
-    // Compute fields to sync from JP → HK (only fill nulls/empty on HK)
+    // Compute fields to sync from JP → HK
+    // rarity + regulationMark + variantType: JP is authoritative — always overwrite HK if JP has a value
+    // other fields: fill nulls/empty on HK only
     const syncFields: Record<string, unknown> = {};
-    if (!dbHKCard.rarity     && jpDbCard.rarity)     syncFields.rarity     = jpDbCard.rarity;
+    if (jpDbCard.rarity     && dbHKCard.rarity     !== jpDbCard.rarity)     syncFields.rarity     = jpDbCard.rarity;
+    if (jpDbCard.variantType && dbHKCard.variantType !== jpDbCard.variantType) syncFields.variantType = jpDbCard.variantType;
+    if (jpDbCard.regulationMark && dbHKCard.regulationMark !== jpDbCard.regulationMark) syncFields.regulationMark = jpDbCard.regulationMark;
     if (!dbHKCard.artist     && jpDbCard.artist)     syncFields.artist     = jpDbCard.artist;
     if (!dbHKCard.evolvesFrom && jpDbCard.evolvesFrom) syncFields.evolvesFrom = jpDbCard.evolvesFrom;
     if (!dbHKCard.ruleBox    && jpDbCard.ruleBox)    syncFields.ruleBox    = jpDbCard.ruleBox;
     if ((!dbHKCard.subtypes || dbHKCard.subtypes.length === 0) && jpDbCard.subtypes && jpDbCard.subtypes.length > 0)
       syncFields.subtypes = jpDbCard.subtypes;
+
+    // Reverse sync: HK → JP for regulationMark (HK scraper has it; JP scraper doesn't)
+    const jpSyncFields: Record<string, unknown> = {};
+    if (!jpDbCard.regulationMark && dbHKCard.regulationMark) jpSyncFields.regulationMark = dbHKCard.regulationMark;
+    if (Object.keys(jpSyncFields).length > 0 && !jpUpdateSet.has(jpDbCard.id)) {
+      jpUpdateSet.add(jpDbCard.id);
+      jpUpdates.push({ jpCardDbId: jpDbCard.id, jpWebCardId: jpDbCard.webCardId, syncFields: jpSyncFields });
+    }
 
     // Only queue an update if there's something to do
     if (!alreadyMapped || Object.keys(syncFields).length > 0) {
@@ -245,6 +291,7 @@ async function main() {
         hkCardDbId: dbHKCard.id,
         hkWebCardId: dbHKCard.webCardId,
         jpWebCardId: jpSrc.webCardId,
+        jpCardDbId: jpDbCard.id,
         jpPrimaryCardId,
         syncFields,
       });
@@ -264,6 +311,7 @@ async function main() {
   console.log(`  🔗 To be linked:              ${matched}`);
   console.log(`     (of which Pokédex ✓):      ${matchedWithPokedexOK}`);
   console.log(`\nSkipped / problems:`);
+  console.log(`  ℹ️  Skipped (non-100% expansions):  ${skippedNon100}`);
   console.log(`  ⚠️  HK dex data issues (matched anyway): ${matchedWithPokedexMismatch}`);
   console.log(`  ⚠️  No JP match in JSON:        ${unmatchedHK}`);
   console.log(`  ⚠️  JP match in JSON but not DB:${noJPInDB}`);
@@ -278,7 +326,15 @@ async function main() {
     console.log('\nFields to sync from JP → HK:');
     for (const [k, n] of Object.entries(syncStats)) console.log(`  ${k}: ${n} cards`);
   }
-
+  // Reverse sync stats (HK → JP)
+  const jpSyncStats: Record<string, number> = {};
+  for (const u of jpUpdates) {
+    for (const k of Object.keys(u.syncFields)) jpSyncStats[k] = (jpSyncStats[k] || 0) + 1;
+  }
+  if (Object.keys(jpSyncStats).length > 0) {
+    console.log('\nFields to sync from HK \u2192 JP:');
+    for (const [k, n] of Object.entries(jpSyncStats)) console.log(`  ${k}: ${n} cards`);
+  }
   if (pokedexMismatches.length > 0) {
     console.log('\n─── Pokédex Mismatches (first 10) ───');
     for (const m of pokedexMismatches.slice(0, 10)) {
@@ -304,7 +360,7 @@ async function main() {
     return;
   }
 
-  if (updates.length === 0) {
+  if (updates.length === 0 && jpUpdates.length === 0) {
     console.log('\nNo updates needed.');
     await prisma.$disconnect();
     return;
@@ -313,7 +369,8 @@ async function main() {
   // Confirm (skip if --yes flag)
   if (!YES) {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    const answer = await new Promise<string>(res => rl.question(`\nApply ${updates.length} DB updates? (yes/no): `, res));
+    const totalChanges = updates.length + jpUpdates.length;
+    const answer = await new Promise<string>(res => rl.question(`\nApply ${totalChanges} DB updates? (yes/no): `, res));
     rl.close();
     if (answer.toLowerCase() !== 'yes') {
       console.log('Aborted.');
@@ -352,6 +409,21 @@ async function main() {
   }
   console.log(`\n✅ Linked ${applied} HK cards to JP PrimaryCards`);
   console.log(`✏️  Synced JP fields on ${fieldsSynced} HK cards`);
+
+  // Apply HK → JP reverse sync (regulationMark)
+  if (jpUpdates.length > 0) {
+    console.log('\nApplying HK \u2192 JP reverse sync...');
+    let jpApplied = 0;
+    for (let i = 0; i < jpUpdates.length; i += CHUNK) {
+      const chunk = jpUpdates.slice(i, i + CHUNK);
+      await prisma.$transaction(
+        chunk.map(u => prisma.card.update({ where: { id: u.jpCardDbId }, data: u.syncFields }))
+      );
+      jpApplied += chunk.length;
+      process.stdout.write(`\r  Updated ${jpApplied}/${jpUpdates.length} JP cards...`);
+    }
+    console.log(`\n✏️  Synced HK fields on ${jpApplied} JP cards`);
+  }
 
   // Delete orphaned HK PrimaryCards (no longer referenced by any card)
   let deletedOrphans = 0;
