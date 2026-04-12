@@ -16,6 +16,11 @@ export class GetProductsDto {
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
+  productTypeGroup?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
   search?: string;
 
   @ApiProperty({ required: false, description: 'Filter by exact expansion code (e.g. sv8a, SV5K)' })

@@ -9,8 +9,15 @@ import * as path from 'path';
 export class ProductsService {
   constructor(private prisma: PrismaService) {}
 
+  // Product type groups
+  private readonly PRODUCT_TYPE_GROUPS: Record<string, string[]> = {
+    expansion_series: ['expansion_pack', 'enhanced_expansion', 'promo'],
+    deck_series: ['starter_set', 'deck', 'constructed_deck'],
+    other_products: ['accessories', 'special_products']
+  };
+
   async getProducts(query: GetProductsDto) {
-    const { country, productType, search, expansionCode, skip = 0, take = 50 } = query;
+    const { country, productType, productTypeGroup, search, expansionCode, skip = 0, take = 50 } = query;
 
     const where: any = {};
 
@@ -27,6 +34,25 @@ export class ProductsService {
         where.productTypeId = productTypeRecord.id;
       } else {
         // If productType code not found, return empty results
+        return {
+          data: [],
+          pagination: {
+            total: 0,
+            skip: Number(skip),
+            take: Math.min(Number(take), 100),
+          },
+        };
+      }
+    } else if (productTypeGroup && this.PRODUCT_TYPE_GROUPS[productTypeGroup]) {
+      // Filter by product type group
+      const groupCodes = this.PRODUCT_TYPE_GROUPS[productTypeGroup];
+      const productTypeRecords = await this.prisma.productType.findMany({
+        where: { code: { in: groupCodes } }
+      });
+      if (productTypeRecords.length > 0) {
+        where.productTypeId = { in: productTypeRecords.map(pt => pt.id) };
+      } else {
+        // If no product types found in group, return empty results
         return {
           data: [],
           pagination: {

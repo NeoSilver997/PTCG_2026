@@ -1282,7 +1282,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                               <div>國家: {product.country}</div>
                             )}
                             {product.productType && (
-                              <div>類型: {product.productType}</div>
+                              <div>類型: {product.productType.nameZh || product.productType.code}</div>
                             )}
                             {product.releaseDate && (
                               <div>發行日期: {new Date(product.releaseDate).toLocaleDateString('zh-TW')}</div>

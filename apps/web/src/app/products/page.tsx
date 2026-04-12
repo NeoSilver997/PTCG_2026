@@ -40,7 +40,7 @@ export default function ProductsPage() {
   
   // Filters
   const [country, setCountry] = useState('');
-  const [productType, setProductType] = useState('');
+  const [productTypeGroup, setProductTypeGroup] = useState('');
   const [search, setSearch] = useState('');
   const [skip, setSkip] = useState(0);
   const take = 50;
@@ -50,7 +50,7 @@ export default function ProductsPage() {
     try {
       const params = new URLSearchParams();
       if (country) params.append('country', country);
-      if (productType) params.append('productType', productType);
+      if (productTypeGroup) params.append('productTypeGroup', productTypeGroup);
       if (search) params.append('search', search);
       params.append('skip', skip.toString());
       params.append('take', take.toString());
@@ -70,11 +70,11 @@ export default function ProductsPage() {
 
   useEffect(() => {
     fetchProducts();
-  }, [country, productType, search, skip]);
+  }, [country, productTypeGroup, search, skip]);
 
   const handleReset = () => {
     setCountry('');
-    setProductType('');
+    setProductTypeGroup('');
     setSearch('');
     setSkip(0);
   };
@@ -149,22 +149,17 @@ export default function ProductsPage() {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">商品類型</label>
             <select
-              value={productType}
+              value={productTypeGroup}
               onChange={(e) => {
-                setProductType(e.target.value);
+                setProductTypeGroup(e.target.value);
                 setSkip(0);
               }}
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">所有類型</option>
-              <option value="expansion_pack">擴充包</option>
-              <option value="enhanced_expansion">強化擴充包</option>
-              <option value="starter_set">入門套組</option>
-              <option value="constructed_deck">構築牌組</option>
-              <option value="accessories">周邊商品</option>
-              <option value="special_products">其他商品</option>
-              <option value="deck">牌組</option>
-              <option value="promo">特典卡</option>
+              <option value="expansion_series">擴充包系列</option>
+              <option value="deck_series">牌組系列</option>
+              <option value="other_products">其他商品</option>
             </select>
           </div>
 
