@@ -174,6 +174,8 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
 
   // State for weekly usage chart selection
   const [selectedWeek, setSelectedWeek] = useState<string | null>(null);
+  // State to control showing all language variants
+  const [showAllVariants, setShowAllVariants] = useState(false);
 
   // Create all variants array including current card
   const allVariants = card ? [card, ...(card.languageVariants || [])] : [];
@@ -1611,7 +1613,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                   其他版本 ({card.languageVariants.length})
                 </h2>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                  {card.languageVariants.slice(0, 10).map((variant) => (
+                  {card.languageVariants.slice(0, showAllVariants ? card.languageVariants.length : 10).map((variant) => (
                     <Link
                       key={variant.id}
                       href={`/cards/${variant.webCardId}`}
@@ -1649,9 +1651,14 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                 </div>
                 {card.languageVariants.length > 10 && (
                   <div className="mt-4 text-center">
-                    <span className="text-sm text-gray-600">
-                      顯示前 10 個，共 {card.languageVariants.length} 個版本
-                    </span>
+                    <button
+                      onClick={() => setShowAllVariants(!showAllVariants)}
+                      className="text-sm text-blue-600 hover:underline"
+                    >
+                      {showAllVariants
+                        ? `顯示前 10 個，共 ${card.languageVariants.length} 個版本`
+                        : `顯示全部 ${card.languageVariants.length} 個版本`}
+                    </button>
                   </div>
                 )}
               </div>
