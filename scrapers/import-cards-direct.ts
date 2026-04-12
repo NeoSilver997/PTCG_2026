@@ -342,6 +342,18 @@ async function importCardOptimized(prisma: PrismaClient, card: any) {
     rarity = VARIANT_RARITY_OVERRIDE[variantType]!;
   }
 
+  // ACE SPEC cards are identified by their rule restriction text, not by rarity/variantType code
+  const isAceSpec = Array.isArray(card.rules) && card.rules.some(
+    (r: string) => r.includes("ACE SPEC")
+  );
+  if (isAceSpec) {
+    rarity = Rarity.ACE_SPEC;
+    // Only override variantType when it wasn't already explicitly mapped to something meaningful
+    if (variantType === VariantType.NORMAL) {
+      // variantType remains NORMAL for base prints; ACE is reserved for the special ACE variant artwork
+    }
+  }
+
   const hp = card.hp ? (typeof card.hp === 'number' ? card.hp : parseInt(card.hp, 10)) : null;
 
   // Map language from card data (default to JA_JP for backward compatibility)
