@@ -109,6 +109,13 @@ const VARIANT_MAP: Record<string, VariantType> = {
   'SAR': VariantType.SAR,
   'SR': VariantType.SR,
   'UR': VariantType.UR,
+  'MUR': VariantType.MUR,
+  'MA': VariantType.MA,
+  'CHR': VariantType.CHR,
+  'SSR': VariantType.SSR,
+  'BWR': VariantType.BWR,
+  'ACE': VariantType.ACE,
+  'U': VariantType.U,
 };
 
 interface JapaneseCard {
@@ -329,6 +336,7 @@ async function importCardOptimized(prisma: PrismaClient, card: any) {
     [VariantType.AR]: Rarity.ILLUSTRATION_RARE,
     [VariantType.SAR]: Rarity.SPECIAL_ILLUSTRATION_RARE,
     [VariantType.UR]: Rarity.HYPER_RARE,
+    [VariantType.MUR]: Rarity.HYPER_RARE,
   };
   if (variantType in VARIANT_RARITY_OVERRIDE) {
     rarity = VARIANT_RARITY_OVERRIDE[variantType]!;
