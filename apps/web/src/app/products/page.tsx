@@ -164,6 +164,7 @@ export default function ProductsPage() {
               <option value="accessories">周邊商品</option>
               <option value="special_products">其他商品</option>
               <option value="deck">牌組</option>
+              <option value="promo">特典卡</option>
             </select>
           </div>
 

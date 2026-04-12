@@ -118,14 +118,20 @@ export class ProductsService {
         dbData.beginnerFlag = updateData.beginnerFlag ? 1 : 0;
       }
 
-      // Handle productType - if it's provided, find the ProductType by code
-      if (updateData.productType) {
-        const productTypeRecord = await this.prisma.productType.findUnique({
-          where: { code: updateData.productType }
-        });
-        if (productTypeRecord) {
-          dbData.productTypeId = productTypeRecord.id;
-          delete dbData.productType; // Remove the code, use the ID
+      // Always remove the productType string from dbData — it's not a DB column (it's a relation)
+      delete dbData.productType;
+
+      // Handle productType - if provided, look up by code and set the FK
+      if (updateData.productType !== undefined) {
+        if (updateData.productType === null) {
+          dbData.productTypeId = null;
+        } else {
+          const productTypeRecord = await this.prisma.productType.findUnique({
+            where: { code: updateData.productType }
+          });
+          if (productTypeRecord) {
+            dbData.productTypeId = productTypeRecord.id;
+          }
         }
       }
 
@@ -145,7 +151,12 @@ export class ProductsService {
         beginnerFlag: product.beginnerFlag === 1,
       };
     } catch (error) {
-      throw new NotFoundException(`Product with ID ${id} not found`);
+      if (error instanceof NotFoundException) throw error;
+      // Prisma record-not-found error code
+      if ((error as any)?.code === 'P2025') {
+        throw new NotFoundException(`Product with ID ${id} not found`);
+      }
+      throw error;
     }
   }
 

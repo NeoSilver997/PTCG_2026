@@ -43,12 +43,44 @@ const COUNTRY_OPTIONS = [
 ];
 
 const PRODUCT_TYPE_OPTIONS = [
-  { value: '拡張パック', label: '擴張包' },
-  { value: '強化拡張パック', label: '強化擴張包' },
-  { value: 'スターターセット', label: '入門套組' },
-  { value: 'デッキ', label: '牌組' },
-  { value: '周辺グッズ', label: '周邊商品' },
+  { value: 'expansion_pack', label: '擴充包' },
+  { value: 'enhanced_expansion', label: '強化擴充包' },
+  { value: 'starter_set', label: '入門套組' },
+  { value: 'constructed_deck', label: '構築牌組' },
+  { value: 'deck', label: '牌組' },
+  { value: 'accessories', label: '周邊商品' },
+  { value: 'special_products', label: '其他商品' },
+  { value: 'promo', label: '特典卡' },
 ];
+
+// Ordered from most specific to least — first match wins
+const PRODUCT_TYPE_RULES: { keywords: string[]; type: string }[] = [
+  // Accessories — check before deck/pack to avoid false matches
+  { keywords: ['グッズ', '周辺', '周邊', 'ケース', 'case', 'スリーブ', 'sleeve', 'プロテクター', 'バインダー', 'binder', 'ダイス', 'dice', 'コイン', 'coin', 'トレー', 'tray', 'ファイル', 'file', 'バッグ', 'bag', 'ポーチ', 'pouch'], type: 'accessories' },
+  // Promo
+  { keywords: ['特典', 'プロモ', 'promo', '記念', 'キャンペーン'], type: 'promo' },
+  // Enhanced expansion (check before expansion_pack)
+  { keywords: ['強化拡張', '強化擴充', '強化擴張', '強化 拡張'], type: 'enhanced_expansion' },
+  // Starter set
+  { keywords: ['スターター', 'starter', '入門套', '入門セット', '入門'], type: 'starter_set' },
+  // Constructed deck
+  { keywords: ['構築デッキ', '構築牌組', '構築deck', 'ex deck', 'exデッキ'], type: 'constructed_deck' },
+  // Generic deck
+  { keywords: ['デッキ', 'deck', '牌組'], type: 'deck' },
+  // Expansion pack
+  { keywords: ['拡張パック', '擴充包', '擴張包', '拡張', 'expansion', '強化パック', 'booster'], type: 'expansion_pack' },
+];
+
+function guessProductType(name: string): string | null {
+  if (!name) return null;
+  const lower = name.toLowerCase();
+  for (const rule of PRODUCT_TYPE_RULES) {
+    if (rule.keywords.some(kw => lower.includes(kw.toLowerCase()))) {
+      return rule.type;
+    }
+  }
+  return null;
+}
 
 export default function ProductEditPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
@@ -165,7 +197,15 @@ export default function ProductEditPage({ params }: { params: Promise<{ id: stri
               <input
                 type="text"
                 value={formData.productName || ''}
-                onChange={(e) => handleChange('productName', e.target.value)}
+                onChange={(e) => {
+                  const name = e.target.value;
+                  const guessed = guessProductType(name);
+                  setFormData(prev => ({
+                    ...prev,
+                    productName: name,
+                    ...(guessed && !prev.productType ? { productType: guessed } : {}),
+                  }));
+                }}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 required
               />
@@ -205,19 +245,37 @@ export default function ProductEditPage({ params }: { params: Promise<{ id: stri
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 商品類型
+                {formData.productName && guessProductType(formData.productName) && !formData.productType && (
+                  <span className="ml-2 text-xs text-blue-500">（根據名稱自動偵測）</span>
+                )}
               </label>
-              <select
-                value={formData.productType || ''}
-                onChange={(e) => handleChange('productType', e.target.value)}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">選擇類型</option>
-                {PRODUCT_TYPE_OPTIONS.map(option => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+              <div className="flex gap-2">
+                <select
+                  value={formData.productType || ''}
+                  onChange={(e) => handleChange('productType', e.target.value)}
+                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">選擇類型</option>
+                  {PRODUCT_TYPE_OPTIONS.map(option => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                {formData.productName && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const guessed = guessProductType(formData.productName || '');
+                      if (guessed) handleChange('productType', guessed);
+                    }}
+                    className="px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 whitespace-nowrap"
+                    title="根據商品名稱自動偵測類型"
+                  >
+                    自動偵測
+                  </button>
+                )}
+              </div>
             </div>
 
             <div>
