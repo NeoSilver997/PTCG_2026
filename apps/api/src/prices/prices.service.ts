@@ -98,6 +98,7 @@ export class PricesService {
     sortDir: 'asc' | 'desc' = 'desc',
     nameFilter?: string,
     inStock?: boolean,
+    minPrice?: number,
   ) {
     const where: any = {};
     if (nameFilter) {
@@ -105,6 +106,9 @@ export class PricesService {
     }
     if (inStock !== undefined) {
       where.inStock = inStock;
+    }
+    if (minPrice !== undefined && minPrice > 0) {
+      where.price = { gte: minPrice };
     }
 
     const orderBy: any =
@@ -135,46 +139,83 @@ export class PricesService {
     return { data: rows, total, skip, take };
   }
 
-  async getTopMovers(take = 20) {
-    // Cards with biggest price change in last 7 days
+  async getTopMovers(
+    take = 300,
+    minChangePct?: number,
+    maxChangePct?: number,
+    days = 90,
+    supertype?: string,
+    pokemonType?: string,
+    sortBy: 'change' | 'price' = 'price',
+  ) {
+    // Compute the start of the window
     const since = new Date();
-    since.setDate(since.getDate() - 7);
+    since.setDate(since.getDate() - days);
 
-    const history = await this.prisma.priceHistory.findMany({
-      where: { date: { gte: since } },
-      orderBy: { date: 'asc' },
+    // Build optional card pre-filter for supertype / pokemonType
+    const cardTypeWhere: Record<string, any> = {};
+    if (supertype) cardTypeWhere['supertype'] = supertype;
+    if (pokemonType) cardTypeWhere['types'] = { has: pokemonType };
+    let preFilterIds: string[] | undefined;
+    if (supertype || pokemonType) {
+      const filtered = await this.prisma.card.findMany({
+        where: cardTypeWhere,
+        select: { id: true },
+      });
+      preFilterIds = filtered.map((c) => c.id);
+      if (preFilterIds.length === 0) return [];
+    }
+
+    // Get first recorded price per card+source within the date window
+    const earliest = await this.prisma.priceHistory.findMany({
+      distinct: ['cardId', 'source'],
+      where: {
+        date: { gte: since },
+        ...(preFilterIds ? { cardId: { in: preFilterIds } } : {}),
+      },
+      orderBy: [{ cardId: 'asc' }, { source: 'asc' }, { date: 'asc' }],
+      select: { cardId: true, source: true, price: true, date: true },
     });
 
-    // Look up cards by id for all unique cardIds
-    const uniqueCardIds = [...new Set(history.map((h) => h.cardId))];
+    // Use CardPrice as the current (authoritative) price to avoid stale/wrong history entries
+    const currentPrices = await this.prisma.cardPrice.findMany({
+      select: { cardId: true, source: true, price: true, fetchedAt: true },
+    });
+    const currentMap = new Map<string, { price: number; date: Date }>();
+    for (const r of currentPrices) currentMap.set(`${r.cardId}__${r.source}`, { price: r.price, date: r.fetchedAt });
+
+    const uniqueCardIds = [...new Set(earliest.map((h) => h.cardId))];
     const cards = await this.prisma.card.findMany({
       where: { id: { in: uniqueCardIds } },
-      select: { id: true, webCardId: true, name: true, imageUrl: true },
+      select: { id: true, webCardId: true, name: true, imageUrl: true, supertype: true, types: true },
     });
     const cardMap = new Map(cards.map((c) => [c.id, c]));
 
-    // Group by card+source, compute % change
-    const groups = new Map<string, { first: number; last: number; card: any; source: string }>();
-
-    for (const h of history) {
-      const key = `${h.cardId}__${h.source}`;
-      const card = cardMap.get(h.cardId);
-      if (!groups.has(key)) {
-        groups.set(key, { first: h.price, last: h.price, card, source: h.source });
-      } else {
-        groups.get(key)!.last = h.price;
-      }
-    }
-
-    return Array.from(groups.values())
-      .map((g) => ({
-        card: g.card,
-        source: g.source,
-        firstPrice: g.first,
-        lastPrice: g.last,
-        changePct: g.first > 0 ? ((g.last - g.first) / g.first) * 100 : 0,
-      }))
-      .sort((a, b) => Math.abs(b.changePct) - Math.abs(a.changePct))
+    return earliest
+      .map((e) => {
+        const key = `${e.cardId}__${e.source}`;
+        const current = currentMap.get(key);
+        if (!current || e.price === current.price) return null;
+        const changePct = e.price > 0 ? ((current.price - e.price) / e.price) * 100 : 0;
+        if (Math.abs(changePct) <= 0.1) return null;
+        if (minChangePct !== undefined && changePct < minChangePct) return null;
+        if (maxChangePct !== undefined && changePct > maxChangePct) return null;
+        return {
+          card: cardMap.get(e.cardId),
+          source: e.source,
+          firstPrice: e.price,
+          lastPrice: current.price,
+          firstDate: e.date,
+          lastDate: current.date,
+          changePct,
+        };
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null)
+      .sort((a, b) =>
+        sortBy === 'price'
+          ? b.lastPrice - a.lastPrice
+          : Math.abs(b.changePct) - Math.abs(a.changePct)
+      )
       .slice(0, take);
   }
 }

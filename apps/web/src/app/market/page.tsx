@@ -42,12 +42,20 @@ interface RecentPriceRow {
 }
 
 interface PriceMover {
-  card: { webCardId: string; name: string; imageUrl?: string };
+  card: { webCardId: string; name: string; imageUrl?: string; supertype?: string; types?: string[] };
   source: string;
   firstPrice: number;
   lastPrice: number;
+  firstDate?: string;
+  lastDate?: string;
   changePct: number;
 }
+
+const TYPE_EMOJI: Record<string, string> = {
+  FIRE: '🔥', WATER: '💧', GRASS: '🌿', LIGHTNING: '⚡',
+  PSYCHIC: '🔮', FIGHTING: '👊', DARKNESS: '🌑', METAL: '⚙️',
+  DRAGON: '🐉', FAIRY: '✨', COLORLESS: '⭐',
+};
 
 const PAGE_SIZE = 50;
 
@@ -58,13 +66,20 @@ export default function MarketPage() {
   const [browseSkip, setBrowseSkip] = useState(0);
   const [nameFilter, setNameFilter] = useState('');
   const [stockFilter, setStockFilter] = useState<'all' | 'in' | 'out'>('all');
+  const [minPrice, setMinPrice] = useState<number>(0);
+  const [hideBelow10, setHideBelow10] = useState(false);
   const [sortField, setSortField] = useState<'price' | 'fetchedAt'>('price');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [activeTab, setActiveTab] = useState<'browse' | 'movers' | 'lookup'>('browse');
+  const [moverPctFilter, setMoverPctFilter] = useState<{ min?: number; max?: number } | null>(null);
+  const [moverDays, setMoverDays] = useState<30 | 90 | 180>(90);
+  const [moverSupertype, setMoverSupertype] = useState<string>('');
+  const [moverPokemonType, setMoverPokemonType] = useState<string>('');
+  const [moverSortBy, setMoverSortBy] = useState<'change' | 'price'>('price');
 
   // Browse all prices
   const browseQuery = useQuery({
-    queryKey: ['prices-recent', browseSkip, sortField, sortDir, nameFilter, stockFilter],
+    queryKey: ['prices-recent', browseSkip, sortField, sortDir, nameFilter, stockFilter, minPrice, hideBelow10],
     queryFn: () => {
       const params = new URLSearchParams({
         take: String(PAGE_SIZE),
@@ -75,6 +90,8 @@ export default function MarketPage() {
       if (nameFilter) params.set('name', nameFilter);
       if (stockFilter === 'in') params.set('inStock', 'true');
       if (stockFilter === 'out') params.set('inStock', 'false');
+      const effectiveMin = hideBelow10 ? Math.max(10, minPrice) : minPrice;
+      if (effectiveMin > 0) params.set('minPrice', String(effectiveMin));
       return apiClient.get(`/prices?${params.toString()}`);
     },
     staleTime: 5 * 60 * 1000,
@@ -82,8 +99,16 @@ export default function MarketPage() {
 
   // Top movers
   const moversQuery = useQuery({
-    queryKey: ['price-movers'],
-    queryFn: () => apiClient.get('/prices/movers?take=20'),
+    queryKey: ['price-movers', moverPctFilter, moverDays, moverSupertype, moverPokemonType, moverSortBy],
+    queryFn: () => {
+      const params = new URLSearchParams({ take: '300', days: String(moverDays), sortBy: moverSortBy });
+      if (moverPctFilter?.min !== undefined) params.set('minChangePct', String(moverPctFilter.min));
+      if (moverPctFilter?.max !== undefined) params.set('maxChangePct', String(moverPctFilter.max));
+      if (moverSupertype) params.set('supertype', moverSupertype);
+      if (moverPokemonType) params.set('pokemonType', moverPokemonType);
+      return apiClient.get(`/prices/movers?${params.toString()}`);
+    },
+    staleTime: 5 * 60 * 1000,
   });
 
   // Card lookup
@@ -107,8 +132,11 @@ export default function MarketPage() {
   const cardInfo = priceQuery.data?.data?.card;
   const history: any[] = historyQuery.data?.data ?? [];
 
-  // Data comes pre-sorted/filtered from the server
-  const filteredRows = allRows;
+  // Data comes pre-sorted/filtered from the server; also apply minPrice client-side as fallback
+  const effectiveClientMin = hideBelow10 ? Math.max(10, minPrice) : minPrice;
+  const filteredRows = effectiveClientMin > 0
+    ? allRows.filter((r) => r.price >= effectiveClientMin)
+    : allRows;
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
   const currentPage = browseSkip / PAGE_SIZE + 1;
@@ -169,6 +197,26 @@ export default function MarketPage() {
                 <option value="in">In stock</option>
                 <option value="out">Out of stock</option>
               </select>
+              <label className="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={hideBelow10}
+                  onChange={(e) => { setHideBelow10(e.target.checked); setBrowseSkip(0); }}
+                  className="rounded accent-amber-500"
+                />
+                Hide &lt; 10
+              </label>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-gray-500">Min price</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={minPrice || ''}
+                  placeholder="0"
+                  onChange={(e) => { setMinPrice(e.target.value ? parseFloat(e.target.value) : 0); setBrowseSkip(0); }}
+                  className="border rounded-md px-2 py-1.5 text-sm w-20 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                />
+              </div>
               <span className="text-xs text-gray-400 ml-auto">
                 Page {currentPage} / {totalPages || 1} · {total.toLocaleString()} total
               </span>
@@ -283,9 +331,113 @@ export default function MarketPage() {
         {/* === MOVERS TAB === */}
         {activeTab === 'movers' && (
           <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="p-4 border-b">
-              <h2 className="font-semibold text-gray-800">Top Movers — Last 7 Days</h2>
-              <p className="text-xs text-gray-400 mt-0.5">Cards with the largest % price change recently</p>
+            <div className="p-4 border-b space-y-3">
+              {/* Row 1: Title + sort + day range */}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="font-semibold text-gray-800">Top Movers — {moverDays}d</h2>
+                  <p className="text-xs text-gray-400 mt-0.5">Cards with the largest % price change over the last {moverDays} days</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  {/* Sort by */}
+                  <div className="flex gap-1">
+                    {([{ label: '% Change', value: 'change' }, { label: 'Price', value: 'price' }] as const).map(({ label, value }) => (
+                      <button
+                        key={value}
+                        onClick={() => setMoverSortBy(value)}
+                        className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                          moverSortBy === value ? 'bg-amber-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        {value === 'change' ? '📈' : '💰'} {label}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="text-gray-200">|</span>
+                  {/* Day range */}
+                  <div className="flex gap-1">
+                    {([30, 90, 180] as const).map((d) => (
+                      <button
+                        key={d}
+                        onClick={() => setMoverDays(d)}
+                        className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                          moverDays === d ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        {d}d{d === 90 ? ' ✦' : ''}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              {/* Row 2: Supertype + Pokemon type */}
+              <div className="flex flex-wrap gap-2 items-center">
+                <span className="text-xs text-gray-400 font-medium">Type:</span>
+                {[
+                  { label: 'All', value: '' },
+                  { label: '🎴 Pokémon', value: 'POKEMON' },
+                  { label: '🃏 Trainer', value: 'TRAINER' },
+                  { label: '⚡ Energy', value: 'ENERGY' },
+                ].map(({ label, value }) => (
+                  <button
+                    key={value}
+                    onClick={() => { setMoverSupertype(value); setMoverPokemonType(''); }}
+                    className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                      moverSupertype === value ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+                {moverSupertype === 'POKEMON' && (
+                  <>
+                    <span className="text-xs text-gray-300">|</span>
+                    {['', 'FIRE', 'WATER', 'GRASS', 'LIGHTNING', 'PSYCHIC', 'FIGHTING', 'DARKNESS', 'METAL', 'DRAGON', 'COLORLESS'].map((t) => (
+                      <button
+                        key={t}
+                        onClick={() => setMoverPokemonType(t)}
+                        className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                          moverPokemonType === t ? 'bg-indigo-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        {t === '' ? 'All' : `${TYPE_EMOJI[t] ?? ''} ${t.charAt(0) + t.slice(1).toLowerCase()}`}
+                      </button>
+                    ))}
+                  </>
+                )}
+              </div>
+              {/* Row 3: % filters */}
+              <div className="flex flex-wrap gap-1 items-center">
+                <span className="text-xs text-gray-400 font-medium">Change:</span>
+                {[
+                  { label: 'All', filter: null },
+                  { label: '+500%+', filter: { min: 500 } },
+                  { label: '+200%', filter: { min: 200 } },
+                  { label: '+100%', filter: { min: 100 } },
+                  { label: '-8%', filter: { max: -8 } },
+                  { label: '-16%', filter: { max: -16 } },
+                  { label: '-35%', filter: { max: -35 } },
+                  { label: '-60%', filter: { max: -60 } },
+                  { label: '-80%+', filter: { max: -80 } },
+                ].map(({ label, filter }) => {
+                  const isActive = JSON.stringify(moverPctFilter) === JSON.stringify(filter);
+                  const isGain = label.startsWith('+');
+                  const isLoss = label.startsWith('-');
+                  return (
+                    <button
+                      key={label}
+                      onClick={() => setMoverPctFilter(filter)}
+                      className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                        isActive
+                          ? isGain ? 'bg-green-600 text-white' : isLoss ? 'bg-red-500 text-white' : 'bg-amber-600 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             {moversQuery.isLoading && <p className="text-center py-16 text-gray-400">Loading…</p>}
             {!moversQuery.isLoading && movers.length === 0 && (
@@ -316,8 +468,26 @@ export default function MarketPage() {
                       <div className="w-8 h-11 bg-gray-100 rounded shrink-0" />
                     )}
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 text-sm truncate">{m.card.name}</p>
-                      <p className="text-xs text-gray-400">{SOURCE_LABELS[m.source] ?? m.source}</p>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <p className="font-medium text-gray-900 text-sm truncate">{m.card.name}</p>
+                        {m.card.supertype && (
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 font-medium shrink-0">
+                            {m.card.supertype === 'POKEMON' ? '🎴' : m.card.supertype === 'TRAINER' ? '🃏' : '⚡'}{' '}
+                            {m.card.supertype.charAt(0) + m.card.supertype.slice(1).toLowerCase()}
+                          </span>
+                        )}
+                        {m.card.types && m.card.types.length > 0 && m.card.types.map((t) => (
+                          <span key={t} className="text-xs shrink-0">{TYPE_EMOJI[t] ?? t}</span>
+                        ))}
+                      </div>
+                      <p className="text-xs text-gray-400">
+                        {SOURCE_LABELS[m.source] ?? m.source}
+                        {m.firstDate && m.lastDate && (
+                          <span className="ml-1">
+                            · {new Date(m.firstDate).toLocaleDateString()} → {new Date(m.lastDate).toLocaleDateString()}
+                          </span>
+                        )}
+                      </p>
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-sm text-gray-600">

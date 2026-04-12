@@ -90,6 +90,7 @@ function resolveFetchedAt(e: MarketEntry): Date {
 }
 
 const CHUNK = 200;
+const HISTORY_INTERVAL_DAYS = 6; // always insert a history entry if last one is older than this
 
 interface ImportResult { matched: number; created: number; updated: number; histAdded: number; }
 
@@ -103,6 +104,8 @@ async function upsertPrices(
   if (entries.length === 0) return { created: 0, updated: 0, histAdded: 0 };
 
   const allCardIds = entries.map((e) => e.cardId);
+
+  // Load existing CardPrice records
   const existingPrices = new Map<string, { id: string; price: number }>();
   for (let i = 0; i < allCardIds.length; i += CHUNK) {
     const rows = await db.cardPrice.findMany({
@@ -112,20 +115,41 @@ async function upsertPrices(
     for (const r of rows) existingPrices.set(r.cardId, { id: r.id, price: r.price });
   }
 
+  // Load latest PriceHistory date per card (to enforce 6-day interval)
+  const latestHistory = new Map<string, Date>();
+  for (let i = 0; i < allCardIds.length; i += CHUNK) {
+    const rows = await db.priceHistory.findMany({
+      where: { cardId: { in: allCardIds.slice(i, i + CHUNK) }, source: "OTHER" },
+      orderBy: { date: "desc" },
+      distinct: ["cardId"],
+      select: { cardId: true, date: true },
+    });
+    for (const r of rows) latestHistory.set(r.cardId, r.date);
+  }
+
   const toCreate: Array<{ cardId: string; source: "OTHER"; price: number; currency: string; inStock: boolean; fetchedAt: Date }> = [];
   const toUpdate: Array<{ id: string; price: number; currency: string; inStock: boolean; fetchedAt: Date }> = [];
   const historyRows: Array<{ cardId: string; source: "OTHER"; price: number; currency: string; date: Date }> = [];
 
+  const sixDaysMs = HISTORY_INTERVAL_DAYS * 24 * 60 * 60 * 1000;
+
   for (const e of entries) {
     const existing = existingPrices.get(e.cardId);
+    const priceChanged = !existing || Math.abs(e.price - existing.price) > 0.01;
+    const lastHistDate = latestHistory.get(e.cardId);
+    const intervalElapsed = !lastHistDate || (e.fetchedAt.getTime() - lastHistDate.getTime()) >= sixDaysMs;
+
     if (existing) {
       toUpdate.push({ id: existing.id, price: e.price, currency: e.currency, inStock: e.inStock, fetchedAt: e.fetchedAt });
-      if (Math.abs(e.price - existing.price) > 0.01)
-        historyRows.push({ cardId: e.cardId, source: "OTHER", price: e.price, currency: e.currency, date: e.fetchedAt });
     } else {
       toCreate.push({ cardId: e.cardId, source: "OTHER", price: e.price, currency: e.currency, inStock: e.inStock, fetchedAt: e.fetchedAt });
+    }
+
+    // Insert history if price changed OR if 6+ days since last entry
+    if (priceChanged || intervalElapsed) {
       historyRows.push({ cardId: e.cardId, source: "OTHER", price: e.price, currency: e.currency, date: e.fetchedAt });
     }
+
     if (verbose) console.log(`  [${existing ? "UPDATE" : "CREATE"}] ${label(e.cardId)} → HK$${e.price}`);
   }
 
@@ -192,6 +216,37 @@ function expansionCodeFromFilename(filePath: string): string | null {
 
 interface ExpansionEntry { price: number; currency: string; inStock: boolean; date: string }
 
+/** Build a collectorNumber → card.id lookup from HK source JSON data.
+ *  Falls back gracefully if source file doesn't exist.
+ *  Source files live at: data/cards/hongkong/hk_cards_{expCode}.json
+ */
+function buildCollectorNumMap(expCode: string, webCardIdMap: Map<string, string>): Map<string, string> {
+  const map = new Map<string, string>();
+  // Search candidate paths: relative to CWD and relative to this script
+  const candidates = [
+    path.resolve(process.cwd(), `data/cards/hongkong/hk_cards_${expCode}.json`),
+    path.resolve(__dirname, `../data/cards/hongkong/hk_cards_${expCode}.json`),
+    path.resolve(__dirname, `../../PTCG_2026/data/cards/hongkong/hk_cards_${expCode}.json`),
+  ];
+  for (const filePath of candidates) {
+    if (!fs.existsSync(filePath)) continue;
+    try {
+      const cards: Array<{ webCardId: string; collectorNumber?: string }> = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+      for (const c of cards) {
+        if (!c.collectorNumber || !c.webCardId) continue;
+        const cardDbId = webCardIdMap.get(c.webCardId);
+        if (!cardDbId) continue;
+        // Index by full "240/193" and by prefix "240"
+        map.set(c.collectorNumber, cardDbId);
+        const prefix = c.collectorNumber.split("/")[0];
+        if (prefix !== c.collectorNumber) map.set(prefix, cardDbId);
+      }
+      break; // found and loaded
+    } catch { /* skip bad files */ }
+  }
+  return map;
+}
+
 async function importExpansionFile(
   raw: Record<string, ExpansionEntry[]>,
   filePath: string,
@@ -212,21 +267,43 @@ async function importExpansionFile(
   // Load all cards for this expansion, keyed by cardNumber
   const dbCards = await db.card.findMany({
     where: { regionalExpansionId: re.id },
-    select: { id: true, primaryCard: { select: { cardNumber: true } } },
+    select: { id: true, webCardId: true, primaryCard: { select: { cardNumber: true } } },
   });
-  const cardNumMap = new Map<string, string>(); // cardNumber → card.id
+  const cardNumMap = new Map<string, string>();   // primaryCard.cardNumber → card.id
+  const webCardIdMap = new Map<string, string>(); // webCardId → card.id
   for (const c of dbCards) {
-    if (c.primaryCard.cardNumber) cardNumMap.set(c.primaryCard.cardNumber, c.id);
+    if (c.primaryCard.cardNumber) {
+      cardNumMap.set(c.primaryCard.cardNumber, c.id);
+    }
+    webCardIdMap.set(c.webCardId, c.id);
   }
-  if (cardNumMap.size === 0) return { matched: 0, created: 0, updated: 0, histAdded: 0 };
+  if (cardNumMap.size === 0 && webCardIdMap.size === 0) return { matched: 0, created: 0, updated: 0, histAdded: 0 };
+
+  // Supplementary lookup: collectorNumber → card.id from HK source JSON data.
+  // This handles cards whose primaryCard.cardNumber in the DB doesn't match their
+  // actual collector number (e.g. wrong expansion mapping during initial import).
+  const collectorNumMap = buildCollectorNumMap(expCode, webCardIdMap);
+
+  // Prevent double-matching: if a card has a proper collectorNumber mapping,
+  // remove it from cardNumMap so it can ONLY be looked up via collectorNumMap.
+  // This fixes cards like hk15257 whose DB cardNumber ("003") belongs to a different
+  // card slot, but collectorNumber ("240/193") is derived from the source JSON.
+  const collectorMappedCardIds = new Set(collectorNumMap.values());
+  for (const [key, cardId] of cardNumMap.entries()) {
+    if (collectorMappedCardIds.has(cardId)) {
+      cardNumMap.delete(key);
+    }
+  }
 
   // Match file entries
   const upserts: Array<{ cardId: string; price: number; currency: string; inStock: boolean; fetchedAt: Date }> = [];
   for (const [rawCardId, entries] of Object.entries(raw)) {
     if (!Array.isArray(entries) || entries.length === 0) continue;
-    // cardId format "093/066" — DB uses just the number part (e.g. "093")
+    // cardId format "093/066" — try full key first, then just the prefix number.
+    // If cardNumMap fails (DB has wrong cardNumber), fall back to collectorNumMap from source data.
     const cardNum = rawCardId.split("/")[0];
-    const dbId = cardNumMap.get(cardNum);
+    const dbId = cardNumMap.get(rawCardId) ?? cardNumMap.get(cardNum)
+              ?? collectorNumMap.get(rawCardId) ?? collectorNumMap.get(cardNum);
     if (!dbId) continue;
     const first = entries[0];
     const price = typeof first.price === "number" ? first.price : 0;
@@ -343,13 +420,19 @@ async function main() {
   console.log("=".repeat(60));
 
   // Print summary header from JSON
-  const rawPeek: MarketPriceFile = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+  const rawPeek = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+  const isFormatA = rawPeek && typeof rawPeek === "object" && Array.isArray(rawPeek.cards);
   console.log(`\n📊 File stats:`);
-  console.log(`   Total entries     : ${rawPeek.cards.length}`);
-  if (rawPeek.summary) {
-    const s = rawPeek.summary as Record<string, unknown>;
-    console.log(`   Matched entries   : ${s.matchedCards ?? "?"}`);
-    console.log(`   Last update       : ${s.lastUpdate ?? "?"}`);
+  if (isFormatA) {
+    console.log(`   Total entries     : ${rawPeek.cards.length}`);
+    if (rawPeek.summary) {
+      const s = rawPeek.summary as Record<string, unknown>;
+      console.log(`   Matched entries   : ${s.matchedCards ?? "?"}`);
+      console.log(`   Last update       : ${s.lastUpdate ?? "?"}`);
+    }
+  } else {
+    console.log(`   Format            : per-expansion`);
+    console.log(`   Card keys         : ${Object.keys(rawPeek).length}`);
   }
 
   // Dry-run: do the lookup without writing

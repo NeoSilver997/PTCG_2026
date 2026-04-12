@@ -29,6 +29,7 @@ export class PricesController {
   @ApiQuery({ name: 'sortDir', required: false, enum: ['asc', 'desc'] })
   @ApiQuery({ name: 'name', required: false, type: String })
   @ApiQuery({ name: 'inStock', required: false, type: Boolean })
+  @ApiQuery({ name: 'minPrice', required: false, type: Number, description: 'Hide prices below this value' })
   listRecent(
     @Query('take') take?: string,
     @Query('skip') skip?: string,
@@ -36,11 +37,13 @@ export class PricesController {
     @Query('sortDir') sortDir?: string,
     @Query('name') name?: string,
     @Query('inStock') inStock?: string,
+    @Query('minPrice') minPrice?: string,
   ) {
     const validSortBy = sortBy === 'price' ? 'price' : 'fetchedAt';
     const validSortDir = sortDir === 'asc' ? 'asc' : 'desc';
     const inStockFilter =
       inStock === 'true' ? true : inStock === 'false' ? false : undefined;
+    const minPriceFilter = minPrice ? parseFloat(minPrice) : undefined;
     return this.pricesService.listRecent(
       take ? parseInt(take, 10) : 50,
       skip ? parseInt(skip, 10) : 0,
@@ -48,15 +51,38 @@ export class PricesController {
       validSortDir,
       name || undefined,
       inStockFilter,
+      minPriceFilter,
     );
   }
 
   @Get('movers')
   @Throttle({ long: { limit: 100, ttl: 60000 } })
-  @ApiOperation({ summary: 'Get top price movers in the last 7 days' })
+  @ApiOperation({ summary: 'Get top price movers within a date window' })
   @ApiQuery({ name: 'take', required: false, type: Number })
-  getTopMovers(@Query('take') take?: string) {
-    return this.pricesService.getTopMovers(take ? parseInt(take, 10) : 20);
+  @ApiQuery({ name: 'minChangePct', required: false, type: Number, description: 'Min % change (e.g. 100 = over +100%)' })
+  @ApiQuery({ name: 'maxChangePct', required: false, type: Number, description: 'Max % change (e.g. -100 = below -100%)' })
+  @ApiQuery({ name: 'days', required: false, type: Number, description: 'Look-back window in days (default 90)' })
+  @ApiQuery({ name: 'supertype', required: false, type: String, description: 'Filter by card supertype: POKEMON, TRAINER, ENERGY' })
+  @ApiQuery({ name: 'pokemonType', required: false, type: String, description: 'Filter by Pokemon type: FIRE, WATER, etc.' })
+  @ApiQuery({ name: 'sortBy', required: false, enum: ['change', 'price'], description: 'Sort by change% (default) or current price' })
+  getTopMovers(
+    @Query('take') take?: string,
+    @Query('minChangePct') minChangePct?: string,
+    @Query('maxChangePct') maxChangePct?: string,
+    @Query('days') days?: string,
+    @Query('supertype') supertype?: string,
+    @Query('pokemonType') pokemonType?: string,
+    @Query('sortBy') sortBy?: string,
+  ) {
+    return this.pricesService.getTopMovers(
+      take ? parseInt(take, 10) : 300,
+      minChangePct !== undefined ? parseFloat(minChangePct) : undefined,
+      maxChangePct !== undefined ? parseFloat(maxChangePct) : undefined,
+      days ? parseInt(days, 10) : 90,
+      supertype || undefined,
+      pokemonType || undefined,
+      sortBy === 'price' ? 'price' : 'change',
+    );
   }
 
   @Get(':webCardId')
