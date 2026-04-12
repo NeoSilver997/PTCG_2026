@@ -453,6 +453,26 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
     staleTime: 1000 * 60 * 60, // cache for 1 hour
   });
 
+  const { data: cardPrices } = useQuery({
+    queryKey: ['card-prices', webCardId],
+    queryFn: async () => {
+      const { data } = await apiClient.get(`/prices/${webCardId}`);
+      return data;
+    },
+    enabled: !!card,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const { data: priceHistory } = useQuery({
+    queryKey: ['price-history', webCardId],
+    queryFn: async () => {
+      const { data } = await apiClient.get(`/prices/${webCardId}/history`, { params: { days: 90 } });
+      return data as Array<{ id: string; source: string; price: number; currency: string; date: string }>;
+    },
+    enabled: !!card,
+    staleTime: 1000 * 60 * 5,
+  });
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -611,7 +631,12 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                   <div>
                     <dt className="text-sm text-gray-600">擴展包</dt>
                     <dd className="font-medium text-gray-900">
-                      {currentVariant.regionalExpansion.primaryExpansion?.code || currentVariant.regionalExpansion.code}
+                      <Link
+                        href={`/products?productTypeGroup=expansion_series&expansionCode=${encodeURIComponent(currentVariant.regionalExpansion.code)}`}
+                        className="text-blue-600 hover:text-blue-800 hover:underline"
+                      >
+                        {currentVariant.regionalExpansion.primaryExpansion?.code || currentVariant.regionalExpansion.code}
+                      </Link>
                       {currentVariant.regionalExpansion.name && (
                         <span className="text-sm text-gray-600 ml-1">({currentVariant.regionalExpansion.name})</span>
                       )}
@@ -1313,6 +1338,82 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                     </Link>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Price History */}
+            {((cardPrices?.prices?.length > 0) || ((priceHistory?.length ?? 0) > 0)) && (
+              <div className="bg-white rounded-lg p-6 shadow-sm">
+                <h2 className="text-xl font-semibold mb-4 text-gray-900">市場價格</h2>
+
+                {/* Current Prices */}
+                {cardPrices?.prices?.length > 0 && (
+                  <div className="mb-5">
+                    <h3 className="text-sm font-medium text-gray-600 mb-3">目前售價</h3>
+                    <div className="flex flex-wrap gap-3">
+                      {cardPrices.prices.map((p: any) => (
+                        <div key={p.id} className={`px-4 py-3 rounded-lg border ${p.inStock ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
+                          <div className="text-xs text-gray-500 mb-1">{p.source}{p.condition ? ` · ${p.condition}` : ''}</div>
+                          <div className="text-lg font-bold text-gray-900">
+                            {p.currency === 'JPY' ? '¥' : '$'}{p.price.toLocaleString()}
+                          </div>
+                          <div className="text-xs text-gray-400 mt-1">
+                            {p.inStock ? '有庫存' : '無庫存'} · {new Date(p.fetchedAt).toLocaleDateString('zh-TW')}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Price History Chart */}
+                {priceHistory && priceHistory.length > 0 && (() => {
+                  // Group by source, then show a mini chart per source
+                  const bySource: Record<string, typeof priceHistory> = {};
+                  for (const h of priceHistory) {
+                    if (!bySource[h.source]) bySource[h.source] = [];
+                    bySource[h.source].push(h);
+                  }
+                  return (
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-600 mb-3">90日價格紀錄</h3>
+                      {Object.entries(bySource).map(([source, entries]) => {
+                        const sorted = [...entries].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                        const maxPrice = Math.max(...sorted.map(e => e.price));
+                        const minPrice = Math.min(...sorted.map(e => e.price));
+                        const range = maxPrice - minPrice || 1;
+                        const currency = sorted[0].currency;
+                        return (
+                          <div key={source} className="mb-4 last:mb-0">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-semibold text-gray-500">{source}</span>
+                              <span className="text-xs text-gray-400">
+                                {currency === 'JPY' ? '¥' : '$'}{minPrice.toLocaleString()} – {currency === 'JPY' ? '¥' : '$'}{maxPrice.toLocaleString()}
+                              </span>
+                            </div>
+                            <div className="flex items-end gap-0.5 h-12">
+                              {sorted.map((entry, i) => {
+                                const heightPct = ((entry.price - minPrice) / range) * 80 + 20;
+                                return (
+                                  <div
+                                    key={entry.id}
+                                    className="flex-1 bg-blue-400 hover:bg-blue-600 rounded-sm transition-colors cursor-default"
+                                    style={{ height: `${heightPct}%` }}
+                                    title={`${new Date(entry.date).toLocaleDateString('zh-TW')}: ${currency === 'JPY' ? '¥' : '$'}${entry.price.toLocaleString()}`}
+                                  />
+                                );
+                              })}
+                            </div>
+                            <div className="flex justify-between text-[9px] text-gray-400 mt-0.5">
+                              <span>{new Date(sorted[0].date).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })}</span>
+                              <span>{new Date(sorted[sorted.length - 1].date).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </div>
             )}
 

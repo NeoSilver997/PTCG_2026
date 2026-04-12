@@ -29,6 +29,14 @@ export class ProductsController {
     return this.productsService.getProduct(id);
   }
 
+  @Get(':id/cards-summary')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get card type/rarity/price summary for a product expansion' })
+  @ApiParam({ name: 'id', type: String })
+  async getCardsSummary(@Param('id') id: string) {
+    return this.productsService.getCardsSummary(id);
+  }
+
   @Put(':id')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update a product by ID' })

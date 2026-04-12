@@ -128,6 +128,73 @@ export class ProductsService {
       productType: product.productType ?? null,
       cardOnly: product.cardOnly === '1' || product.cardOnly === 'true' || product.cardOnly === 'Yes',
       beginnerFlag: product.beginnerFlag === 1,
+
+    };
+  }
+
+  async getCardsSummary(id: string) {
+    const product = await this.prisma.product.findUnique({
+      where: { id },
+      select: { code: true, country: true },
+    });
+
+    if (!product?.code) {
+      return { cardCount: 0, typeCount: {}, rarityCount: {}, totalPrice: 0, priceCount: 0, currency: 'JPY' };
+    }
+
+    const COUNTRY_TO_LANGUAGE: Record<string, string> = {
+      'Japan': 'JA_JP',
+      'Hong Kong (ZH)': 'ZH_TW',
+      'Hong Kong (EN)': 'EN_US',
+    };
+    const language = COUNTRY_TO_LANGUAGE[product.country];
+
+    const where: any = {
+      regionalExpansion: {
+        code: { equals: product.code, mode: 'insensitive' },
+      },
+    };
+    if (language) where.language = language;
+
+    const cards = await this.prisma.card.findMany({
+      where,
+      select: {
+        supertype: true,
+        rarity: true,
+        prices: {
+          take: 1,
+          orderBy: { fetchedAt: 'desc' },
+          select: { price: true, currency: true },
+        },
+      },
+    });
+
+    const typeCount: Record<string, number> = {};
+    const rarityCount: Record<string, number> = {};
+    let totalPrice = 0;
+    let priceCount = 0;
+    let currency = 'JPY';
+
+    for (const card of cards) {
+      const type = card.supertype || 'UNKNOWN';
+      typeCount[type] = (typeCount[type] || 0) + 1;
+      if (card.rarity) {
+        rarityCount[card.rarity] = (rarityCount[card.rarity] || 0) + 1;
+      }
+      if (card.prices?.length) {
+        totalPrice += card.prices[0].price;
+        currency = card.prices[0].currency;
+        priceCount++;
+      }
+    }
+
+    return {
+      cardCount: cards.length,
+      typeCount,
+      rarityCount,
+      totalPrice: Math.round(totalPrice),
+      priceCount,
+      currency,
     };
   }
 

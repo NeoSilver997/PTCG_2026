@@ -33,8 +33,22 @@ interface ProductDetail {
   updatedAt: string;
 }
 
+interface CardsSummary {
+  cardCount: number;
+  typeCount: Record<string, number>;
+  rarityCount: Record<string, number>;
+  totalPrice: number;
+  priceCount: number;
+  currency: string;
+}
+
 async function fetchProductDetail(id: string) {
   const { data } = await apiClient.get(`/products/${id}`);
+  return data;
+}
+
+async function fetchCardsSummary(id: string): Promise<CardsSummary> {
+  const { data } = await apiClient.get(`/products/${id}/cards-summary`);
   return data;
 }
 
@@ -52,6 +66,15 @@ async function fetchRelatedCards(productCode: string, language: string, skip = 0
   return data;
 }
 
+async function fetchLinkedProduct(code: string, country: string) {
+  const targetCountry = country.includes('Hong Kong') ? 'Japan' : null;
+  if (!targetCountry) return null;
+  const { data } = await apiClient.get('/products', {
+    params: { country: targetCountry, expansionCode: code, take: 1 }
+  });
+  return data?.data?.[0] || null;
+}
+
 const COUNTRY_TO_LANGUAGE: Record<string, string> = {
   'Japan': 'JA_JP',
   'Hong Kong (ZH)': 'ZH_TW',
@@ -64,12 +87,39 @@ const COUNTRY_LABELS: Record<string, string> = {
   'Hong Kong (ZH)': '香港 (中文)',
 };
 
+const SUPERTYPE_LABELS: Record<string, string> = {
+  POKEMON: '寶可夢',
+  TRAINER: '訓練家',
+  ENERGY: '能量',
+};
+
+const RARITY_SORT = [
+  'HYPER_RARE', 'SPECIAL_ILLUSTRATION_RARE', 'ILLUSTRATION_RARE', 'ULTRA_RARE',
+  'DOUBLE_RARE', 'SHINY_RARE', 'RARE', 'UNCOMMON', 'COMMON', 'PROMO',
+];
+
+function rarityLabel(key: string) {
+  return key.replace(/_/g, ' ');
+}
+
 export default function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const { id } = use(params);
   const { data: product, isLoading, error } = useQuery<ProductDetail>({
     queryKey: ['product', id],
     queryFn: () => fetchProductDetail(id),
+  });
+
+  const { data: cardsSummary } = useQuery<CardsSummary>({
+    queryKey: ['product-cards-summary', id],
+    queryFn: () => fetchCardsSummary(id),
+    enabled: !!product?.code,
+  });
+
+  const { data: linkedProduct } = useQuery({
+    queryKey: ['linked-product', product?.code, product?.country],
+    queryFn: () => fetchLinkedProduct(product!.code!, product!.country),
+    enabled: !!product?.code && !!product?.country,
   });
 
   const { data: relatedCards, isLoading: cardsLoading } = useQuery({
@@ -256,6 +306,109 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
             </div>
           </div>
         </div>
+
+        {/* Card Summary */}
+        {(cardsSummary && cardsSummary.cardCount > 0) && (
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">
+              卡牌統計
+              <span className="ml-2 text-sm font-normal text-gray-500">({cardsSummary.cardCount} 張)</span>
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* By Type */}
+              <div>
+                <h3 className="text-sm font-medium text-gray-700 mb-3">類型分佈</h3>
+                <div className="space-y-2">
+                  {Object.entries(cardsSummary.typeCount)
+                    .sort(([, a], [, b]) => b - a)
+                    .map(([type, count]) => (
+                      <div key={type} className="flex items-center gap-2">
+                        <span className="text-sm text-gray-700 w-20 shrink-0">{SUPERTYPE_LABELS[type] || type}</span>
+                        <div className="flex-1 bg-gray-100 rounded-full h-4 overflow-hidden">
+                          <div
+                            className="h-4 rounded-full bg-blue-500"
+                            style={{ width: `${(count / cardsSummary.cardCount) * 100}%` }}
+                          />
+                        </div>
+                        <span className="text-sm font-medium text-gray-900 w-8 text-right">{count}</span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+
+              {/* By Rarity */}
+              <div>
+                <h3 className="text-sm font-medium text-gray-700 mb-3">稀有度分佈</h3>
+                <div className="space-y-1 max-h-52 overflow-y-auto">
+                  {[
+                    ...RARITY_SORT.filter(r => cardsSummary.rarityCount[r]),
+                    ...Object.keys(cardsSummary.rarityCount).filter(r => !RARITY_SORT.includes(r)).sort(),
+                  ].map(rarity => {
+                    const count = cardsSummary.rarityCount[rarity];
+                    if (!count) return null;
+                    return (
+                      <div key={rarity} className="flex items-center justify-between text-sm">
+                        <span className="text-gray-700">{rarityLabel(rarity)}</span>
+                        <span className="font-medium text-gray-900">{count}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Total Price */}
+              <div>
+                <h3 className="text-sm font-medium text-gray-700 mb-3">市場估值</h3>
+                {cardsSummary.priceCount > 0 ? (
+                  <div>
+                    <div className="text-3xl font-bold text-green-600">
+                      {cardsSummary.currency === 'JPY' ? '¥' : '$'}{cardsSummary.totalPrice.toLocaleString()}
+                    </div>
+                    <div className="text-sm text-gray-500 mt-1">
+                      {cardsSummary.priceCount} / {cardsSummary.cardCount} 張有價格資料
+                    </div>
+                    <div className="text-xs text-gray-400 mt-1">
+                      平均 {cardsSummary.currency === 'JPY' ? '¥' : '$'}{Math.round(cardsSummary.totalPrice / cardsSummary.priceCount).toLocaleString()} /張
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm text-gray-400">暫無價格資料</div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Linked JP/HK Product */}
+        {linkedProduct && (
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">
+              {product.country.includes('Hong Kong') ? '關聯日版產品' : '關聯港版產品'}
+            </h2>
+            <Link
+              href={`/products/${linkedProduct.id}`}
+              className="flex items-center gap-4 p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-colors"
+            >
+              {linkedProduct.imageUrl && (
+                <img
+                  src={linkedProduct.imageUrl}
+                  alt={linkedProduct.productName}
+                  className="w-16 h-auto rounded shadow-sm object-cover"
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                />
+              )}
+              <div className="flex-1">
+                <div className="font-medium text-gray-900">{linkedProduct.productName}</div>
+                <div className="text-sm text-gray-600 mt-1">
+                  {COUNTRY_LABELS[linkedProduct.country] || linkedProduct.country}
+                  {linkedProduct.code && <span className="ml-2 font-mono text-xs bg-gray-100 px-1.5 py-0.5 rounded">{linkedProduct.code}</span>}
+                  {linkedProduct.releaseDate && <span className="ml-2">{new Date(linkedProduct.releaseDate).toLocaleDateString('zh-TW')}</span>}
+                </div>
+              </div>
+              <span className="text-blue-600 text-sm">查看 →</span>
+            </Link>
+          </div>
+        )}
 
         {/* Metadata */}
         <div className="bg-white rounded-lg shadow p-6">
