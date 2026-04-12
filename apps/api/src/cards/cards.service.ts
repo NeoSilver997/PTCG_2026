@@ -533,7 +533,12 @@ export class CardsService {
       };
     }
     if (regulationMark) {
-      where.regulationMark = regulationMark;
+      const marks = String(regulationMark).split(',').map((m: string) => m.trim()).filter(Boolean);
+      if (marks.length === 1) {
+        where.regulationMark = marks[0];
+      } else if (marks.length > 1) {
+        where.regulationMark = { in: marks } as any;
+      }
     }
     // Note: expansionCode is handled directly in the raw SQL path below (jsonFieldConditions)
     // Note: evolvesTo filter handled via raw SQL WHERE clause below for exact CSV matching
@@ -666,7 +671,11 @@ export class CardsService {
           if (key === 'ruleBox' && typeof value === 'string') return `c."${key}" = '${value}'`;
           if (key === 'rarity' && typeof value === 'string') return `c."${key}" = '${value}'`;
           if (key === 'language' && typeof value === 'string') return `c."${key}" = '${value}'`;
-          if (key === 'regulationMark' && typeof value === 'string') return `c."${key}" = '${value}'`;
+          if (key === 'regulationMark' && typeof value === 'string') {
+            const vals = value.split(',').map((v: string) => v.trim()).filter(Boolean);
+            if (vals.length === 1) return `c."${key}" = '${vals[0]}'`;
+            return `(${vals.map((v: string) => `c."${key}" = '${v.replace(/'/g, "''")}'`).join(' OR ')})`;
+          }
           if (key === 'variantType' && typeof value === 'string') return `c."${key}" = '${value}'`;
           // Handle subtypes array filter
           if (key === 'subtypes' && typeof value === 'object' && value !== null && 'hasSome' in value && Array.isArray(value.hasSome)) {
