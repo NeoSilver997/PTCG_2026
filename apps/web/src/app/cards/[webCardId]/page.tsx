@@ -38,8 +38,9 @@ interface CardDetail {
   updatedAt: string;
   primaryCard: {
     id: string;
-    expansionId: string;
+    primaryExpansionId: string;
     cardNumber: string;
+    name?: string;
     primaryExpansion: {
       code: string;
       nameEn: string;
@@ -394,15 +395,19 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
     enabled: !!card?.name,
   });
 
-  // Fetch related products for this card's expansion
+  // Fetch related products for this card's expansion (matched by expansion code)
+  // Use regionalExpansion.code first (e.g. "sv5k") which is the actual per-region release code,
+  // falling back to primaryExpansion.code only when unavailable.
+  const expansionCode = card?.regionalExpansion?.code || card?.primaryCard?.primaryExpansion?.code;
+  const cardLanguage = card?.language;
   const { data: relatedProducts = [] } = useQuery({
-    queryKey: ['relatedProducts', card?.primaryCard?.expansionId],
+    queryKey: ['relatedProducts', expansionCode],
     queryFn: async () => {
-      if (!card?.primaryCard?.expansionId) return [];
+      if (!expansionCode) return [];
       try {
         const { data } = await apiClient.get('/products', {
           params: {
-            search: card.primaryCard.expansionId,
+            expansionCode,
             take: 10
           }
         });
@@ -412,8 +417,28 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
         return [];
       }
     },
-    enabled: !!card?.primaryCard?.expansionId,
+    enabled: !!expansionCode,
   });
+
+  // Pick the most relevant product for this card's language/region.
+  // For ZH_TW prefer HK/Taiwan products; for JA_JP prefer Japan; fall back to any with a date.
+  const preferredProduct: any = (() => {
+    if (!relatedProducts.length) return null;
+    const COUNTRY_PREF: Record<string, string[]> = {
+      ZH_TW: ['hong kong', 'taiwan', 'zh'],
+      JA_JP: ['japan'],
+      EN_US: ['united states', 'international', 'english', 'en'],
+    };
+    const prefs = COUNTRY_PREF[cardLanguage || ''] || [];
+    if (prefs.length) {
+      const match = relatedProducts.find((p: any) =>
+        prefs.some(k => (p.country || '').toLowerCase().includes(k))
+      );
+      if (match) return match;
+    }
+    // No language preference match — return first with releaseDate (already sorted by date desc)
+    return relatedProducts.find((p: any) => p.releaseDate) || relatedProducts[0];
+  })();
 
   // Basic energy cards don't appear in competitive decks — skip related decks section
   const isBasicEnergy = card?.supertype === 'ENERGY' && Array.isArray(card?.subtypes) && card.subtypes.includes('BASIC_ENERGY');
@@ -619,9 +644,13 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                 <div className="flex justify-between">
                   <dt className="text-gray-600">擴展包發行日期</dt>
                   <dd className="font-medium text-gray-900">
-                    {card.primaryCard.primaryExpansion?.releaseDate 
-                      ? new Date(card.primaryCard.primaryExpansion.releaseDate).toLocaleDateString('zh-TW')
-                      : 'N/A'}
+                    {(() => {
+                      const date = card.primaryCard.primaryExpansion?.releaseDate
+                        || preferredProduct?.releaseDate;
+                      return date
+                        ? new Date(date).toLocaleDateString('zh-TW')
+                        : 'N/A';
+                    })()}
                   </dd>
                 </div>
                 
@@ -1171,21 +1200,25 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                 <div className="flex justify-between">
                   <dt className="text-gray-600">擴展包</dt>
                   <dd className="font-medium text-gray-900">
-                    {relatedProducts.length > 0 ? relatedProducts[0].productName : card.primaryCard.expansionId}
+                    {preferredProduct?.productName || (card.primaryCard.primaryExpansion?.code || card.primaryCard.primaryExpansionId)}
                   </dd>
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-gray-600">卡片編號</dt>
                   <dd className="font-medium text-gray-900">{card.primaryCard.cardNumber}</dd>
                 </div>
-                {card.primaryCard.primaryExpansion?.releaseDate && (
-                  <div className="flex justify-between">
-                    <dt className="text-gray-600">發行日期</dt>
-                    <dd className="font-medium text-gray-900">
-                      {new Date(card.primaryCard.primaryExpansion.releaseDate).toLocaleDateString('zh-TW')}
-                    </dd>
-                  </div>
-                )}
+                {(() => {
+                    const date = card.primaryCard.primaryExpansion?.releaseDate
+                      || preferredProduct?.releaseDate;
+                    return date ? (
+                      <div className="flex justify-between">
+                        <dt className="text-gray-600">發行日期</dt>
+                        <dd className="font-medium text-gray-900">
+                          {new Date(date).toLocaleDateString('zh-TW')}
+                        </dd>
+                      </div>
+                    ) : null;
+                  })()}
                 {card.region && (
                   <div className="flex justify-between">
                     <dt className="text-gray-600">地區</dt>
@@ -1273,7 +1306,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                 {relatedProducts.length >= 10 && (
                   <div className="mt-4 text-center">
                     <Link
-                      href={`/products?search=${encodeURIComponent(card.primaryCard.expansionId)}`}
+                      href={`/products?expansionCode=${encodeURIComponent(card.primaryCard.primaryExpansion?.code || card.primaryCard.primaryExpansionId)}`}
                       className="text-sm text-blue-600 hover:text-blue-800"
                     >
                       查看更多相關產品 →

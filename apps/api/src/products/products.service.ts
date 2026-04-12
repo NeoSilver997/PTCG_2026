@@ -10,7 +10,7 @@ export class ProductsService {
   constructor(private prisma: PrismaService) {}
 
   async getProducts(query: GetProductsDto) {
-    const { country, productType, search, skip = 0, take = 50 } = query;
+    const { country, productType, search, expansionCode, skip = 0, take = 50 } = query;
 
     const where: any = {};
 
@@ -41,6 +41,13 @@ export class ProductsService {
     if (search) {
       where.productName = {
         contains: search,
+        mode: 'insensitive',
+      };
+    }
+
+    if (expansionCode) {
+      where.code = {
+        equals: expansionCode,
         mode: 'insensitive',
       };
     }
