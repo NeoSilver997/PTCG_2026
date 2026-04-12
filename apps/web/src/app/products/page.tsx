@@ -31,6 +31,9 @@ interface ProductsResponse {
   };
 }
 
+// Module-level cache (clears on page hard-refresh / server restart)
+const _productsCache = new Map<string, { data: ProductsResponse; ts: number }>();
+
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,10 +43,11 @@ export default function ProductsPage() {
   
   // Filters
   const [country, setCountry] = useState('');
-  const [productTypeGroup, setProductTypeGroup] = useState('');
+  const [productTypeGroup, setProductTypeGroup] = useState('expansion_series');
   const [search, setSearch] = useState('');
+  const [codeSearch, setCodeSearch] = useState('');
   const [skip, setSkip] = useState(0);
-  const take = 50;
+  const take = 120;
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -52,13 +56,23 @@ export default function ProductsPage() {
       if (country) params.append('country', country);
       if (productTypeGroup) params.append('productTypeGroup', productTypeGroup);
       if (search) params.append('search', search);
+      if (codeSearch) params.append('expansionCode', codeSearch);
       params.append('skip', skip.toString());
       params.append('take', take.toString());
+
+      const cacheKey = params.toString();
+      const cached = _productsCache.get(cacheKey);
+      if (cached && Date.now() - cached.ts < 5 * 60 * 1000) {
+        setProducts(cached.data.data);
+        setTotal(cached.data.pagination.total);
+        setLoading(false);
+        return;
+      }
 
       const response = await apiClient.get<ProductsResponse>(
         `/products?${params.toString()}`
       );
-      
+      _productsCache.set(cacheKey, { data: response.data, ts: Date.now() });
       setProducts(response.data.data);
       setTotal(response.data.pagination.total);
     } catch (error) {
@@ -70,12 +84,13 @@ export default function ProductsPage() {
 
   useEffect(() => {
     fetchProducts();
-  }, [country, productTypeGroup, search, skip]);
+  }, [country, productTypeGroup, search, codeSearch, skip]);
 
   const handleReset = () => {
     setCountry('');
-    setProductTypeGroup('');
+    setProductTypeGroup('expansion_series');
     setSearch('');
+    setCodeSearch('');
     setSkip(0);
   };
 
@@ -126,7 +141,7 @@ export default function ProductsPage() {
         {/* Filters */}
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">篩選條件</h2>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             {/* Country Filter */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">國家地區</label>
@@ -161,6 +176,21 @@ export default function ProductsPage() {
               <option value="deck_series">牌組系列</option>
               <option value="other_products">其他商品</option>
             </select>
+          </div>
+
+          {/* Code Search */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">編號搜尋</label>
+            <input
+              type="text"
+              value={codeSearch}
+              onChange={(e) => {
+                setCodeSearch(e.target.value);
+                setSkip(0);
+              }}
+              placeholder="如 SV、SV-P、sv8a..."
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
           </div>
 
           {/* Search */}

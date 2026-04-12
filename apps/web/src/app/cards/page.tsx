@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation';
 
 const DEFAULT_EXPANSION_CODES = 'm4,m3,m2a,m1l,m1s,sv11w,sv11b,sv10';
 const FILTER_VERSION = '3';
-const TAKE = 50;
+const TAKE = 120;
 
 const DEFAULT_FILTERS = {
   name: '',

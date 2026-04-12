@@ -39,7 +39,7 @@ export class ProductsService {
           pagination: {
             total: 0,
             skip: Number(skip),
-            take: Math.min(Number(take), 100),
+            take: Math.min(Number(take), 200),
           },
         };
       }
@@ -58,7 +58,7 @@ export class ProductsService {
           pagination: {
             total: 0,
             skip: Number(skip),
-            take: Math.min(Number(take), 100),
+            take: Math.min(Number(take), 200),
           },
         };
       }
@@ -73,7 +73,7 @@ export class ProductsService {
 
     if (expansionCode) {
       where.code = {
-        equals: expansionCode,
+        contains: expansionCode,
         mode: 'insensitive',
       };
     }
@@ -82,7 +82,7 @@ export class ProductsService {
       this.prisma.product.findMany({
         where,
         skip: Number(skip),
-        take: Math.min(Number(take), 100),
+        take: Math.min(Number(take), 200),
         orderBy: [
           { releaseDate: 'desc' },
           { productName: 'asc' },
@@ -106,7 +106,7 @@ export class ProductsService {
       pagination: {
         total,
         skip: Number(skip),
-        take: Math.min(Number(take), 100),
+        take: Math.min(Number(take), 200),
       },
     };
   }

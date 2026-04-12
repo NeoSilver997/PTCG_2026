@@ -38,11 +38,12 @@ async function fetchProductDetail(id: string) {
   return data;
 }
 
-async function fetchRelatedCards(productCode: string, skip = 0) {
+async function fetchRelatedCards(productCode: string, language: string, skip = 0) {
   const { data } = await apiClient.get('/cards', {
     params: {
       expansionCode: productCode,
-      take: 100,
+      language,
+      take: 120,
       skip,
       sortBy: 'webCardId',
       sortOrder: 'asc'
@@ -50,6 +51,12 @@ async function fetchRelatedCards(productCode: string, skip = 0) {
   });
   return data;
 }
+
+const COUNTRY_TO_LANGUAGE: Record<string, string> = {
+  'Japan': 'JA_JP',
+  'Hong Kong (ZH)': 'ZH_TW',
+  'Hong Kong (EN)': 'EN_US',
+};
 
 const COUNTRY_LABELS: Record<string, string> = {
   Japan: '日本',
@@ -66,8 +73,12 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
   });
 
   const { data: relatedCards, isLoading: cardsLoading } = useQuery({
-    queryKey: ['product-cards', product?.code],
-    queryFn: () => product?.code ? fetchRelatedCards(product.code) : Promise.resolve({ data: [] }),
+    queryKey: ['product-cards', product?.code, product?.country],
+    queryFn: () => {
+      if (!product?.code) return Promise.resolve({ data: [] });
+      const language = COUNTRY_TO_LANGUAGE[product.country] ?? '';
+      return fetchRelatedCards(product.code, language);
+    },
     enabled: !!product?.code,
   });
 
@@ -278,9 +289,10 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                 <div className="mb-4 text-sm text-gray-600">
                   共 {relatedCards.pagination?.total || 0} 張卡牌 (按 ID 降序排列)
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                   {relatedCards.data.map((card: any) => (
-                    <div key={card.id} className="border rounded-lg p-3 hover:shadow-md transition-shadow">
+                    <Link key={card.id} href={`/cards/${card.webCardId}`}
+                      className="border rounded-lg p-2 hover:shadow-md transition-shadow block">
                       <div className="aspect-[2.5/3.5] bg-gray-100 rounded mb-2 relative overflow-hidden">
                         {card.imageUrl ? (
                           <img
@@ -305,7 +317,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                           <div className="text-gray-500 text-xs">{card.rarity}</div>
                         )}
                       </div>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               </>

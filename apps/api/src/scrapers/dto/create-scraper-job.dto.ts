@@ -13,6 +13,7 @@ export enum JobType {
   RESYNC_DECKS        = 'RESYNC_DECKS',
   REMAP_DECKS         = 'REMAP_DECKS',
   REMOVE_DUPLICATES   = 'REMOVE_DUPLICATES',
+  PROMO_RARITY        = 'PROMO_RARITY',
 }
 
 const boolTransform = ({ value }: { value: unknown }) => {

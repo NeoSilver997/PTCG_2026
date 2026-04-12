@@ -97,7 +97,12 @@ export default function ProductEditPage({ params }: { params: Promise<{ id: stri
   // Initialize form data when product loads
   React.useEffect(() => {
     if (product) {
-      setFormData(product);
+      // The API returns productType as a full object {id, code, nameZh, ...}
+      // but the form needs just the code string for the <select> value
+      const productType = product.productType && typeof product.productType === 'object'
+        ? (product.productType as any).code as string
+        : product.productType as string | null;
+      setFormData({ ...product, productType });
     }
   }, [product]);
 

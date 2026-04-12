@@ -567,7 +567,7 @@ export class CardsService {
     let cardsQuery = this.prisma.card.findMany({
       where,
       skip,
-      take: Math.min(take, 100), // Max 100 per page
+      take: Math.min(take, 200), // Max 200 per page
       include: {
         primaryCard: {
           include: {
@@ -745,7 +745,7 @@ export class CardsService {
           LEFT JOIN primary_expansions pe ON re."primaryExpansionId" = pe.id
           ${whereClause}
           ORDER BY ${orderByClause} ${actualSortOrder === 'asc' ? 'ASC' : 'DESC'} NULLS LAST${actualSortBy === 'expansionCode' ? ', c."id" ASC' : ''}
-          LIMIT ${Math.min(take, 100)} OFFSET ${skip}
+          LIMIT ${Math.min(take, 200)} OFFSET ${skip}
         `),
         this.prisma.$queryRawUnsafe<[{ count: bigint }]>(`
           SELECT COUNT(*) as count FROM cards c

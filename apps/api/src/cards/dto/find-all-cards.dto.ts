@@ -11,12 +11,12 @@ export class FindAllCardsDto {
   @Min(0)
   skip?: number = 0;
 
-  @ApiProperty({ required: false, example: 50, maximum: 100 })
+  @ApiProperty({ required: false, example: 50, maximum: 200 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(100)
+  @Max(200)
   take?: number = 50;
 
   // Sorting

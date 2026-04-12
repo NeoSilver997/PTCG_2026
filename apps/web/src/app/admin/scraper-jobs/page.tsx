@@ -26,6 +26,7 @@ const JOB_TYPE_LABELS: Record<string, string> = {
   RESYNC_DECKS:      '🔄 Resync Decks',
   REMAP_DECKS:       '🗺️ Remap Decks',
   REMOVE_DUPLICATES: '🧹 Remove Dupes',
+  PROMO_RARITY:      '🎫 Promo Rarity',
 };
 
 interface ScraperJob {
@@ -260,7 +261,7 @@ function ImportForm({ s, set }: { s: ImportState; set: (p: Partial<ImportState>)
 
 // ── Tab: Maintenance ───────────────────────────────────────────────────────
 
-type MaintenanceTool = 'seed_tournaments' | 'resync_decks' | 'remap_decks' | 'remove_duplicates';
+type MaintenanceTool = 'seed_tournaments' | 'resync_decks' | 'remap_decks' | 'remove_duplicates' | 'promo_rarity';
 
 interface MaintenanceState {
   tool: MaintenanceTool;
@@ -276,6 +277,7 @@ function MaintenanceForm({ s, set }: { s: MaintenanceState; set: (p: Partial<Mai
     ['resync_decks',      '🔄 Resync'],
     ['remap_decks',       '🗺️ Remap'],
     ['remove_duplicates', '🧹 Dupes'],
+    ['promo_rarity',      '🎫 Promo Rarity'],
   ];
   return (
     <div className="space-y-3">
@@ -355,6 +357,11 @@ function MaintenanceForm({ s, set }: { s: MaintenanceState; set: (p: Partial<Mai
         <p className="text-xs text-gray-500">Runs <code className="bg-gray-100 px-1 rounded">remove-duplicates.ts</code> — deletes duplicate card records</p>
         <SectionDivider label="Options" />
         <Check id="d-dry" label="Dry run" hint="--dry-run: show what would be deleted" checked={s.dryRun} onChange={(v) => set({ dryRun: v })} />
+      </>}
+
+      {s.tool === 'promo_rarity' && <>
+        <p className="text-xs text-gray-500">Runs <code className="bg-gray-100 px-1 rounded">update-promo-rarity.ts --apply</code></p>
+        <p className="text-xs text-gray-400">Sets PROMO rarity on cards in promo expansion products. Cards with "ex" in name are set to DOUBLE_RARE (RR) instead.</p>
       </>}
     </div>
   );
@@ -450,6 +457,7 @@ export default function ScraperJobsPage() {
           case 'resync_decks':     return { jobType: 'RESYNC_DECKS',     source: 'JP',     ...base, ...(m.processLimit ? { processLimit: parseInt(m.processLimit) } : {}), ...(m.reportFile ? { reportFile: m.reportFile } : {}) };
           case 'remap_decks':      return { jobType: 'REMAP_DECKS',      source: 'JP',      ...base, ...(m.deckId ? { deckId: m.deckId } : {}) };
           case 'remove_duplicates':return { jobType: 'REMOVE_DUPLICATES', source: 'JP', dryRun: m.dryRun };
+          case 'promo_rarity':      return { jobType: 'PROMO_RARITY',      source: 'JP' };
         }
       }
     }

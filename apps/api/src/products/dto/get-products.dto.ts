@@ -40,6 +40,6 @@ export class GetProductsDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(100)
+  @Max(200)
   take?: number;
 }

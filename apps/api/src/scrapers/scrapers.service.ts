@@ -193,6 +193,11 @@ export class ScrapersService implements OnModuleDestroy {
         if (dto.dryRun) args.push('--dry-run');
         break;
 
+      case JobType.PROMO_RARITY:
+        command = 'npx';
+        args = ['tsx', 'scrapers/update-promo-rarity.ts', '--apply'];
+        break;
+
       default:
         command = 'python';
         args = [
