@@ -51,7 +51,9 @@ const RARITY_COLORS: Record<string, string> = {
   ILLUSTRATION_RARE: 'bg-yellow-500',
   SPECIAL_ILLUSTRATION_RARE: 'bg-pink-500',
   HYPER_RARE: 'bg-red-500',
-  ACE_SPEC_RARE: 'bg-orange-500',
+  SHINY_RARE: 'bg-teal-500',
+  AMAZING_RARE: 'bg-indigo-500',
+  ACE_SPEC: 'bg-orange-500',
   PROMO: 'bg-sky-500',
 };
 
@@ -60,11 +62,13 @@ const RARITY_SHORT: Record<string, string> = {
   UNCOMMON: 'U',
   RARE: 'R',
   DOUBLE_RARE: 'RR',
-  ULTRA_RARE: 'UR',
-  ILLUSTRATION_RARE: 'IR',
-  SPECIAL_ILLUSTRATION_RARE: 'SR',
-  HYPER_RARE: 'HR',
-  ACE_SPEC_RARE: 'ACE',
+  ULTRA_RARE: 'RRR',
+  ILLUSTRATION_RARE: 'AR',
+  SPECIAL_ILLUSTRATION_RARE: 'SAR',
+  HYPER_RARE: 'UR',
+  SHINY_RARE: 'SR',
+  AMAZING_RARE: 'A',
+  ACE_SPEC: 'ACE',
   PROMO: 'P',
 };
 
@@ -305,7 +309,9 @@ export default function BrowsePage() {
                 { value: 'SPECIAL_ILLUSTRATION_RARE', label: 'Special IR' },
                 { value: 'ULTRA_RARE', label: 'Ultra Rare' },
                 { value: 'HYPER_RARE', label: 'Hyper Rare' },
-                { value: 'ACE_SPEC_RARE', label: 'ACE SPEC' },
+                { value: 'SHINY_RARE', label: 'SR - Shiny Rare' },
+                { value: 'AMAZING_RARE', label: 'A - Amazing Rare' },
+                { value: 'ACE_SPEC', label: 'ACE SPEC' },
                 { value: 'PROMO', label: 'Promo' },
               ]}
             />

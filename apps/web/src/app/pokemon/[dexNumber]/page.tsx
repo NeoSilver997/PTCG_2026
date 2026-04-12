@@ -46,7 +46,9 @@ const RARITY_COLORS: Record<string, string> = {
   ILLUSTRATION_RARE: 'bg-amber-500',
   SPECIAL_ILLUSTRATION_RARE: 'bg-pink-500',
   HYPER_RARE: 'bg-red-500',
-  ACE_SPEC_RARE: 'bg-orange-500',
+  ACE_SPEC: 'bg-orange-500',
+  SHINY_RARE: 'bg-teal-500',
+  AMAZING_RARE: 'bg-indigo-500',
   PROMO: 'bg-sky-500',
 };
 
@@ -55,13 +57,14 @@ const RARITY_SHORT: Record<string, string> = {
   UNCOMMON: 'U',
   RARE: 'R',
   DOUBLE_RARE: 'RR',
-  ULTRA_RARE: 'UR',
-  ILLUSTRATION_RARE: 'IR',
+  ULTRA_RARE: 'RRR',
+  ILLUSTRATION_RARE: 'AR',
   SPECIAL_ILLUSTRATION_RARE: 'SAR',
-  HYPER_RARE: 'HR',
-  ACE_SPEC_RARE: 'ACE',
-  PROMO: 'P',
+  HYPER_RARE: 'UR',
   SHINY_RARE: 'SR',
+  AMAZING_RARE: 'A',
+  ACE_SPEC: 'ACE',
+  PROMO: 'P',
 };
 
 const LANG_FLAG: Record<string, string> = {

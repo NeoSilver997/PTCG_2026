@@ -280,7 +280,17 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
           </label>
           <select
             value={filters.rarity}
-            onChange={(e) => updateFilter('rarity', e.target.value)}
+            onChange={(e) => {
+              const newRarity = e.target.value;
+              // When selecting a rarity, clear the expansion filter if it's still at the
+              // default value — otherwise AR/SAR searches would be silently limited to
+              // those few default expansions and return 0 results.
+              if (newRarity && filters.expansionCode === DEFAULT_EXPANSION_CODES) {
+                onFilterChange({ ...filters, rarity: newRarity, expansionCode: '' });
+              } else {
+                updateFilter('rarity', newRarity);
+              }
+            }}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900"
           >
             <option value="" className="text-gray-900">全部</option>
@@ -292,8 +302,10 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
             <option value="ILLUSTRATION_RARE" className="text-gray-900">AR - 插圖稀有</option>
             <option value="SPECIAL_ILLUSTRATION_RARE" className="text-gray-900">SAR - 特別插圖稀有</option>
             <option value="HYPER_RARE" className="text-gray-900">UR - 超級稀有</option>
-            <option value="SECRET_RARE" className="text-gray-900">SR - 秘藏稀有</option>
-            <option value="SHINY_RARE" className="text-gray-900">閃卡稀有</option>
+            <option value="SHINY_RARE" className="text-gray-900">SR - 閃卡稀有</option>
+            <option value="AMAZING_RARE" className="text-gray-900">A - 神奇稀有</option>
+            <option value="ACE_SPEC" className="text-gray-900">ACE - ACE SPEC</option>
+            <option value="PROMO" className="text-gray-900">PROMO - 宣傳卡</option>
           </select>
         </div>
         

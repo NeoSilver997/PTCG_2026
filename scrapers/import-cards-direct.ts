@@ -320,6 +320,20 @@ async function importCardOptimized(prisma: PrismaClient, card: any) {
   }
 
   const variantType = card.variantType ? (VARIANT_MAP[card.variantType.toUpperCase()] || VariantType.NORMAL) : VariantType.NORMAL;
+
+  // Guard: variantType is always authoritative for rarity when they conflict.
+  // SR cards (Shiny Rare) must have rarity=SHINY_RARE regardless of what the JSON rarity field says,
+  // because HK scrapers sometimes store SPECIAL_ILLUSTRATION_RARE for all high-rarity cards.
+  const VARIANT_RARITY_OVERRIDE: Partial<Record<VariantType, Rarity>> = {
+    [VariantType.SR]: Rarity.SHINY_RARE,
+    [VariantType.AR]: Rarity.ILLUSTRATION_RARE,
+    [VariantType.SAR]: Rarity.SPECIAL_ILLUSTRATION_RARE,
+    [VariantType.UR]: Rarity.HYPER_RARE,
+  };
+  if (variantType in VARIANT_RARITY_OVERRIDE) {
+    rarity = VARIANT_RARITY_OVERRIDE[variantType]!;
+  }
+
   const hp = card.hp ? (typeof card.hp === 'number' ? card.hp : parseInt(card.hp, 10)) : null;
 
   // Map language from card data (default to JA_JP for backward compatibility)
