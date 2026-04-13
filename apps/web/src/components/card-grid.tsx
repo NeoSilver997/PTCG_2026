@@ -14,15 +14,67 @@ const TIER_COLORS: Record<string, string> = {
   'C':  'bg-gray-50 text-gray-500 border-gray-300',
 };
 
+const TYPE_COLORS: Record<string, string> = {
+  GRASS: 'bg-green-500', FIRE: 'bg-red-500', WATER: 'bg-blue-500',
+  LIGHTNING: 'bg-yellow-400', PSYCHIC: 'bg-purple-500', FIGHTING: 'bg-orange-600',
+  DARKNESS: 'bg-gray-800', METAL: 'bg-gray-500', DRAGON: 'bg-purple-600',
+  FAIRY: 'bg-pink-400', COLORLESS: 'bg-gray-400',
+};
+
+function CardTooltip({ card }: { card: any }) {
+  const abilities: any[] = Array.isArray(card.abilities) ? card.abilities : [];
+  const attacks: any[] = Array.isArray(card.attacks) ? card.attacks : [];
+
+  if (abilities.length === 0 && attacks.length === 0) return null;
+
+  return (
+    <div className="absolute left-full top-0 ml-2 z-50 w-64 bg-white border border-gray-200 rounded-lg shadow-xl p-3 pointer-events-none text-xs">
+      {abilities.map((ability: any, i: number) => (
+        <div key={i} className="mb-2 last:mb-0">
+          <div className="font-semibold text-blue-700 text-[11px]">
+            {ability.name && <span className="mr-1 px-1 py-0.5 bg-blue-100 text-blue-700 rounded text-[9px]">特性</span>}
+            {ability.name}
+          </div>
+          {(ability.text || ability.description) && (
+            <div className="mt-0.5 text-gray-700 leading-snug">{ability.text || ability.description}</div>
+          )}
+        </div>
+      ))}
+      {abilities.length > 0 && attacks.length > 0 && <hr className="my-2 border-gray-100" />}
+      {attacks.map((attack: any, i: number) => (
+        <div key={i} className="mb-2 last:mb-0">
+          <div className="flex items-center justify-between gap-1">
+            <div className="flex items-center gap-1 min-w-0">
+              {attack.cost && (Array.isArray(attack.cost) ? attack.cost : []).map((c: string, idx: number) => (
+                <span key={idx} className={`w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold ${TYPE_COLORS[c] || 'bg-gray-400'}`} style={{ fontSize: '7px' }}>
+                  {c.charAt(0)}
+                </span>
+              ))}
+              <span className="font-semibold text-gray-900 text-[11px] truncate">{attack.name}</span>
+            </div>
+            {attack.damage && (
+              <span className="font-bold text-red-600 text-[11px] flex-shrink-0">{attack.damage}</span>
+            )}
+          </div>
+          {(attack.effect || attack.text) && (
+            <div className="mt-0.5 text-gray-700 leading-snug">{attack.effect || attack.text}</div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function CardGrid({ cards, onCardClick }: CardGridProps) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
       {cards.map((card) => (
         <div
           key={card.id}
-          className="bg-white rounded-lg shadow-md hover:shadow-xl transition-shadow cursor-pointer overflow-hidden"
+          className="group bg-white rounded-lg shadow-md hover:shadow-xl transition-shadow cursor-pointer overflow-visible relative"
           onClick={() => onCardClick?.(card)}
         >
+          <div className="overflow-hidden rounded-lg">
           <div className="aspect-[2.5/3.5] bg-gray-100 relative">
             {card.imageUrl ? (
               <img
@@ -78,6 +130,12 @@ export function CardGrid({ cards, onCardClick }: CardGridProps) {
                 )}
               </div>
             )}
+          </div>
+          </div>
+
+          {/* Skill tooltip on hover */}
+          <div className="hidden group-hover:block">
+            <CardTooltip card={card} />
           </div>
         </div>
       ))}

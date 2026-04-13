@@ -64,10 +64,12 @@ function CardsPageInner() {
   const [filters, setFilters] = useState<typeof DEFAULT_FILTERS>(getInitialFilters);
   const [skip, setSkip] = useState(0);
 
-  // Apply URL params (e.g. ?effectTag=抽卡效果&cardTier=S) on first mount
+  // Derive URL params so the effect dependency is stable scalars (re-runs on client-side navigation)
+  const urlEffectTag = searchParams.get('effectTag');
+  const urlCardTier = searchParams.get('cardTier');
+
+  // Apply URL params each time they change (covers both initial load and client-side navigation)
   useEffect(() => {
-    const urlEffectTag = searchParams.get('effectTag');
-    const urlCardTier = searchParams.get('cardTier');
     if (urlEffectTag || urlCardTier) {
       setFilters(prev => ({
         ...prev,
@@ -76,8 +78,7 @@ function CardsPageInner() {
       }));
       setSkip(0);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [urlEffectTag, urlCardTier]);
 
   // Persist filters to localStorage whenever they change
   useEffect(() => {
