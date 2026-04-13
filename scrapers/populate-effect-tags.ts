@@ -322,10 +322,11 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     primary.add('附著干擾');
   }
 
-  // HP boost (ZH + JA) - covers +10 through +70
+  // HP boost (ZH + JA) - covers +10 through +70; requires 最大HP to avoid false positives on damage modifiers
   if (
-    has('最大HP', '+50', '+70', '+30', '+10', '+20', '+40', '+60') ||
-    (has('最大HP') && has('多くなる', '増える', '大きくなる'))
+    (has('最大HP') && has('+10', '+20', '+30', '+40', '+50', '+60', '+70')) ||
+    (has('最大HP') && has('多くなる', '増える', '大きくなる')) ||
+    has('最大HPが')
   ) {
     primary.add('HP提升');
   }
@@ -482,8 +483,11 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
 
   // --- Japanese-only patterns (JA_JP cards without Chinese translations) ---
 
-  // Hand discard (手牌丟棄)
-  if (has('手札を', 'トラッシュ') && !primary.has('能量操作')) {
+  // Hand discard (手牌丟棄) - ZH + JA
+  if (
+    (has('手牌') && has('丟棄')) ||
+    (has('手札') && has('トラッシュ'))
+  ) {
     primary.add('手牌丟棄');
   }
 

@@ -1,0 +1,1281 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PTCG 效果標籤摘要報告</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+    header {
+      background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e3a5f 100%);
+      padding: 2rem 2.5rem;
+      border-bottom: 1px solid #334155;
+    }
+    header h1 {
+      font-size: 2rem;
+      font-weight: 800;
+      color: #f8fafc;
+      letter-spacing: -0.025em;
+    }
+    header p {
+      color: #94a3b8;
+      margin-top: 0.25rem;
+      font-size: 0.9rem;
+    }
+    .badge {
+      display: inline-block;
+      background: #312e81;
+      border: 1px solid #4f46e5;
+      color: #a5b4fc;
+      font-size: 0.75rem;
+      padding: 0.2rem 0.6rem;
+      border-radius: 9999px;
+      margin-left: 0.5rem;
+    }
+
+    .container { max-width: 1400px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+    /* Stats row */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    .stat-card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 0.75rem;
+      padding: 1.25rem 1.5rem;
+      text-align: center;
+    }
+    .stat-card .value {
+      font-size: 2rem;
+      font-weight: 800;
+      color: #818cf8;
+      line-height: 1;
+    }
+    .stat-card .label {
+      font-size: 0.8rem;
+      color: #64748b;
+      margin-top: 0.4rem;
+    }
+
+    /* Section */
+    .section {
+      margin-bottom: 2.5rem;
+    }
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1.25rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid #1e293b;
+    }
+    .section-header h2 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #f1f5f9;
+    }
+    .section-header .dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: #6366f1;
+    }
+
+    /* Chart grid */
+    .chart-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+      gap: 1.5rem;
+    }
+    .chart-card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+    }
+    .chart-card h3 {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #cbd5e1;
+      margin-bottom: 1rem;
+    }
+    .chart-wrap { position: relative; height: 260px; }
+    .chart-wrap-tall { position: relative; height: 340px; }
+
+    /* Group breakdown */
+    .groups-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 1.5rem;
+    }
+    .group-card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+    }
+    .group-card h3 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #f1f5f9;
+      margin-bottom: 0.75rem;
+    }
+    .group-total {
+      font-size: 0.75rem;
+      color: #64748b;
+      margin-left: 0.5rem;
+    }
+    .tag-bar-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .tag-label {
+      width: 100px;
+      font-size: 0.78rem;
+      color: #94a3b8;
+      text-align: right;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .bar-bg {
+      flex: 1;
+      background: #0f172a;
+      border-radius: 4px;
+      height: 18px;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.3s;
+    }
+    .bar-count {
+      font-size: 0.75rem;
+      color: #64748b;
+      min-width: 32px;
+      text-align: right;
+    }
+
+    /* Co-occurrence */
+    .co-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+    .co-table th {
+      background: #0f172a;
+      color: #64748b;
+      padding: 0.5rem 0.75rem;
+      text-align: left;
+      border-bottom: 1px solid #334155;
+    }
+    .co-table td {
+      padding: 0.45rem 0.75rem;
+      border-bottom: 1px solid #1e293b;
+      color: #cbd5e1;
+    }
+    .co-table tr:hover td { background: #263347; }
+    .co-count {
+      background: #312e81;
+      color: #a5b4fc;
+      padding: 0.1rem 0.4rem;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+
+    /* Top cards grid */
+    .top-cards-section { margin-bottom: 2.5rem; }
+    .top-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1.25rem;
+    }
+    .tag-group-panel {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 0.75rem;
+      padding: 1rem 1.25rem;
+    }
+    .tag-group-panel h4 {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #818cf8;
+      margin-bottom: 0.6rem;
+    }
+    .card-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.3rem 0;
+      border-bottom: 1px solid #1e293b;
+    }
+    .card-item:last-child { border-bottom: none; }
+    .tier-dot {
+      width: 20px; height: 20px;
+      border-radius: 4px;
+      font-size: 0.65rem;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .card-name {
+      font-size: 0.8rem;
+      color: #cbd5e1;
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Special tags */
+    .special-tags-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+    }
+    .special-tag-chip {
+      background: linear-gradient(135deg, #4f46e5, #7c3aed);
+      border-radius: 0.5rem;
+      padding: 0.6rem 1rem;
+      text-align: center;
+    }
+    .special-tag-chip .name { font-size: 0.85rem; font-weight: 600; color: #f1f5f9; }
+    .special-tag-chip .num  { font-size: 1.4rem; font-weight: 800; color: #fbbf24; }
+
+    footer {
+      border-top: 1px solid #1e293b;
+      padding: 1.5rem;
+      text-align: center;
+      font-size: 0.8rem;
+      color: #475569;
+    }
+  </style>
+</head>
+<body>
+<header>
+  <h1>PTCG 效果標籤摘要報告
+    <span class="badge">繁體中文牌</span>
+  </h1>
+  <p>生成時間: 2026/4/13 下午10:06:27 &nbsp;|&nbsp; 資料來源: PTCG CardDB PostgreSQL</p>
+</header>
+
+<div class="container">
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="value">4,956</div>
+      <div class="label">繁中卡牌總數</div>
+    </div>
+    <div class="stat-card">
+      <div class="value">4,139</div>
+      <div class="label">已標籤卡牌</div>
+    </div>
+    <div class="stat-card">
+      <div class="value">817</div>
+      <div class="label">未標籤卡牌 (其他效果)</div>
+    </div>
+    <div class="stat-card">
+      <div class="value">54</div>
+      <div class="label">效果標籤種類</div>
+    </div>
+    <div class="stat-card">
+      <div class="value">84%</div>
+      <div class="label">標籤覆蓋率</div>
+    </div>
+  </div>
+
+  <!-- Overview Charts -->
+  <div class="section">
+    <div class="section-header">
+      <div class="dot" style="background:#6366f1"></div>
+      <h2>總覽圖表</h2>
+    </div>
+    <div class="chart-grid">
+      <!-- All tags bar chart -->
+      <div class="chart-card" style="grid-column: span 2;">
+        <h3>所有效果標籤 — 卡牌數量</h3>
+        <div class="chart-wrap-tall">
+          <canvas id="allTagsChart"></canvas>
+        </div>
+      </div>
+      <!-- Tier doughnut -->
+      <div class="chart-card">
+        <h3>評級分布 (Tier)</h3>
+        <div class="chart-wrap">
+          <canvas id="tierChart"></canvas>
+        </div>
+      </div>
+      <!-- Supertype pie -->
+      <div class="chart-card">
+        <h3>卡種分布 (已標籤)</h3>
+        <div class="chart-wrap">
+          <canvas id="supertypeChart"></canvas>
+        </div>
+      </div>
+      <!-- Group totals radar -->
+      <div class="chart-card">
+        <h3>效果分類群組對比</h3>
+        <div class="chart-wrap">
+          <canvas id="groupRadarChart"></canvas>
+        </div>
+      </div>
+      <!-- Tagged vs untagged doughnut -->
+      <div class="chart-card">
+        <h3>標籤覆蓋率</h3>
+        <div class="chart-wrap">
+          <canvas id="coverageChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Special Tags -->
+  
+  <div class="section">
+    <div class="section-header">
+      <div class="dot" style="background:#fbbf24"></div>
+      <h2>特殊效果標籤 (高價值)</h2>
+    </div>
+    <div class="special-tags-row">
+      
+      <div class="special-tag-chip">
+        <div class="name">丟棄效果</div>
+        <div class="num">291</div>
+      </div>
+      <div class="special-tag-chip">
+        <div class="name">放置效果</div>
+        <div class="num">283</div>
+      </div>
+      <div class="special-tag-chip">
+        <div class="name">撤退效果</div>
+        <div class="num">165</div>
+      </div>
+      <div class="special-tag-chip">
+        <div class="name">特性效果</div>
+        <div class="num">104</div>
+      </div>
+      <div class="special-tag-chip">
+        <div class="name">競技場效果</div>
+        <div class="num">82</div>
+      </div>
+      <div class="special-tag-chip">
+        <div class="name">進化效果</div>
+        <div class="num">67</div>
+      </div>
+      <div class="special-tag-chip">
+        <div class="name">大量抽卡</div>
+        <div class="num">45</div>
+      </div>
+      <div class="special-tag-chip">
+        <div class="name">狀態免疫</div>
+        <div class="num">26</div>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-wrap">
+        <canvas id="specialTagsChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Per-group breakdown -->
+  <div class="section">
+    <div class="section-header">
+      <div class="dot" style="background:#10b981"></div>
+      <h2>效果分類細項</h2>
+    </div>
+    <div class="groups-grid">
+      
+      <div class="group-card">
+        <h3>資源 (Resources) <span class="group-total">共 2570 張</span></h3>
+        
+        <div class="tag-bar-row">
+          <span class="tag-label" title="搜索效果">搜索效果</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:100%;background:#6366f1"></div>
+          </div>
+          <span class="bar-count">1040</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="能量操作">能量操作</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:61%;background:#8b5cf6"></div>
+          </div>
+          <span class="bar-count">637</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="抽卡效果">抽卡效果</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:55%;background:#ec4899"></div>
+          </div>
+          <span class="bar-count">567</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="手牌丟棄">手牌丟棄</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:17%;background:#f43f5e"></div>
+          </div>
+          <span class="bar-count">177</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="能量附著">能量附著</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:7%;background:#f97316"></div>
+          </div>
+          <span class="bar-count">72</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="牌庫重洗">牌庫重洗</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:4%;background:#eab308"></div>
+          </div>
+          <span class="bar-count">44</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="能量回收">能量回收</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:3%;background:#84cc16"></div>
+          </div>
+          <span class="bar-count">26</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="牌庫操作">牌庫操作</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:1%;background:#22c55e"></div>
+          </div>
+          <span class="bar-count">7</span>
+        </div>
+      </div>
+      <div class="group-card">
+        <h3>傷害/戰鬥 (Damage & Battle) <span class="group-total">共 2334 張</span></h3>
+        
+        <div class="tag-bar-row">
+          <span class="tag-label" title="條件傷害">條件傷害</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:100%;background:#f43f5e"></div>
+          </div>
+          <span class="bar-count">510</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="傷害效果">傷害效果</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:98%;background:#f97316"></div>
+          </div>
+          <span class="bar-count">498</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="備戰傷害加成">備戰傷害加成</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:70%;background:#eab308"></div>
+          </div>
+          <span class="bar-count">359</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="傷害指示物">傷害指示物</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:70%;background:#84cc16"></div>
+          </div>
+          <span class="bar-count">357</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="連鎖傷害">連鎖傷害</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:45%;background:#22c55e"></div>
+          </div>
+          <span class="bar-count">230</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="反噬傷害">反噬傷害</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:41%;background:#10b981"></div>
+          </div>
+          <span class="bar-count">210</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="棄牌區傷害加成">棄牌區傷害加成</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:33%;background:#14b8a6"></div>
+          </div>
+          <span class="bar-count">170</span>
+        </div>
+      </div>
+      <div class="group-card">
+        <h3>防禦/控制 (Defense & Control) <span class="group-total">共 587 張</span></h3>
+        
+        <div class="tag-bar-row">
+          <span class="tag-label" title="效果免疫">效果免疫</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:100%;background:#84cc16"></div>
+          </div>
+          <span class="bar-count">191</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="傷害防禦">傷害防禦</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:83%;background:#22c55e"></div>
+          </div>
+          <span class="bar-count">159</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="傷害減免">傷害減免</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:58%;background:#10b981"></div>
+          </div>
+          <span class="bar-count">110</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="無視弱點/效果">無視弱點/效果</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:50%;background:#14b8a6"></div>
+          </div>
+          <span class="bar-count">95</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="HP提升">HP提升</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:10%;background:#06b6d4"></div>
+          </div>
+          <span class="bar-count">20</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="高額傷害減免">高額傷害減免</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:4%;background:#3b82f6"></div>
+          </div>
+          <span class="bar-count">8</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="全體防禦">全體防禦</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:2%;background:#a855f7"></div>
+          </div>
+          <span class="bar-count">4</span>
+        </div>
+      </div>
+      <div class="group-card">
+        <h3>狀態/干擾 (Status & Disruption) <span class="group-total">共 803 張</span></h3>
+        
+        <div class="tag-bar-row">
+          <span class="tag-label" title="狀態異常">狀態異常</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:100%;background:#14b8a6"></div>
+          </div>
+          <span class="bar-count">437</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="撤退封鎖">撤退封鎖</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:24%;background:#06b6d4"></div>
+          </div>
+          <span class="bar-count">107</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="招式鎖定">招式鎖定</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:18%;background:#3b82f6"></div>
+          </div>
+          <span class="bar-count">79</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="昏厥條件">昏厥條件</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:15%;background:#a855f7"></div>
+          </div>
+          <span class="bar-count">65</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="撤退干擾">撤退干擾</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:14%;background:#d946ef"></div>
+          </div>
+          <span class="bar-count">60</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="狀態恢復">狀態恢復</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:6%;background:#ef4444"></div>
+          </div>
+          <span class="bar-count">28</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="物品卡封鎖">物品卡封鎖</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:3%;background:#6366f1"></div>
+          </div>
+          <span class="bar-count">12</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="招式封鎖">招式封鎖</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:2%;background:#8b5cf6"></div>
+          </div>
+          <span class="bar-count">7</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="支援者限制">支援者限制</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:1%;background:#ec4899"></div>
+          </div>
+          <span class="bar-count">4</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="道具消除">道具消除</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:1%;background:#f43f5e"></div>
+          </div>
+          <span class="bar-count">3</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="附著干擾">附著干擾</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:0%;background:#f97316"></div>
+          </div>
+          <span class="bar-count">1</span>
+        </div>
+      </div>
+      <div class="group-card">
+        <h3>其他 (Others) <span class="group-total">共 2172 張</span></h3>
+        
+        <div class="tag-bar-row">
+          <span class="tag-label" title="硬幣判定">硬幣判定</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:100%;background:#a855f7"></div>
+          </div>
+          <span class="bar-count">717</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="情報收集">情報收集</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:59%;background:#d946ef"></div>
+          </div>
+          <span class="bar-count">424</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="獎賞控制">獎賞控制</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:56%;background:#ef4444"></div>
+          </div>
+          <span class="bar-count">400</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="回復效果">回復效果</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:32%;background:#6366f1"></div>
+          </div>
+          <span class="bar-count">229</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="切換效果">切換效果</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:27%;background:#8b5cf6"></div>
+          </div>
+          <span class="bar-count">196</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="進化支援">進化支援</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:19%;background:#ec4899"></div>
+          </div>
+          <span class="bar-count">133</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="特殊能量">特殊能量</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:6%;background:#f43f5e"></div>
+          </div>
+          <span class="bar-count">43</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="招式複製">招式複製</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:2%;background:#f97316"></div>
+          </div>
+          <span class="bar-count">14</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="連續技">連續技</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:1%;background:#eab308"></div>
+          </div>
+          <span class="bar-count">10</span>
+        </div>
+        <div class="tag-bar-row">
+          <span class="tag-label" title="弱點改變">弱點改變</span>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width:1%;background:#84cc16"></div>
+          </div>
+          <span class="bar-count">6</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tag Co-Occurrence -->
+  
+  <div class="section">
+    <div class="section-header">
+      <div class="dot" style="background:#f59e0b"></div>
+      <h2>標籤共現分析 (常見效果組合)</h2>
+    </div>
+    <div class="chart-card">
+      <table class="co-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>效果標籤 1</th>
+            <th>效果標籤 2</th>
+            <th>共同卡牌數</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          <tr>
+            <td>1</td>
+            <td>抽卡效果</td>
+            <td>搜索效果</td>
+            <td><span class="co-count">507</span></td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>情報收集</td>
+            <td>搜索效果</td>
+            <td><span class="co-count">345</span></td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>抽卡效果</td>
+            <td>情報收集</td>
+            <td><span class="co-count">231</span></td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td>硬幣判定</td>
+            <td>傷害效果</td>
+            <td><span class="co-count">166</span></td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>效果免疫</td>
+            <td>傷害防禦</td>
+            <td><span class="co-count">158</span></td>
+          </tr>
+          <tr>
+            <td>6</td>
+            <td>條件傷害</td>
+            <td>硬幣判定</td>
+            <td><span class="co-count">158</span></td>
+          </tr>
+          <tr>
+            <td>7</td>
+            <td>備戰傷害加成</td>
+            <td>傷害效果</td>
+            <td><span class="co-count">151</span></td>
+          </tr>
+          <tr>
+            <td>8</td>
+            <td>能量操作</td>
+            <td>備戰傷害加成</td>
+            <td><span class="co-count">149</span></td>
+          </tr>
+          <tr>
+            <td>9</td>
+            <td>狀態異常</td>
+            <td>硬幣判定</td>
+            <td><span class="co-count">138</span></td>
+          </tr>
+          <tr>
+            <td>10</td>
+            <td>棄牌區傷害加成</td>
+            <td>傷害效果</td>
+            <td><span class="co-count">108</span></td>
+          </tr>
+          <tr>
+            <td>11</td>
+            <td>備戰傷害加成</td>
+            <td>傷害指示物</td>
+            <td><span class="co-count">106</span></td>
+          </tr>
+          <tr>
+            <td>12</td>
+            <td>能量操作</td>
+            <td>傷害效果</td>
+            <td><span class="co-count">103</span></td>
+          </tr>
+          <tr>
+            <td>13</td>
+            <td>搜索效果</td>
+            <td>獎賞控制</td>
+            <td><span class="co-count">99</span></td>
+          </tr>
+          <tr>
+            <td>14</td>
+            <td>能量操作</td>
+            <td>獎賞控制</td>
+            <td><span class="co-count">96</span></td>
+          </tr>
+          <tr>
+            <td>15</td>
+            <td>能量操作</td>
+            <td>搜索效果</td>
+            <td><span class="co-count">93</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Top Cards by Tag -->
+  
+  <div class="top-cards-section">
+    <div class="section-header">
+      <div class="dot" style="background:#ec4899"></div>
+      <h2>高評級代表卡牌 (依效果)</h2>
+    </div>
+    <div class="top-cards-grid">
+      
+      <div class="tag-group-panel">
+        <h4>🏷 抽卡效果</h4>
+        
+        <div class="card-item">
+          <div class="tier-dot" style="background:#34d39920;color:#34d399;border:1px solid #34d39950">A+</div>
+          <span class="card-name" title="<小霞的>拉普拉斯"><小霞的>拉普拉斯</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#fbbf2420;color:#fbbf24;border:1px solid #fbbf2450">S+</div>
+          <span class="card-name" title="<火箭隊的>多邊獸Ｚ"><火箭隊的>多邊獸Ｚ</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#34d39920;color:#34d399;border:1px solid #34d39950">A+</div>
+          <span class="card-name" title="<火箭隊的>咩利羊"><火箭隊的>咩利羊</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#f59e0b20;color:#f59e0b;border:1px solid #f59e0b50">S</div>
+          <span class="card-name" title="<火箭隊的>黑暗鴉"><火箭隊的>黑暗鴉</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#34d39920;color:#34d399;border:1px solid #34d39950">A+</div>
+          <span class="card-name" title="<竹蘭的>尖牙陸鯊"><竹蘭的>尖牙陸鯊</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#10b98120;color:#10b981;border:1px solid #10b98150">A</div>
+          <span class="card-name" title="<竹蘭的>烈咬陸鯊ex"><竹蘭的>烈咬陸鯊ex</span>
+        </div>
+      </div>
+      <div class="tag-group-panel">
+        <h4>🏷 搜索效果</h4>
+        
+        <div class="card-item">
+          <div class="tier-dot" style="background:#10b98120;color:#10b981;border:1px solid #10b98150">A</div>
+          <span class="card-name" title="<大吾的>天秤偶"><大吾的>天秤偶</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#3b82f620;color:#3b82f6;border:1px solid #3b82f650">B</div>
+          <span class="card-name" title="<大吾的>巨金怪ex"><大吾的>巨金怪ex</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#34d39920;color:#34d399;border:1px solid #34d39950">A+</div>
+          <span class="card-name" title="<小霞的>拉普拉斯"><小霞的>拉普拉斯</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#60a5fa20;color:#60a5fa;border:1px solid #60a5fa50">B+</div>
+          <span class="card-name" title="<火箭隊的>尼多娜"><火箭隊的>尼多娜</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#10b98120;color:#10b981;border:1px solid #10b98150">A</div>
+          <span class="card-name" title="<火箭隊的>瓦斯彈"><火箭隊的>瓦斯彈</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#fbbf2420;color:#fbbf24;border:1px solid #fbbf2450">S+</div>
+          <span class="card-name" title="<火箭隊的>多邊獸Ｚ"><火箭隊的>多邊獸Ｚ</span>
+        </div>
+      </div>
+      <div class="tag-group-panel">
+        <h4>🏷 能量操作</h4>
+        
+        <div class="card-item">
+          <div class="tier-dot" style="background:#10b98120;color:#10b981;border:1px solid #10b98150">A</div>
+          <span class="card-name" title="<大吾的>念力土偶"><大吾的>念力土偶</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#34d39920;color:#34d399;border:1px solid #34d39950">A+</div>
+          <span class="card-name" title="<火箭隊的>火焰鳥ex"><火箭隊的>火焰鳥ex</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#fbbf2420;color:#fbbf24;border:1px solid #fbbf2450">S+</div>
+          <span class="card-name" title="<火箭隊的>以歐路普"><火箭隊的>以歐路普</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#fbbf2420;color:#fbbf24;border:1px solid #fbbf2450">S+</div>
+          <span class="card-name" title="<火箭隊的>班基拉斯"><火箭隊的>班基拉斯</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#10b98120;color:#10b981;border:1px solid #10b98150">A</div>
+          <span class="card-name" title="<火箭隊的>閃電鳥"><火箭隊的>閃電鳥</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#f59e0b20;color:#f59e0b;border:1px solid #f59e0b50">S</div>
+          <span class="card-name" title="<火箭隊的>超夢ex"><火箭隊的>超夢ex</span>
+        </div>
+      </div>
+      <div class="tag-group-panel">
+        <h4>🏷 能量回收</h4>
+        
+        <div class="card-item">
+          <div class="tier-dot" style="background:#34d39920;color:#34d399;border:1px solid #34d39950">A+</div>
+          <span class="card-name" title="女服務生">女服務生</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#10b98120;color:#10b981;border:1px solid #10b98150">A</div>
+          <span class="card-name" title="水補丁">水補丁</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#fbbf2420;color:#fbbf24;border:1px solid #fbbf2450">S+</div>
+          <span class="card-name" title="火焰雞">火焰雞</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#fbbf2420;color:#fbbf24;border:1px solid #fbbf2450">S+</div>
+          <span class="card-name" title="四顎針龍">四顎針龍</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#fbbf2420;color:#fbbf24;border:1px solid #fbbf2450">S+</div>
+          <span class="card-name" title="來悲粗茶ex">來悲粗茶ex</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#fbbf2420;color:#fbbf24;border:1px solid #fbbf2450">S+</div>
+          <span class="card-name" title="拉普拉斯ex">拉普拉斯ex</span>
+        </div>
+      </div>
+      <div class="tag-group-panel">
+        <h4>🏷 能量附著</h4>
+        
+        <div class="card-item">
+          <div class="tier-dot" style="background:#60a5fa20;color:#60a5fa;border:1px solid #60a5fa50">B+</div>
+          <span class="card-name" title="<阿響的>鳳王ex"><阿響的>鳳王ex</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#47556920;color:#475569;border:1px solid #47556950">C+</div>
+          <span class="card-name" title="三首惡龍">三首惡龍</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#34d39920;color:#34d399;border:1px solid #34d39950">A+</div>
+          <span class="card-name" title="土地雲">土地雲</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#f59e0b20;color:#f59e0b;border:1px solid #f59e0b50">S</div>
+          <span class="card-name" title="大電海燕ex">大電海燕ex</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#fbbf2420;color:#fbbf24;border:1px solid #fbbf2450">S+</div>
+          <span class="card-name" title="厄鬼椪 碧草面具ex">厄鬼椪 碧草面具ex</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#34d39920;color:#34d399;border:1px solid #34d39950">A+</div>
+          <span class="card-name" title="天然鳥">天然鳥</span>
+        </div>
+      </div>
+      <div class="tag-group-panel">
+        <h4>🏷 手牌丟棄</h4>
+        
+        <div class="card-item">
+          <div class="tier-dot" style="background:#10b98120;color:#10b981;border:1px solid #10b98150">A</div>
+          <span class="card-name" title="<火箭隊的>叉字蝠ex"><火箭隊的>叉字蝠ex</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#10b98120;color:#10b981;border:1px solid #10b98150">A</div>
+          <span class="card-name" title="<火箭隊的>多邊獸"><火箭隊的>多邊獸</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#fbbf2420;color:#fbbf24;border:1px solid #fbbf2450">S+</div>
+          <span class="card-name" title="<火箭隊的>多邊獸Ｚ"><火箭隊的>多邊獸Ｚ</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#10b98120;color:#10b981;border:1px solid #10b98150">A</div>
+          <span class="card-name" title="<火箭隊的>鈴鐺響"><火箭隊的>鈴鐺響</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#f59e0b20;color:#f59e0b;border:1px solid #f59e0b50">S</div>
+          <span class="card-name" title="N的索羅亞克ex">N的索羅亞克ex</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#fbbf2420;color:#fbbf24;border:1px solid #fbbf2450">S+</div>
+          <span class="card-name" title="三海地鼠ex">三海地鼠ex</span>
+        </div>
+      </div>
+      <div class="tag-group-panel">
+        <h4>🏷 牌庫操作</h4>
+        
+        <div class="card-item">
+          <div class="tier-dot" style="background:#f59e0b20;color:#f59e0b;border:1px solid #f59e0b50">S</div>
+          <span class="card-name" title="米立龍">米立龍</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#10b98120;color:#10b981;border:1px solid #10b98150">A</div>
+          <span class="card-name" title="朋友手冊">朋友手冊</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#f59e0b20;color:#f59e0b;border:1px solid #f59e0b50">S</div>
+          <span class="card-name" title="洛拍棒">洛拍棒</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#f59e0b20;color:#f59e0b;border:1px solid #f59e0b50">S</div>
+          <span class="card-name" title="寶可裝置3.0">寶可裝置3.0</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#f59e0b20;color:#f59e0b;border:1px solid #f59e0b50">S</div>
+          <span class="card-name" title="寶可齒輪3.0">寶可齒輪3.0</span>
+        </div>
+      </div>
+      <div class="tag-group-panel">
+        <h4>🏷 牌庫重洗</h4>
+        
+        <div class="card-item">
+          <div class="tier-dot" style="background:#34d39920;color:#34d399;border:1px solid #34d39950">A+</div>
+          <span class="card-name" title="不公印章">不公印章</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#34d39920;color:#34d399;border:1px solid #34d39950">A+</div>
+          <span class="card-name" title="巴大蝶">巴大蝶</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#fbbf2420;color:#fbbf24;border:1px solid #fbbf2450">S+</div>
+          <span class="card-name" title="比克提尼">比克提尼</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#34d39920;color:#34d399;border:1px solid #34d39950">A+</div>
+          <span class="card-name" title="火箭隊的阿波羅">火箭隊的阿波羅</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#f59e0b20;color:#f59e0b;border:1px solid #f59e0b50">S</div>
+          <span class="card-name" title="仙子伊布ex">仙子伊布ex</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#f59e0b20;color:#f59e0b;border:1px solid #f59e0b50">S</div>
+          <span class="card-name" title="卡蕪">卡蕪</span>
+        </div>
+      </div>
+      <div class="tag-group-panel">
+        <h4>🏷 傷害效果</h4>
+        
+        <div class="card-item">
+          <div class="tier-dot" style="background:#10b98120;color:#10b981;border:1px solid #10b98150">A</div>
+          <span class="card-name" title="<小霞的>暴鯉龍"><小霞的>暴鯉龍</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#10b98120;color:#10b981;border:1px solid #10b98150">A</div>
+          <span class="card-name" title="<火箭隊的>多邊獸Ⅱ"><火箭隊的>多邊獸Ⅱ</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#fbbf2420;color:#fbbf24;border:1px solid #fbbf2450">S+</div>
+          <span class="card-name" title="<火箭隊的>多邊獸Ｚ"><火箭隊的>多邊獸Ｚ</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#fbbf2420;color:#fbbf24;border:1px solid #fbbf2450">S+</div>
+          <span class="card-name" title="<火箭隊的>臭臭泥"><火箭隊的>臭臭泥</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#34d39920;color:#34d399;border:1px solid #34d39950">A+</div>
+          <span class="card-name" title="<火箭隊的>喵喵"><火箭隊的>喵喵</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#f59e0b20;color:#f59e0b;border:1px solid #f59e0b50">S</div>
+          <span class="card-name" title="<火箭隊的>操陷蛛"><火箭隊的>操陷蛛</span>
+        </div>
+      </div>
+      <div class="tag-group-panel">
+        <h4>🏷 條件傷害</h4>
+        
+        <div class="card-item">
+          <div class="tier-dot" style="background:#60a5fa20;color:#60a5fa;border:1px solid #60a5fa50">B+</div>
+          <span class="card-name" title="<小霞的>寶石海星"><小霞的>寶石海星</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#10b98120;color:#10b981;border:1px solid #10b98150">A</div>
+          <span class="card-name" title="<火箭隊的>尼多力諾"><火箭隊的>尼多力諾</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#3b82f620;color:#3b82f6;border:1px solid #3b82f650">B</div>
+          <span class="card-name" title="<火箭隊的>尼多后"><火箭隊的>尼多后</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#10b98120;color:#10b981;border:1px solid #10b98150">A</div>
+          <span class="card-name" title="<火箭隊的>拉達"><火箭隊的>拉達</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#34d39920;color:#34d399;border:1px solid #34d39950">A+</div>
+          <span class="card-name" title="<火箭隊的>急凍鳥"><火箭隊的>急凍鳥</span>
+        </div>
+        <div class="card-item">
+          <div class="tier-dot" style="background:#10b98120;color:#10b981;border:1px solid #10b98150">A</div>
+          <span class="card-name" title="<火箭隊的>閃電鳥"><火箭隊的>閃電鳥</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  PTCG CardDB &copy; 2026 &nbsp;|&nbsp; 資料基於 PostgreSQL 資料庫查詢
+</footer>
+
+<script>
+Chart.defaults.color = '#94a3b8';
+Chart.defaults.borderColor = '#1e293b';
+
+const tagColors = ["#6366f1","#8b5cf6","#ec4899","#f43f5e","#f97316","#eab308","#84cc16","#22c55e","#10b981","#14b8a6","#06b6d4","#3b82f6","#a855f7","#d946ef","#ef4444"];
+const getColor = (i) => tagColors[i % tagColors.length];
+
+// All tags bar chart
+(function(){
+  const data = [{"tag":"搜索效果","count":1040},{"tag":"硬幣判定","count":717},{"tag":"能量操作","count":637},{"tag":"抽卡效果","count":567},{"tag":"條件傷害","count":510},{"tag":"傷害效果","count":498},{"tag":"狀態異常","count":437},{"tag":"情報收集","count":424},{"tag":"獎賞控制","count":400},{"tag":"備戰傷害加成","count":359},{"tag":"傷害指示物","count":357},{"tag":"連鎖傷害","count":230},{"tag":"回復效果","count":229},{"tag":"反噬傷害","count":210},{"tag":"切換效果","count":196},{"tag":"效果免疫","count":191},{"tag":"其他效果","count":188},{"tag":"手牌丟棄","count":177},{"tag":"棄牌區傷害加成","count":170},{"tag":"傷害防禦","count":159},{"tag":"進化支援","count":133},{"tag":"使用限制","count":114},{"tag":"條件失敗","count":114},{"tag":"傷害減免","count":110},{"tag":"撤退封鎖","count":107},{"tag":"無視弱點/效果","count":95},{"tag":"招式鎖定","count":79},{"tag":"能量附著","count":72},{"tag":"昏厥條件","count":65},{"tag":"撤退干擾","count":60},{"tag":"簡單灼傷","count":53},{"tag":"牌庫重洗","count":44},{"tag":"特殊能量","count":43},{"tag":"狀態施加","count":30},{"tag":"能量需求增加","count":29},{"tag":"狀態恢復","count":28},{"tag":"能量回收","count":26},{"tag":"HP提升","count":20},{"tag":"招式複製","count":14},{"tag":"道具移除","count":13},{"tag":"物品卡封鎖","count":12},{"tag":"連續技","count":10},{"tag":"高額傷害減免","count":8},{"tag":"屬性防禦","count":8},{"tag":"能量條件","count":8},{"tag":"牌庫操作","count":7},{"tag":"弱點消除","count":7},{"tag":"招式封鎖","count":7},{"tag":"弱點改變","count":6},{"tag":"全體防禦","count":4},{"tag":"支援者限制","count":4},{"tag":"道具消除","count":3},{"tag":"特定寶可夢防禦","count":2},{"tag":"附著干擾","count":1}];
+  const labels = data.map(d => d.tag);
+  const counts = data.map(d => d.count);
+  const colors = labels.map((_, i) => getColor(i));
+  new Chart(document.getElementById('allTagsChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{ label: '卡牌數量', data: counts, backgroundColor: colors, borderRadius: 4 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { font: { size: 11 }, maxRotation: 45 }, grid: { display: false } },
+        y: { beginAtZero: true, grid: { color: '#1e293b' }, ticks: { font: { size: 11 } } }
+      }
+    }
+  });
+})();
+
+// Tier doughnut
+(function(){
+  const data = [{"tier":"A","count":830},{"tier":"D","count":767},{"tier":"A+","count":759},{"tier":"B+","count":583},{"tier":"C+","count":491},{"tier":"S+","count":467},{"tier":"B","count":464},{"tier":"S","count":420},{"tier":"C","count":175}];
+  const tierColorMap = {"S+":"#fbbf24","S":"#f59e0b","A+":"#34d399","A":"#10b981","B+":"#60a5fa","B":"#3b82f6","C":"#94a3b8","D":"#475569"};
+  new Chart(document.getElementById('tierChart'), {
+    type: 'doughnut',
+    data: {
+      labels: data.map(d => d.tier),
+      datasets: [{ data: data.map(d => d.count), backgroundColor: data.map(d => tierColorMap[d.tier] || '#475569'), borderWidth: 2, borderColor: '#1e293b' }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      cutout: '60%',
+      plugins: { legend: { position: 'right', labels: { font: { size: 11 } } } }
+    }
+  });
+})();
+
+// Supertype pie
+(function(){
+  const data = [{"supertype":"POKEMON","count":3642},{"supertype":"TRAINER","count":448},{"supertype":"ENERGY","count":53}];
+  const colors = ['#6366f1','#10b981','#f59e0b','#ef4444'];
+  new Chart(document.getElementById('supertypeChart'), {
+    type: 'pie',
+    data: {
+      labels: data.map(d => d.supertype),
+      datasets: [{ data: data.map(d => d.count), backgroundColor: colors, borderWidth: 2, borderColor: '#1e293b' }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'right', labels: { font: { size: 11 } } } }
+    }
+  });
+})();
+
+// Group radar chart
+(function(){
+  const groups = [{"group":"資源","total":2570},{"group":"傷害/戰鬥","total":2334},{"group":"防禦/控制","total":587},{"group":"狀態/干擾","total":803},{"group":"其他","total":2172}];
+  new Chart(document.getElementById('groupRadarChart'), {
+    type: 'radar',
+    data: {
+      labels: groups.map(g => g.group),
+      datasets: [{
+        label: '卡牌數',
+        data: groups.map(g => g.total),
+        backgroundColor: 'rgba(99,102,241,0.2)',
+        borderColor: '#6366f1',
+        pointBackgroundColor: '#6366f1',
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        r: {
+          grid: { color: '#334155' },
+          ticks: { backdropColor: 'transparent', font: { size: 9 } },
+          pointLabels: { font: { size: 11 }, color: '#94a3b8' }
+        }
+      }
+    }
+  });
+})();
+
+// Coverage doughnut
+(function(){
+  const data = [4139, 817];
+  new Chart(document.getElementById('coverageChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['已標籤', '未標籤 (其他效果)'],
+      datasets: [{ data, backgroundColor: ['#6366f1','#1e293b'], borderWidth: 2, borderColor: '#334155' }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '65%',
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const total = 4956;
+              return ` ${ctx.label}: ${ctx.raw} (${Math.round(ctx.raw/total*100)}%)`;
+            }
+          }
+        }
+      }
+    }
+  });
+})();
+
+
+// Special tags bar chart
+(function(){
+  const data = [{"tag":"丟棄效果","count":291},{"tag":"放置效果","count":283},{"tag":"撤退效果","count":165},{"tag":"特性效果","count":104},{"tag":"競技場效果","count":82},{"tag":"進化效果","count":67},{"tag":"大量抽卡","count":45},{"tag":"狀態免疫","count":26}];
+  new Chart(document.getElementById('specialTagsChart'), {
+    type: 'bar',
+    data: {
+      labels: data.map(d => d.tag),
+      datasets: [{ label: '卡牌數量', data: data.map(d => d.count), backgroundColor: '#fbbf24', borderRadius: 4 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 12 } } },
+        y: { beginAtZero: true, grid: { color: '#1e293b' } }
+      }
+    }
+  });
+})();
+
+</script>
+</body>
+</html>

@@ -150,4 +150,9 @@ export class FindAllCardsDto {
   @IsOptional()
   @IsString()
   effectTag?: string;
+
+  @ApiProperty({ required: false, example: 'S+', description: 'Filter by card tier (S+, S, A+, A, B+, B, C+, C)' })
+  @IsOptional()
+  @IsString()
+  cardTier?: string;
 }

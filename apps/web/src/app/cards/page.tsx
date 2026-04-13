@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { CardGrid } from '@/components/card-grid';
 import { FilterPanel } from '@/components/filter-panel';
 import apiClient from '@/lib/api-client';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 const DEFAULT_EXPANSION_CODES = 'm4,m3,m2a,m2,m1s,m1l,mc,m,sv11w,sv11b,sv10,sv9,sv9a,sv8,sv8a,sv7,sv6a,sv6,sv5a,sv5k,sv5m,sv';
 const FILTER_VERSION = '4';
@@ -30,6 +30,7 @@ const DEFAULT_FILTERS = {
   hasAbilities: '',
   hasAttackText: '',
   effectTag: '',
+  cardTier: '',
 };
 
 function getInitialFilters() {
@@ -57,10 +58,26 @@ interface CardStats {
   byExpansion: Array<{ code: string; nameEn: string; count: number }>;
 }
 
-export default function CardsPage() {
+function CardsPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [filters, setFilters] = useState<typeof DEFAULT_FILTERS>(getInitialFilters);
   const [skip, setSkip] = useState(0);
+
+  // Apply URL params (e.g. ?effectTag=抽卡效果&cardTier=S) on first mount
+  useEffect(() => {
+    const urlEffectTag = searchParams.get('effectTag');
+    const urlCardTier = searchParams.get('cardTier');
+    if (urlEffectTag || urlCardTier) {
+      setFilters(prev => ({
+        ...prev,
+        ...(urlEffectTag ? { effectTag: urlEffectTag, regulationMark: '', expansionCode: '' } : {}),
+        ...(urlCardTier ? { cardTier: urlCardTier } : {}),
+      }));
+      setSkip(0);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Persist filters to localStorage whenever they change
   useEffect(() => {
@@ -170,5 +187,13 @@ export default function CardsPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function CardsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-50" />}>
+      <CardsPageInner />
+    </Suspense>
   );
 }

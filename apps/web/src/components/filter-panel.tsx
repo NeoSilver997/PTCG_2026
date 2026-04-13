@@ -60,6 +60,7 @@ interface FilterPanelProps {
     hasAbilities?: string;
     hasAttackText?: string;
     effectTag?: string;
+    cardTier?: string;
   };
   onFilterChange: (filters: any) => void;
   stats?: {
@@ -97,6 +98,7 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
       hasAbilities: '',
       hasAttackText: '',
       effectTag: '',
+      cardTier: '',
     });
   };
 
@@ -114,7 +116,7 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
     filters.rarity || filters.language || filters.webCardId || filters.subtypes ||
     filters.variantType || filters.minHp || filters.maxHp || filters.artist ||
     filters.regulationMark || filters.expansionCode || filters.hasAbilities || filters.hasAttackText ||
-    filters.effectTag;
+    filters.effectTag || filters.cardTier;
   
   return (
     <div className="bg-white rounded-lg shadow-md p-4 mb-6">
@@ -601,6 +603,28 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
                   <option value="特殊能量">特殊能量</option>
                   <option value="弱點改變">弱點改變</option>
                 </optgroup>
+              </select>
+            </div>
+
+            {/* Card Tier */}
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                卡牌等級
+              </label>
+              <select
+                value={filters.cardTier || ''}
+                onChange={(e) => updateFilter('cardTier', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900"
+              >
+                <option value="">全部</option>
+                <option value="S+">S+ (最強)</option>
+                <option value="S">S</option>
+                <option value="A+">A+</option>
+                <option value="A">A</option>
+                <option value="B+">B+</option>
+                <option value="B">B</option>
+                <option value="C+">C+</option>
+                <option value="C">C</option>
               </select>
             </div>
           </div>

@@ -864,7 +864,14 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                     <div className="text-xs font-semibold text-gray-500 mb-1">效果標籤</div>
                     <div className="flex flex-wrap gap-2">
                       {card.primaryCard.effectTags.map((tag: string) => (
-                        <span key={tag} className="px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-800 font-medium">{tag}</span>
+                        <Link
+                          key={tag}
+                          href={`/cards?effectTag=${encodeURIComponent(tag)}`}
+                          className="px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-800 font-medium hover:bg-blue-200 transition-colors cursor-pointer"
+                          title={`篩選：${tag}`}
+                        >
+                          {tag}
+                        </Link>
                       ))}
                     </div>
                   </div>
@@ -874,7 +881,14 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                     <div className="text-xs font-semibold text-gray-500 mb-1">特殊標籤</div>
                     <div className="flex flex-wrap gap-2">
                       {card.primaryCard.specialEffectTags.map((tag: string) => (
-                        <span key={tag} className="px-2 py-0.5 rounded-full text-xs bg-purple-100 text-purple-800 font-medium">{tag}</span>
+                        <Link
+                          key={tag}
+                          href={`/cards?effectTag=${encodeURIComponent(tag)}`}
+                          className="px-2 py-0.5 rounded-full text-xs bg-purple-100 text-purple-800 font-medium hover:bg-purple-200 transition-colors cursor-pointer"
+                          title={`篩選：${tag}`}
+                        >
+                          {tag}
+                        </Link>
                       ))}
                     </div>
                   </div>
@@ -1621,6 +1635,30 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                                 <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 bg-gray-200 text-gray-600">
                                   #{deck.placement}
                                 </div>
+                                {/* Key cards: ACE SPEC first, then main Pokemon */}
+                                {deck.keyCards && deck.keyCards.length > 0 && (
+                                  <div className="flex items-center gap-0.5 shrink-0">
+                                    {deck.keyCards.slice(0, 4).map((kc: any) => (
+                                      <div key={kc.webCardId} className="relative group" title={`${kc.name} ×${kc.quantity}`}>
+                                        {kc.imageUrl ? (
+                                          <img
+                                            src={kc.imageUrl}
+                                            alt={kc.name}
+                                            className="w-8 h-11 object-cover rounded shadow-sm"
+                                          />
+                                        ) : (
+                                          <div className="w-8 h-11 bg-gray-200 rounded flex items-center justify-center text-[8px] text-gray-500 text-center px-0.5">
+                                            {kc.name}
+                                          </div>
+                                        )}
+                                        {kc.rarity === 'ACE_SPEC' && (
+                                          <span className="absolute -top-1 -right-1 bg-yellow-400 text-yellow-900 text-[7px] font-bold px-0.5 rounded leading-tight">ACE</span>
+                                        )}
+                                        <span className="absolute -bottom-1 -right-1 bg-gray-700 text-white text-[7px] font-bold px-0.5 rounded leading-tight">×{kc.quantity}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
                                 <div className="flex-1 min-w-0">
                                   <p className="text-sm font-medium text-gray-900 truncate">
                                     {deck.playerName}

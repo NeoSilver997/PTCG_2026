@@ -404,6 +404,7 @@ export class CardsService {
     evolvesTo?: string;
     attackName?: string;
     effectTag?: string;
+    cardTier?: string;
   }): Promise<{
     data: any[];
     pagination: {
@@ -439,6 +440,7 @@ export class CardsService {
       evolvesTo,
       attackName,
       effectTag,
+      cardTier,
     } = params;
 
     const where: any = {};
@@ -596,7 +598,10 @@ export class CardsService {
     // hasAbilities, hasAttackText, and attackName require raw SQL due to Prisma JSON field limitations
     // evolvesTo requires raw SQL for exact CSV value matching
     // expansionReleaseDate requires raw SQL because Prisma does not support two-level nested orderBy
-    if (hasAbilities !== undefined || hasAttackText !== undefined || evolvesTo || attackName || effectTag || actualSortBy === 'expansionReleaseDate' || actualSortBy === 'expansionCode' || expansionCode) {
+    // Detect multi-value regulationMark (Prisma { in: [...] }) — must use raw SQL path
+    const regulationMarkIsMulti = where.regulationMark !== undefined && typeof where.regulationMark === 'object' && 'in' in (where.regulationMark as any);
+
+    if (hasAbilities !== undefined || hasAttackText !== undefined || evolvesTo || attackName || effectTag || cardTier || regulationMarkIsMulti || actualSortBy === 'expansionReleaseDate' || actualSortBy === 'expansionCode' || expansionCode) {
       const jsonFieldConditions: string[] = [];
 
       // Expansion codes: directly inject as raw SQL OR condition
@@ -656,6 +661,11 @@ export class CardsService {
         jsonFieldConditions.push(`pc."effectTags" @> ARRAY['${effectTag.replace(/'/g, "''")}']::text[]`);
       }
 
+      // cardTier: filter by primaryCard.cardTier
+      if (cardTier) {
+        jsonFieldConditions.push(`pc."cardTier" = '${cardTier.replace(/'/g, "''")}'`);
+      }
+
       const baseWhereConditions = Object.entries(where)
         .map(([key, value]) => {
           if (value === null || value === undefined) return null;
@@ -678,10 +688,18 @@ export class CardsService {
           if (key === 'ruleBox' && typeof value === 'string') return `c."${key}" = '${value}'`;
           if (key === 'rarity' && typeof value === 'string') return `c."${key}" = '${value}'`;
           if (key === 'language' && typeof value === 'string') return `c."${key}" = '${value}'`;
-          if (key === 'regulationMark' && typeof value === 'string') {
-            const vals = value.split(',').map((v: string) => v.trim()).filter(Boolean);
-            if (vals.length === 1) return `c."${key}" = '${vals[0]}'`;
-            return `(${vals.map((v: string) => `c."${key}" = '${v.replace(/'/g, "''")}'`).join(' OR ')})`;
+          if (key === 'regulationMark') {
+            if (typeof value === 'string') {
+              const vals = value.split(',').map((v: string) => v.trim()).filter(Boolean);
+              if (vals.length === 1) return `c."${key}" = '${vals[0].replace(/'/g, "''")}'`;
+              return `(${vals.map((v: string) => `c."${key}" = '${v.replace(/'/g, "''")}'`).join(' OR ')})`;
+            }
+            if (typeof value === 'object' && value !== null && 'in' in value && Array.isArray((value as any).in)) {
+              const vals: string[] = (value as any).in;
+              if (vals.length === 1) return `c."${key}" = '${vals[0].replace(/'/g, "''")}'`;
+              return `(${vals.map((v: string) => `c."${key}" = '${v.replace(/'/g, "''")}'`).join(' OR ')})`;
+            }
+            return null;
           }
           if (key === 'variantType' && typeof value === 'string') return `c."${key}" = '${value}'`;
           // Handle subtypes array filter
@@ -1062,6 +1080,7 @@ export class CardsService {
     const [cardDeckRows, totalRows] = await Promise.all([
       // All decks containing ANY version of this card across last 52 weeks.
       // Deduplicate by (week, deckId) so a deck using multiple variants counts once.
+      // Lateral join fetches ACE SPEC + top Pokemon as keyCards.
       this.prisma.$queryRaw<Array<any>>`
         SELECT DISTINCT ON (date_trunc('week', t.date)::date, d.id)
           date_trunc('week', t.date)::date AS week_start,
@@ -1073,11 +1092,41 @@ export class CardsService {
           t.date AS "tournamentDate",
           t.id AS "eventId",
           t.region,
-          dc.quantity
+          dc.quantity,
+          kc."keyCards"
         FROM deck_cards dc
         JOIN decks d ON d.id = dc."deckId"
         JOIN tournament_results tr ON tr."deckId" = d.id
         JOIN tournaments t ON t.id = tr."tournamentId"
+        LEFT JOIN LATERAL (
+          SELECT json_agg(
+            json_build_object(
+              'webCardId', sub."webCardId",
+              'name', sub.name,
+              'imageUrl', sub."imageUrl",
+              'rarity', sub.rarity,
+              'quantity', sub.qty
+            ) ORDER BY sub.is_ace DESC, sub.qty DESC
+          ) AS "keyCards"
+          FROM (
+            SELECT
+              c2."webCardId",
+              c2.name,
+              c2."imageUrl",
+              c2.rarity,
+              dc2.quantity AS qty,
+              CASE WHEN c2.rarity = 'ACE_SPEC' THEN 1 ELSE 0 END AS is_ace
+            FROM deck_cards dc2
+            JOIN cards c2 ON c2.id = dc2."cardId"
+            WHERE dc2."deckId" = d.id
+              AND (
+                c2.rarity = 'ACE_SPEC'
+                OR (c2.supertype = 'POKEMON' AND dc2.quantity >= 2)
+              )
+            ORDER BY CASE WHEN c2.rarity = 'ACE_SPEC' THEN 1 ELSE 0 END DESC, dc2.quantity DESC
+            LIMIT 4
+          ) sub
+        ) kc ON TRUE
         WHERE dc."cardId" = ANY(${cardIds})
           AND t.date >= now() - interval '52 weeks'
         ORDER BY date_trunc('week', t.date)::date ASC, d.id, t.date DESC, tr.placement ASC
@@ -1121,6 +1170,7 @@ export class CardsService {
           eventId: row.eventId,
           region: row.region,
           quantity: Number(row.quantity),
+          keyCards: row.keyCards ?? [],
         });
       }
     }
