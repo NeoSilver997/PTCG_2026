@@ -1569,4 +1569,66 @@ export class CardsService {
       byExpansion: byExpansion.map((r) => ({ code: r.code, nameEn: r.nameEn, count: Number(r.count) })),
     };
   }
+
+  async getMissingEffects(): Promise<{
+    total: number;
+    withEffectTags: number;
+    missingEffectTags: number;
+    withTier: number;
+    missingTier: number;
+    tierDistribution: Array<{ tier: string | null; count: number }>;
+    samples: any[];
+  }> {
+    const [total, withEffectTags, withTier, tierRows, samples] = await Promise.all([
+      this.prisma.primaryCard.count({ where: { cards: { some: {} } } }),
+      this.prisma.primaryCard.count({ where: { cards: { some: {} }, effectTags: { isEmpty: false } } }),
+      this.prisma.primaryCard.count({
+        where: {
+          cards: { some: {} },
+          NOT: { cardTier: null } as any,
+        } as any,
+      }),
+
+      this.prisma.$queryRaw<Array<{ cardTier: string | null; count: bigint }>>`
+        SELECT pc."cardTier", COUNT(*)::bigint as count
+        FROM primary_cards pc
+        WHERE EXISTS (SELECT 1 FROM cards c WHERE c."primaryCardId" = pc.id)
+        GROUP BY pc."cardTier"
+        ORDER BY pc."cardTier" ASC NULLS LAST
+      `,
+
+      this.prisma.primaryCard.findMany({
+        where: { cards: { some: {} }, effectTags: { isEmpty: true } },
+        include: {
+          primaryExpansion: { select: { code: true, nameEn: true } },
+          cards: {
+            take: 1,
+            orderBy: { createdAt: 'desc' },
+            select: { webCardId: true, name: true, language: true, imageUrl: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 30,
+      }),
+    ]);
+
+    return {
+      total,
+      withEffectTags,
+      missingEffectTags: total - withEffectTags,
+      withTier,
+      missingTier: total - withTier,
+      tierDistribution: tierRows.map((r) => ({ tier: r.cardTier, count: Number(r.count) })),
+      samples: samples.map((pc: any) => ({
+        id: pc.id,
+        cardNumber: pc.cardNumber,
+        expansionCode: pc.primaryExpansion?.code ?? null,
+        expansionNameEn: pc.primaryExpansion?.nameEn ?? null,
+        effectTags: pc.effectTags ?? [],
+        cardTier: pc.cardTier ?? null,
+        effectScore: pc.effectScore ?? null,
+        card: pc.cards[0] ?? null,
+      })),
+    };
+  }
 }

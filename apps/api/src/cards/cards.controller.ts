@@ -93,6 +93,13 @@ export class CardsController {
     return await this.cardsService.getSpeciesSummary();
   }
 
+  @Get('admin/missing-effects')
+  @ApiOperation({ summary: 'Get PrimaryCards missing effectTags or tier, with sample cards' })
+  @ApiResponse({ status: 200, description: 'Missing effects stats and samples' })
+  async getMissingEffects() {
+    return await this.cardsService.getMissingEffects();
+  }
+
   @Get()
   @ApiOperation({ summary: 'Get cards with pagination, filters, and sorting' })
   @ApiResponse({ status: 200, description: 'Returns paginated cards' })

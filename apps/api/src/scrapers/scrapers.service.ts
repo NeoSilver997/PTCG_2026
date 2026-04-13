@@ -198,6 +198,11 @@ export class ScrapersService implements OnModuleDestroy {
         args = ['tsx', 'scrapers/update-promo-rarity.ts', '--apply'];
         break;
 
+      case JobType.POPULATE_EFFECTS:
+        command = 'npx';
+        args = ['tsx', 'scrapers/populate-effect-tags.ts', '--apply'];
+        break;
+
       default:
         command = 'python';
         args = [

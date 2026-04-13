@@ -27,6 +27,7 @@ const JOB_TYPE_LABELS: Record<string, string> = {
   REMAP_DECKS:       '🗺️ Remap Decks',
   REMOVE_DUPLICATES: '🧹 Remove Dupes',
   PROMO_RARITY:      '🎫 Promo Rarity',
+  POPULATE_EFFECTS:  '🏷️ Effect Tags',
 };
 
 interface ScraperJob {
@@ -49,6 +50,164 @@ interface FileMoveResult { name: string; srcPath: string; destPath: string; }
 interface FollowUpState { verifying: boolean; verifyResults?: FileVerifyResult[]; moving: boolean; moveResults?: FileMoveResult[]; error?: string; }
 
 type TabKey = 'events' | 'cards' | 'import' | 'maintenance';
+
+// ── Missing Effects Panel ────────────────────────────────────────────────────
+
+const TIER_COLORS: Record<string, string> = {
+  'S+': 'bg-yellow-400 text-yellow-900',
+  'S':  'bg-yellow-300 text-yellow-900',
+  'A+': 'bg-green-500 text-white',
+  'A':  'bg-green-400 text-white',
+  'B+': 'bg-blue-500 text-white',
+  'B':  'bg-blue-400 text-white',
+  'C+': 'bg-gray-400 text-white',
+  'C':  'bg-gray-300 text-gray-700',
+  'D':  'bg-gray-200 text-gray-500',
+};
+
+function MissingEffectsPanel({ onRunJob }: { onRunJob: () => void }) {
+  const [open, setOpen] = useState(true);
+  const { data, isLoading, refetch, isFetching } = useQuery({
+    queryKey: ['cards-missing-effects'],
+    queryFn: () => apiClient.get('/cards/admin/missing-effects'),
+    staleTime: 60_000,
+  });
+  const stats = data?.data;
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm overflow-hidden border-l-4 border-orange-400">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-orange-500 font-bold text-lg">⚠</span>
+          <h3 className="font-semibold text-gray-800 text-sm">Missing Effects Review</h3>
+          {stats && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 font-medium">
+              {stats.missingEffectTags.toLocaleString()} missing
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={(e) => { e.stopPropagation(); refetch(); }}
+            disabled={isFetching}
+            className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-40"
+          >
+            {isFetching ? '⟳' : '↻ Refresh'}
+          </button>
+          <span className="text-gray-400 text-sm">{open ? '▲' : '▼'}</span>
+        </div>
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 space-y-4">
+          {isLoading && <p className="text-sm text-gray-400 py-2">Loading stats…</p>}
+
+          {stats && (
+            <>
+              {/* Stats row */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                <div className="bg-gray-50 rounded p-2 text-center">
+                  <p className="text-xs text-gray-500">Total Primary Cards</p>
+                  <p className="font-bold text-gray-800">{stats.total.toLocaleString()}</p>
+                </div>
+                <div className="bg-green-50 rounded p-2 text-center">
+                  <p className="text-xs text-gray-500">With Effect Tags</p>
+                  <p className="font-bold text-green-700">{stats.withEffectTags.toLocaleString()}</p>
+                </div>
+                <div className="bg-orange-50 rounded p-2 text-center">
+                  <p className="text-xs text-gray-500">Missing Tags</p>
+                  <p className="font-bold text-orange-600">{stats.missingEffectTags.toLocaleString()}</p>
+                </div>
+                <div className="bg-orange-50 rounded p-2 text-center">
+                  <p className="text-xs text-gray-500">Missing Tier</p>
+                  <p className="font-bold text-orange-600">{stats.missingTier.toLocaleString()}</p>
+                </div>
+              </div>
+
+              {/* Tier distribution */}
+              {stats.tierDistribution.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Tier Distribution</p>
+                  <div className="flex flex-wrap gap-2">
+                    {stats.tierDistribution.map(({ tier, count }: { tier: string | null; count: number }) => (
+                      <span key={tier ?? 'null'} className={`px-2 py-0.5 rounded text-xs font-medium ${tier ? (TIER_COLORS[tier] ?? 'bg-gray-100 text-gray-600') : 'bg-gray-100 text-gray-400 italic'}`}>
+                        {tier ?? 'no tier'}: {count.toLocaleString()}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Action button */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={onRunJob}
+                  className="px-3 py-1.5 text-xs font-medium bg-slate-700 text-white rounded hover:bg-slate-800"
+                >
+                  🏷 Run Effect Tagger
+                </button>
+                <span className="text-xs text-gray-400">Runs populate-effect-tags.ts --apply on all PrimaryCards</span>
+              </div>
+
+              {/* Sample cards missing effects */}
+              {stats.samples.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">
+                    Sample Cards Missing EffectTags ({stats.samples.length} shown)
+                  </p>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-gray-50 text-gray-500">
+                          <th className="text-left px-2 py-1.5 font-semibold">Card</th>
+                          <th className="text-left px-2 py-1.5 font-semibold">Expansion</th>
+                          <th className="text-left px-2 py-1.5 font-semibold">No.</th>
+                          <th className="text-left px-2 py-1.5 font-semibold">webCardId</th>
+                          <th className="text-left px-2 py-1.5 font-semibold">Lang</th>
+                          <th className="text-left px-2 py-1.5 font-semibold">Tier</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {stats.samples.map((s: any) => (
+                          <tr key={s.id} className="hover:bg-gray-50">
+                            <td className="px-2 py-1.5">
+                              <a
+                                href={s.card ? `/cards/${s.card.webCardId}` : '#'}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-blue-600 hover:underline font-medium"
+                              >
+                                {s.card?.name ?? '—'}
+                              </a>
+                            </td>
+                            <td className="px-2 py-1.5 text-gray-600">{s.expansionCode ?? '—'}</td>
+                            <td className="px-2 py-1.5 text-gray-500 font-mono">{s.cardNumber}</td>
+                            <td className="px-2 py-1.5 font-mono text-gray-500">{s.card?.webCardId ?? '—'}</td>
+                            <td className="px-2 py-1.5 text-gray-500">{s.card?.language ?? '—'}</td>
+                            <td className="px-2 py-1.5">
+                              {s.cardTier ? (
+                                <span className={`px-1.5 py-0.5 rounded text-xs font-bold ${TIER_COLORS[s.cardTier] ?? 'bg-gray-100 text-gray-600'}`}>{s.cardTier}</span>
+                              ) : (
+                                <span className="text-gray-300">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ── Shared tiny components ──────────────────────────────────────────────────
 
@@ -597,9 +756,12 @@ export default function ScraperJobsPage() {
       jobType: 'CARD_IMPORT',
       source: 'JP',
       baseDir: 'data/cards',
-      regionOrPattern: regionDirMap[cardScrapeInfo.region],
-    });
+      regionOrPattern: regionDirMap[cardScrapeInfo.region],    });
   }, [cardScrapeInfo, startImportMutation]);
+
+  const handleRunEffectTagger = useCallback(() => {
+    startImportMutation.mutate({ jobType: 'POPULATE_EFFECTS', source: 'JP' });
+  }, [startImportMutation]);
 
   const formatDuration = (start?: string, end?: string) => {
     if (!start) return '-';
@@ -805,6 +967,9 @@ export default function ScraperJobsPage() {
               )}
             </div>
           )}
+
+          {/* Missing Effects Review */}
+          <MissingEffectsPanel onRunJob={handleRunEffectTagger} />
         </div>
       </div>
     </div>
