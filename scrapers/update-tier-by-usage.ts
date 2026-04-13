@@ -59,7 +59,7 @@ async function main() {
 
   console.log(apply ? '▶ APPLY mode — writing to DB' : '📋 DRY-RUN — no writes');
   if (topN) console.log(`  Showing top ${topN} cards only`);
-  console.log('  Lookback: 26 weeks\n');
+  console.log('  Lookback: 26 weeks (with 3-month recency floor)\n');
 
   // ── 1. Weekly total decks (denominator) ──────────────────────────────────
   const weekTotals = await prisma.$queryRaw<Array<{ week_start: Date; total_decks: bigint }>>`
@@ -165,6 +165,52 @@ async function main() {
     ORDER BY avg_weekly_pct DESC
   `;
 
+  // ── 2b. Last-3-month (13-week) average usage per card (recency floor) ──────
+  const recent3mRows = await prisma.$queryRaw<Array<{
+    primaryCardId: string;
+    recent_avg_pct: number;
+  }>>`
+    WITH weekly_usage AS (
+      SELECT
+        c."primaryCardId",
+        date_trunc('week', t.date)::date AS week_start,
+        COUNT(DISTINCT d.id)             AS deck_count
+      FROM deck_cards dc
+      JOIN cards c  ON c.id  = dc."cardId"
+      JOIN decks d  ON d.id  = dc."deckId"
+      JOIN tournament_results tr ON tr."deckId" = d.id
+      JOIN tournaments t  ON t.id  = tr."tournamentId"
+      WHERE t.date >= now() - interval '13 weeks'
+        AND c."primaryCardId" IS NOT NULL
+      GROUP BY c."primaryCardId", date_trunc('week', t.date)::date
+    ),
+    weekly_totals AS (
+      SELECT
+        date_trunc('week', t2.date)::date AS week_start,
+        COUNT(DISTINCT tr2."deckId")::bigint AS total_decks
+      FROM tournament_results tr2
+      JOIN tournaments t2 ON t2.id = tr2."tournamentId"
+      WHERE t2.date >= now() - interval '13 weeks'
+        AND tr2."deckId" IS NOT NULL
+      GROUP BY 1
+    )
+    SELECT
+      wu."primaryCardId",
+      ROUND(
+        AVG(
+          CASE WHEN wt.total_decks > 0
+          THEN (wu.deck_count::numeric / wt.total_decks) * 100
+          ELSE 0 END
+        )::numeric, 2
+      ) AS recent_avg_pct
+    FROM weekly_usage wu
+    JOIN weekly_totals wt ON wt.week_start = wu.week_start
+    GROUP BY wu."primaryCardId"
+  `;
+  const recentMap = new Map<string, number>(
+    recent3mRows.map(r => [r.primaryCardId, Number(r.recent_avg_pct)])
+  );
+
   // ── 3. Compute tier changes ───────────────────────────────────────────────
   // Also fetch current tier for comparison
   const currentTiers = await prisma.primaryCard.findMany({
@@ -189,6 +235,9 @@ async function main() {
     tierChanged: boolean;
   }
 
+  const TIERS_BELOW_A  = ['B+', 'B', 'C+', 'C'];
+  const RECENT_FLOOR_PCT = 2; // 3-month avg > 2% → at least A
+
   const results: CardUsage[] = usageRows.map(r => {
     const weeksUsed     = Number(r.weeks_used);
     const totalDecks    = Number(r.total_deck_appearances);
@@ -196,7 +245,12 @@ async function main() {
     const maxWeeklyPct  = Number(r.max_weekly_pct);
     // Weighted score: avg % across active weeks (not just weeks it appeared)
     const usageScore    = parseFloat(((avgWeeklyPct * weeksUsed) / activeWeeks).toFixed(3));
-    const newTier       = usageToTier(usageScore);
+    let newTier         = usageToTier(usageScore);
+    // Recency floor: if last-3-month avg > 2%, ensure at least Tier A
+    const recent3mPct   = recentMap.get(r.primaryCardId) ?? 0;
+    if (newTier && TIERS_BELOW_A.includes(newTier) && recent3mPct > RECENT_FLOOR_PCT) {
+      newTier = 'A';
+    }
     const oldTier       = tierMap.get(r.primaryCardId) ?? null;
     return {
       primaryCardId: r.primaryCardId,

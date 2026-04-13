@@ -63,6 +63,7 @@ function CardsPageInner() {
   const searchParams = useSearchParams();
   const [filters, setFilters] = useState<typeof DEFAULT_FILTERS>(getInitialFilters);
   const [skip, setSkip] = useState(0);
+  const [hideDuplicates, setHideDuplicates] = useState(false);
 
   // Derive URL params so the effect dependency is stable scalars (re-runs on client-side navigation)
   const urlEffectTag = searchParams.get('effectTag');
@@ -119,6 +120,20 @@ function CardsPageInner() {
     },
   });
 
+  // Deduplicate by primaryCardId when toggled (client-side, keeps first per sort order)
+  const displayCards: any[] = (() => {
+    const raw: any[] = data?.data ?? [];
+    if (!hideDuplicates) return raw;
+    const seen = new Set<string>();
+    return raw.filter((card: any) => {
+      const key = card.primaryCardId;
+      if (!key) return true; // no primaryCard — always show
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  })();
+
   const totalCards: number = data?.pagination?.total ?? 0;
   const totalPages = Math.ceil(totalCards / TAKE);
   const currentPage = Math.floor(skip / TAKE) + 1;
@@ -156,7 +171,21 @@ function CardsPageInner() {
             {data?.data && data.data.length > 0 ? (
               <>
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-sm text-gray-600">
-                  <span>顯示 {skip + 1}–{Math.min(skip + data.data.length, totalCards)} / {totalCards} 張</span>
+                  <div className="flex items-center gap-3">
+                    <span>顯示 {skip + 1}–{Math.min(skip + data.data.length, totalCards)} / {totalCards} 張</span>
+                    <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={hideDuplicates}
+                        onChange={e => setHideDuplicates(e.target.checked)}
+                        className="w-3.5 h-3.5 accent-blue-600"
+                      />
+                      <span className="text-xs text-gray-600">隱藏重複卡</span>
+                      {hideDuplicates && (
+                        <span className="text-xs text-blue-600">({displayCards.length} 張)</span>
+                      )}
+                    </label>
+                  </div>
                   {totalPages > 1 && (
                     <div className="flex items-center gap-2">
                       <button onClick={() => setSkip(Math.max(0, skip - TAKE))} disabled={skip === 0}
@@ -167,7 +196,7 @@ function CardsPageInner() {
                     </div>
                   )}
                 </div>
-                <CardGrid cards={data.data} onCardClick={handleCardClick} />
+                <CardGrid cards={displayCards} onCardClick={handleCardClick} />
                 {totalPages > 1 && (
                   <div className="mt-6 flex justify-center items-center gap-3">
                     <button onClick={() => setSkip(Math.max(0, skip - TAKE))} disabled={skip === 0}
