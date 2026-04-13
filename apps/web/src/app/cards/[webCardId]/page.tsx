@@ -41,6 +41,10 @@ interface CardDetail {
     primaryExpansionId: string;
     cardNumber: string;
     name?: string;
+    effectTags: string[];
+    specialEffectTags: string[];
+    effectScore: number | null;
+    cardTier: string | null;
     primaryExpansion: {
       code: string;
       nameEn: string;
@@ -812,6 +816,55 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                     )}
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Effect Tags */}
+            {(card.primaryCard.cardTier || (card.primaryCard.effectTags?.length > 0) || (card.primaryCard.specialEffectTags?.length > 0)) && (
+              <div className="bg-white rounded-lg p-3 shadow-sm">
+                <h2 className="text-xl font-semibold mb-3 text-gray-900">效果評級</h2>
+                <div className="flex flex-wrap items-center gap-3">
+                  {card.primaryCard.cardTier && (
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-bold ${
+                      card.primaryCard.cardTier === 'S+' ? 'bg-yellow-400 text-yellow-900' :
+                      card.primaryCard.cardTier === 'S'  ? 'bg-yellow-300 text-yellow-900' :
+                      card.primaryCard.cardTier === 'A+' ? 'bg-green-500 text-white' :
+                      card.primaryCard.cardTier === 'A'  ? 'bg-green-400 text-white' :
+                      card.primaryCard.cardTier === 'B+' ? 'bg-blue-500 text-white' :
+                      card.primaryCard.cardTier === 'B'  ? 'bg-blue-400 text-white' :
+                      card.primaryCard.cardTier === 'C+' ? 'bg-gray-400 text-white' :
+                      card.primaryCard.cardTier === 'C'  ? 'bg-gray-300 text-gray-700' :
+                      'bg-gray-200 text-gray-500'
+                    }`}>
+                      Tier {card.primaryCard.cardTier}
+                    </span>
+                  )}
+                  {card.primaryCard.effectScore != null && (
+                    <span className="text-sm text-gray-500">
+                      分數：<span className="font-semibold text-gray-800">{card.primaryCard.effectScore.toFixed(1)}</span>
+                    </span>
+                  )}
+                </div>
+                {card.primaryCard.effectTags?.length > 0 && (
+                  <div className="mt-3">
+                    <div className="text-xs font-semibold text-gray-500 mb-1">效果標籤</div>
+                    <div className="flex flex-wrap gap-2">
+                      {card.primaryCard.effectTags.map((tag: string) => (
+                        <span key={tag} className="px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-800 font-medium">{tag}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {card.primaryCard.specialEffectTags?.length > 0 && (
+                  <div className="mt-2">
+                    <div className="text-xs font-semibold text-gray-500 mb-1">特殊標籤</div>
+                    <div className="flex flex-wrap gap-2">
+                      {card.primaryCard.specialEffectTags.map((tag: string) => (
+                        <span key={tag} className="px-2 py-0.5 rounded-full text-xs bg-purple-100 text-purple-800 font-medium">{tag}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

@@ -170,38 +170,33 @@ Score = (base + meta + expansion + function + synergy + effect + damage) × rari
 
 ## 7. Integration Roadmap (PTCG_2026)
 
-### Option A — Schema Extension (Recommended)
-Add effect tag fields to the `Card` model:
+### ✅ Implemented — Effect Tags on `PrimaryCard`
+
+Effect tags belong on `PrimaryCard`, **not** `Card`, because all language variants (JA_JP, ZH_HK, EN_US) of the same card share identical game mechanics.
 
 ```prisma
-model Card {
+model PrimaryCard {
   // ... existing fields ...
-  effectTags      String[]   // Primary effect tags, e.g. ["抽卡效果", "搜索效果"]
-  specialEffectTags String[] // Special effect tags, e.g. ["大量抽卡"]
-  effectScore     Float?     // Pre-computed effect score (0–12)
-  cardTier        String?    // S+/S/A+/A/B+/B/C+/C/D
+  effectTags         String[]  // Primary effect tags e.g. ["抽卡效果", "搜索效果"]
+  specialEffectTags  String[]  // Special effect tags e.g. ["大量抽卡"]
+  effectScore        Float?    // Pre-computed effect score (0–12)
+  cardTier           String?   // S+/S/A+/A/B+/B/C+/C/D
+
+  @@index([effectTags])        // GIN index for array contains queries
+  @@index([cardTier])
 }
 ```
 
-Migration: `pnpm db:migrate -- --name add_effect_tags`
+**Migration applied:** `20260413000000_add_effect_tags_to_primary_card`
 
-### Option B — Compute at Query Time
-Implement a TypeScript port of `classify_single_effect()` in the API that runs over `attacks[].effect` and `abilities[].text` at request time.  No schema change needed — trades CPU for DB space.
+#### Why PrimaryCard (not Card)
 
-### Option C — JSON Field inside existing `attacks`/`abilities`
-Embed tags directly inside each attack/ability JSON object:
-
-```json
-{
-  "name": "Miracle Force",
-  "cost": ["超", "超", "無"],
-  "damage": "190",
-  "effect": "This Pokémon recovers...",
-  "effectTags": ["回復效果", "條件傷害"]
-}
-```
-
-No schema migration needed; backward compatible.
+| Concern | Reasoning |
+|---|---|
+| Same card, 3 languages | JA 「ゲッコウガex」, ZH 「甲賀忍蛙ex」, EN 「Greninja ex」 all have the same attacks |
+| `skillsSignature` already lives here | Dedup key is on PrimaryCard — effect tags are the semantic extension of it |
+| Avoids 3× data redundancy | One tag update propagates to all language variants automatically |
+| API filter stays simple | `WHERE 'effectTags' && '{"搜索效果"}'` on primary_cards — no JOIN fan-out |
 
 ---
 

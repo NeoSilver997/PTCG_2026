@@ -108,6 +108,11 @@ model PrimaryCard {
   cardNumber         String?
   primaryExpansionId String?
   pokemonSpeciesId   String?
+  // Effect tags — shared across all language variants of this card
+  effectTags         String[]         // Primary effect tags, e.g. ["抽卡效果", "搜索效果"]
+  specialEffectTags  String[]         // Special effect tags, e.g. ["大量抽卡"]
+  effectScore        Float?           // Pre-computed effect score (0–12)
+  cardTier           String?          // S+/S/A+/A/B+/B/C+/C/D
   cards              Card[]
   primaryExpansion   PrimaryExpansion? @relation(fields: [primaryExpansionId], references: [id])
   pokemonSpecies     PokemonSpecies?  @relation(fields: [pokemonSpeciesId], references: [id])
@@ -116,6 +121,8 @@ model PrimaryCard {
   @@index([name])
   @@index([primaryExpansionId])
   @@index([pokemonSpeciesId])
+  @@index([effectTags])
+  @@index([cardTier])
   @@map("primary_cards")
 }
 
