@@ -59,6 +59,7 @@ interface FilterPanelProps {
     expansionCode?: string;
     hasAbilities?: string;
     hasAttackText?: string;
+    effectTag?: string;
   };
   onFilterChange: (filters: any) => void;
   stats?: {
@@ -95,6 +96,7 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
       expansionCode: DEFAULT_EXPANSION_CODES,
       hasAbilities: '',
       hasAttackText: '',
+      effectTag: '',
     });
   };
 
@@ -111,7 +113,8 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
   const hasActiveFilters = filters.name || filters.supertype || filters.types || 
     filters.rarity || filters.language || filters.webCardId || filters.subtypes ||
     filters.variantType || filters.minHp || filters.maxHp || filters.artist ||
-    filters.regulationMark || filters.expansionCode || filters.hasAbilities || filters.hasAttackText;
+    filters.regulationMark || filters.expansionCode || filters.hasAbilities || filters.hasAttackText ||
+    filters.effectTag;
   
   return (
     <div className="bg-white rounded-lg shadow-md p-4 mb-6">
@@ -531,6 +534,73 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
                 <option value="" className="text-gray-900">全部</option>
                 <option value="true" className="text-gray-900">有特性描述</option>
                 <option value="false" className="text-gray-900">無特性描述</option>
+              </select>
+            </div>
+
+            {/* Effect Tag */}
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                效果標籤
+              </label>
+              <select
+                value={filters.effectTag || ''}
+                onChange={(e) => updateFilter('effectTag', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900"
+              >
+                <option value="">全部</option>
+                <optgroup label="── 資源 ──">
+                  <option value="抽卡效果">抽卡效果</option>
+                  <option value="搜索效果">搜索效果</option>
+                  <option value="能量操作">能量操作</option>
+                  <option value="能量回收">能量回收</option>
+                  <option value="能量附著">能量附著</option>
+                  <option value="手牌丟棄">手牌丟棄</option>
+                  <option value="牌庫操作">牌庫操作</option>
+                  <option value="牌庫重洗">牌庫重洗</option>
+                </optgroup>
+                <optgroup label="── 傷害/戰鬥 ──">
+                  <option value="傷害效果">傷害效果</option>
+                  <option value="條件傷害">條件傷害</option>
+                  <option value="連鎖傷害">連鎖傷害</option>
+                  <option value="備戰傷害加成">備戰傷害加成</option>
+                  <option value="棄牌區傷害加成">棄牌區傷害加成</option>
+                  <option value="傷害指示物">傷害指示物</option>
+                  <option value="反噬傷害">反噬傷害</option>
+                </optgroup>
+                <optgroup label="── 防禦/控制 ──">
+                  <option value="傷害防禦">傷害防禦</option>
+                  <option value="傷害減免">傷害減免</option>
+                  <option value="高額傷害減免">高額傷害減免</option>
+                  <option value="全體防禦">全體防禦</option>
+                  <option value="效果免疫">效果免疫</option>
+                  <option value="無視弱點/效果">無視弱點/效果</option>
+                  <option value="HP提升">HP提升</option>
+                </optgroup>
+                <optgroup label="── 狀態/干擾 ──">
+                  <option value="狀態異常">狀態異常</option>
+                  <option value="狀態恢復">狀態恢復</option>
+                  <option value="昏厥條件">昏厥條件</option>
+                  <option value="招式封鎖">招式封鎖</option>
+                  <option value="招式鎖定">招式鎖定</option>
+                  <option value="撤退封鎖">撤退封鎖</option>
+                  <option value="撤退干擾">撤退干擾</option>
+                  <option value="道具消除">道具消除</option>
+                  <option value="物品卡封鎖">物品卡封鎖</option>
+                  <option value="附著干擾">附著干擾</option>
+                  <option value="支援者限制">支援者限制</option>
+                </optgroup>
+                <optgroup label="── 其他 ──">
+                  <option value="切換效果">切換效果</option>
+                  <option value="回復效果">回復效果</option>
+                  <option value="進化支援">進化支援</option>
+                  <option value="招式複製">招式複製</option>
+                  <option value="硬幣判定">硬幣判定</option>
+                  <option value="連續技">連續技</option>
+                  <option value="獎賞控制">獎賞控制</option>
+                  <option value="情報收集">情報收集</option>
+                  <option value="特殊能量">特殊能量</option>
+                  <option value="弱點改變">弱點改變</option>
+                </optgroup>
               </select>
             </div>
           </div>

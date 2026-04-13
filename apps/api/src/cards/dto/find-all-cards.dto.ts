@@ -145,4 +145,9 @@ export class FindAllCardsDto {
   @IsOptional()
   @IsString()
   attackName?: string;
+
+  @ApiProperty({ required: false, example: '抽卡效果', description: 'Filter by effect tag (from primaryCard.effectTags)' })
+  @IsOptional()
+  @IsString()
+  effectTag?: string;
 }

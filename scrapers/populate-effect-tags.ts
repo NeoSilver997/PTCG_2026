@@ -43,39 +43,84 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
   const has = (...words: string[]) => words.some(w => effect.includes(w));
 
   // --- Primary ---
-  if (has('抽取', '抽出', '加入手牌', '抽卡') && has('牌庫')) {
-    if (has('抽4張', '抽5張', '抽6張', '抽出4張', '抽出5張', '抽出6張')) {
+  // Draw cards (ZH + JA)
+  if (
+    (has('抽取', '抽出', '加入手牌', '抽卡') && has('牌庫')) ||
+    (has('山札から') && has('引く', 'カードを引')) ||
+    (has('手札に加える', '手札に入れる') && has('山札', '引く'))
+  ) {
+    if (
+      has('抽4張', '抽5張', '抽6張', '抽出4張', '抽出5張', '抽出6張') ||
+      has('山札から4枚引く', '山札から5枚引く', '山札から6枚引く',
+          '山札から4枚', '山札から5枚', '山札から6枚')
+    ) {
       special.add('大量抽卡');
     } else {
       primary.add('抽卡效果');
     }
   }
 
-  if (has('從', '選擇') && has('牌庫', '棄牌區') && !has('抽卡')) {
+  // Search (ZH + JA)
+  if (
+    (has('從', '選擇') && has('牌庫', '棄牌區') && !has('抽卡')) ||
+    (has('山札から') && has('探す', '選び', '手札に加える') && !has('引く')) ||
+    (has('トラッシュから') && has('手札に加える', '手札に'))
+  ) {
     primary.add('搜索效果');
   }
 
-  if (has('附上', '附加', '移除') && has('能量')) {
+  // Energy operations (ZH + JA)
+  if (
+    (has('附上', '附加', '移除') && has('能量')) ||
+    has('エネルギーをつけ替える', 'エネルギーをはがし', 'エネルギーを手札に戻す') ||
+    (has('エネルギー') && has('トラッシュ') && has('ポケモン')) ||
+    (has('エネルギーカード') && has('つける', 'はがす'))
+  ) {
     primary.add('能量操作');
   }
 
-  if (has('造成', '給予') && has('傷害')) {
+  // Damage (ZH + JA)
+  if (
+    (has('造成', '給予') && has('傷害')) ||
+    (has('ダメカン') && has('のせる', '乗せる')) ||
+    (has('ダメージを与え'))
+  ) {
     primary.add('傷害效果');
   }
 
-  if (has('中毒', '燃燒', '麻痺', '睡眠', '混亂')) {
+  // Status conditions (ZH + JA)
+  if (
+    has('中毒', '燃燒', '麻痺', '睡眠', '混亂') ||
+    has('どくにする', 'どくポケモン', 'やけどにする', 'やけどポケモン',
+        'ねむりにする', 'まひにする', 'こんらんにする',
+        'やけど', 'どく', 'ねむり', 'まひ', 'こんらん')
+  ) {
     primary.add('狀態異常');
   }
 
-  if (has('硬幣') && has('擲')) {
+  // Coin flip (ZH + JA)
+  if (
+    (has('硬幣') && has('擲')) ||
+    has('コインを投げ', 'コイントス')
+  ) {
     primary.add('硬幣判定');
   }
 
-  if (has('切換', '互換')) {
+  // Switch (ZH + JA)
+  if (
+    has('切換', '互換') ||
+    has('バトル場に呼び出す', 'バトル場のポケモンと入れ替える',
+        'ベンチポケモンと交代', 'ベンチに下がる', '強制的に入れ替え')
+  ) {
     primary.add('切換效果');
   }
 
-  if (has('恢復', '回復') && has('HP', '傷害')) {
+  // Recovery (ZH + JA)
+  if (
+    (has('恢復', '回復') && has('HP', '傷害')) ||
+    (has('HPを回復') || (has('回復') && has('HP', 'ダメカン'))) ||
+    has('ダメカンをとり除く', 'ダメカンを取り除く', 'HPが回復')
+  ) {
     primary.add('回復效果');
   }
 
@@ -83,75 +128,134 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     special.add('狀態免疫');
   }
 
-  if (has('不會受到', '無法使用') && has('傷害')) {
+  // Damage prevention (ZH + JA)
+  if (
+    (has('不會受到', '無法使用') && has('傷害')) ||
+    has('ダメージを受けない', '受けるダメージは「0」') ||
+    (has('受けるダメージ') && has('受けない', '0にする'))
+  ) {
     primary.add('傷害防禦');
   }
 
-  if (has('若', '在這個回合', '在上個', '在下個') && has('增加', '點傷害')) {
+  // Conditional damage (ZH + JA)
+  if (
+    (has('若', '在這個回合', '在上個', '在下個') && has('增加', '點傷害')) ||
+    (has('の数×', 'の枚数×', '×10', '×20', '×30', '×40', '×50') && has('ダメージ'))
+  ) {
     primary.add('條件傷害');
   }
 
-  if (has('恢復', '回復') && has('特殊狀態', '狀態')) {
+  // Status recovery (ZH + JA)
+  if (
+    (has('恢復', '回復') && has('特殊狀態', '狀態')) ||
+    has('特殊状態を回復', '特殊状態がなおる', '状態異常を回復')
+  ) {
     primary.add('狀態恢復');
   }
 
-  if (has('傷害指示物') && has('放置', '增加')) {
+  // Damage counters (ZH + JA)
+  if (
+    (has('傷害指示物') && has('放置', '增加')) ||
+    (has('ダメカン') && has('のせる', '乗せる', 'ダメカンを'))
+  ) {
     primary.add('傷害指示物');
   }
 
-  if (has('道具', '物品') && has('消除', '移除') && !has('選擇最多')) {
+  // Tool removal (ZH + JA)
+  if (
+    (has('道具', '物品') && has('消除', '移除') && !has('選擇最多')) ||
+    has('ポケモンのどうぐをトラッシュ', 'ポケモンのどうぐを捨て', 'どうぐをトラッシュ')
+  ) {
     primary.add('道具消除');
   }
 
-  if (has('查看', '看') && !primary.has('搜索效果')) {
+  // Information (ZH + JA)
+  if (
+    (has('查看', '看') && !primary.has('搜索効果')) ||
+    (has('手札を見る', '相手の手札を見る') && !primary.has('搜索效果'))
+  ) {
     primary.add('情報收集');
   }
 
-  if (has('昏厥') && has('若', '當')) {
+  // KO condition (ZH + JA)
+  if (
+    (has('昏厥') && has('若', '當')) ||
+    (has('きぜつ') && has('なら', 'したなら', 'していたなら'))
+  ) {
     primary.add('昏厥條件');
   }
 
+  // Evolution support (ZH + JA)
   if (
-    has('進化', '2階進化', '跳過') &&
-    has('進化') &&
-    !has('從手牌使出這張卡並完成進化時')
+    (has('進化', '2階進化', '跳過') && has('進化') && !has('從手牌使出這張卡並完成進化時')) ||
+    (has('進化できる') || (has('進化') && has('このターン', '手札')))
   ) {
     primary.add('進化支援');
   }
 
-  if (has('撤退') && has('增加', '所需的能量')) {
+  // Retreat disruption (ZH + JA)
+  if (
+    (has('撤退') && has('增加', '所需的能量')) ||
+    (has('にげるためのエネルギー') && has('多く', '必要'))
+  ) {
     primary.add('撤退干擾');
   }
 
-  if (has('獎賞卡')) {
+  // Prize control (ZH + JA)
+  if (
+    has('獎賞卡') ||
+    has('サイドカード', 'サイドを', 'サイドを取る')
+  ) {
     primary.add('獎賞控制');
   }
 
-  if (has('這隻寶可夢也受到', '自己也受到') && has('傷害')) {
+  // Recoil (ZH + JA)
+  if (
+    (has('這隻寶可夢也受到', '自己也受到') && has('傷害')) ||
+    (has('このポケモンにも') && has('ダメージ'))
+  ) {
     primary.add('反噬傷害');
   }
 
-  if (has('備戰寶可夢也受到', '備戰區不計算') && has('傷害')) {
+  // Bench damage (ZH + JA)
+  if (
+    (has('備戰寶可夢也受到', '備戰區不計算') && has('傷害')) ||
+    (has('ベンチポケモンにも') && has('ダメージ')) ||
+    has('ベンチにも', 'ベンチにダメカン')
+  ) {
     primary.add('連鎖傷害');
   }
 
+  // Ignore weakness/effect (ZH + JA)
   if (
-    has('傷害不計算', '不計算弱點', '不計算抵抗力') &&
-    has('弱點', '抵抗力', '附加效果') &&
-    !has('備戰區不計算')
+    (has('傷害不計算', '不計算弱點', '不計算抵抗力') && has('弱點', '抵抗力', '附加效果') && !has('備戰區不計算')) ||
+    has('弱点・抵抗力は計算しない', '弱点は計算しない', '弱点を使わない') ||
+    has('ついている場合のダメージは計算しない')
   ) {
     primary.add('無視弱點/效果');
   }
 
-  if (has('下個自己的回合') && has('無法使用招式')) {
+  // Use limit (ZH + JA)
+  if (
+    (has('下個自己的回合') && has('無法使用招式')) ||
+    has('この番は使えない', '次の自分の番は使えない', 'この番このワザは使えない')
+  ) {
     primary.add('使用限制');
   }
 
-  if (has('若', '如果') && has('失敗', '則這個招式失敗')) {
+  // Fail condition (ZH + JA)
+  if (
+    (has('若', '如果') && has('失敗', '則這個招式失敗')) ||
+    has('このワザは失敗する', 'ワザは失敗')
+  ) {
     primary.add('條件失敗');
   }
 
-  if (has('從自己的手牌選擇', '選擇1張能量卡') && has('附於')) {
+  // Energy attachment (ZH + JA)
+  if (
+    (has('從自己的手牌選擇', '選擇1張能量卡') && has('附於')) ||
+    (has('手札のエネルギーカード') && has('つける', 'ポケモンにつける'))
+  ) {
     primary.add('能量附著');
   }
 
@@ -167,50 +271,95 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     primary.add('備戰傷害加成');
   }
 
-  if (has('視為提供', '重新附於') && has('能量')) {
+  // Special energy (ZH + JA)
+  if (
+    (has('視為提供', '重新附於') && has('能量')) ||
+    has('エネルギー1個ぶんとしてはたらく', 'エネルギー2個ぶんとしてはたらく',
+        'すべてのタイプのエネルギー1個ぶん', 'タイプすべてのエネルギー') ||
+    (has('ぶんとしてはたらく') && has('エネルギー'))
+  ) {
     primary.add('特殊能量');
   }
 
-  if (has('放回牌庫並重洗', '各自從牌庫抽出') && has('支援者卡')) {
+  // Deck operations (ZH + JA)
+  if (
+    (has('放回牌庫並重洗', '各自從牌庫抽出') && has('支援者卡')) ||
+    has('山札を引き直す', '山札をシャッフル') ||
+    (has('山札') && has('戻し', '並べ替え'))
+  ) {
     primary.add('牌庫操作');
   }
 
+  // Chain moves (ZH + JA)
   if (
-    has('在上個自己的回合', '在上個對手的回合', '在上個回合', '在上回合') &&
-    has('才可使用')
+    (has('在上個自己的回合', '在上個對手的回合', '在上個回合', '在上回合') && has('才可使用')) ||
+    (has('前の番に') && has('使っていたなら', 'このワザを使っていた'))
   ) {
     primary.add('連續技');
   }
 
-  if (has('選擇1個', '持有的招式') && has('無法使用') && !has('作為這個招式使用')) {
+  // Move lock (ZH + JA)
+  if (
+    (has('選擇1個', '持有的招式') && has('無法使用') && !has('作為這個招式使用')) ||
+    (has('ワザ') && has('使えない', '使えなくなる') && !has('この番') && !has('作為'))
+  ) {
     primary.add('招式封鎖');
   }
 
-  if (has('若自己', '只需要') && has('能量即可使用')) {
+  // Energy condition (ZH + JA)
+  if (
+    (has('若自己', '只需要') && has('能量即可使用')) ||
+    (has('エネルギーが') && has('ついているなら', 'ついているポケモン', 'たりないなら'))
+  ) {
     primary.add('能量條件');
   }
 
-  if (has('若對手', '將能量卡附於') && has('對手的回合結束')) {
+  // Attachment disruption (ZH + JA)
+  if (
+    (has('若對手', '將能量卡附於') && has('對手的回合結束')) ||
+    (has('対戦相手') && has('エネルギーカードをつけ') && has('ターン'))
+  ) {
     primary.add('附著干擾');
   }
 
-  if (has('最大HP', '+50', '+70', '+30')) {
+  // HP boost (ZH + JA) - covers +10 through +70
+  if (
+    has('最大HP', '+50', '+70', '+30', '+10', '+20', '+40', '+60') ||
+    (has('最大HP') && has('多くなる', '増える', '大きくなる'))
+  ) {
     primary.add('HP提升');
   }
 
-  if (has('場上所有', '最大HP各') && has('競技場')) {
+  // Stadium amplify (ZH + JA)
+  if (
+    (has('場上所有', '最大HP各') && has('競技場')) ||
+    (has('スタジアム') && has('HP', 'ダメージ', '効果'))
+  ) {
     primary.add('場地增幅');
   }
 
-  if (has('不會受到', '效果的影響')) {
+  // Effect immunity (ZH + JA)
+  if (
+    has('不會受到', '效果的影響') ||
+    has('ワザの効果を受けない', '効果を受けない', 'この特性の効果は受けない') ||
+    (has('効果') && has('受けない', '受けない。'))
+  ) {
     primary.add('效果免疫');
   }
 
-  if (has('寶可夢道具', '將其丟棄') && has('選擇最多')) {
+  // Tool removal (mass) (ZH + JA)
+  if (
+    (has('寶可夢道具', '將其丟棄') && has('選擇最多')) ||
+    (has('どうぐ') && has('すべてトラッシュ', '全てトラッシュ'))
+  ) {
     primary.add('道具移除');
   }
 
-  if (has('選擇1個', '持有的招式') && has('作為這個招式使用')) {
+  // Move copy (ZH + JA)
+  if (
+    (has('選擇1個', '持有的招式') && has('作為這個招式使用')) ||
+    has('このワザとして使う', 'ワザとして使う', 'のワザを使う')
+  ) {
     primary.add('招式複製');
   }
 
@@ -241,55 +390,121 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     primary.add('物品卡封鎖');
   }
 
+  // Full defense (ZH + JA)
   if (
-    has('自己的所有寶可夢', '受到對手的寶可夢招式的傷害') &&
-    has('包含新上場')
+    (has('自己的所有寶可夢', '受到對手的寶可夢招式的傷害') && has('包含新上場')) ||
+    (has('自分のポケモン全員') && has('受けるダメージ') && has('減る', '少なくなる'))
   ) {
     primary.add('全體防禦');
   }
 
-  if (has('無法撤退')) {
+  // Retreat lock (ZH + JA)
+  if (
+    has('無法撤退') ||
+    has('逃げることができない', 'にげることができない', 'バトル場から離れられない')
+  ) {
     primary.add('撤退封鎖');
   }
 
-  if (has('離開戰鬥場前無法使用', '無法使用') && !has('招式')) {
+  // Move lockout (ZH + JA)
+  if (
+    (has('離開戰鬥場前無法使用', '無法使用') && !has('招式')) ||
+    has('バトル場からいなくなるまでワザを使えない')
+  ) {
     primary.add('招式鎖定');
   }
 
-  if (has('從自己的棄牌區抽出', '放回牌庫並重洗') && has('能量卡')) {
+  // Energy recovery (ZH + JA)
+  if (
+    (has('從自己的棄牌區抽出', '放回牌庫並重洗') && has('能量卡')) ||
+    (has('トラッシュから') && has('エネルギーカード') && has('手札に加える', 'つける', '拾う'))
+  ) {
     primary.add('能量回收');
   }
 
-  if (has('放回各自的牌庫並重洗', '全部放回牌庫並重洗')) {
+  // Deck reshuffle (ZH + JA)
+  if (
+    has('放回各自的牌庫並重洗', '全部放回牌庫並重洗') ||
+    has('すべてのポケモンを山札に戻し', 'すべてを山札に戻し')
+  ) {
     primary.add('牌庫重洗');
   }
 
-  if (has('的所有「', '的寶可夢」') && has('傷害「-30」點')) {
+  // Specific Pokemon defense (ZH + JA)
+  if (
+    (has('的所有「', '的寶可夢」') && has('傷害「-30」點')) ||
+    (has('すべての「') && has('ダメージ') && has('少なくなる', '減る'))
+  ) {
     primary.add('特定寶可夢防禦');
   }
 
-  if (has('弱點改為', '弱點以')) {
+  // Weakness change (ZH + JA)
+  if (
+    has('弱點改為', '弱點以') ||
+    has('弱点を', 'タイプに変える', '弱点タイプを変え')
+  ) {
     primary.add('弱點改變');
   }
 
-  if (has('對手選擇對手自己的', '作為這個招式使用') && primary.has('招式複製對手')) {
+  // Copy opponent move (ZH + JA)
+  if (
+    (has('對手選擇對手自己的', '作為這個招式使用') && primary.has('招式複製對手')) ||
+    has('相手が選んだ', '相手のポケモンのワザ') && has('使う')
+  ) {
     primary.add('招式複製對手');
   }
 
-  if (has('傷害「-80', '傷害「-100')) {
+  // High damage reduction (ZH + JA)
+  if (
+    has('傷害「-80', '傷害「-100') ||
+    has('受けるダメージは「80」少なくなる', '受けるダメージは「100」少なくなる',
+        '受けるダメージを80少なく', '受けるダメージを100少なく')
+  ) {
     primary.add('高額傷害減免');
   }
 
+  // Damage reduction (ZH + JA)
   if (
-    has('受到招式的傷害', '傷害「-') &&
-    has('-10', '-20', '-30') &&
-    !has('【鋼】', '【鬥】', '所有寶可夢')
+    (has('受到招式的傷害', '傷害「-') && has('-10', '-20', '-30') && !has('【鋼】', '【鬥】', '所有寶可夢')) ||
+    (has('受けるダメージは') && has('「10」少なくなる', '「20」少なくなる', '「30」少なくなる',
+        '10少なくなる', '20少なくなる', '30少なくなる') && !has('80', '100'))
   ) {
     primary.add('傷害減免');
   }
 
-  if (has('支援者卡只可使用', '支援者卡只可使用1張')) {
+  // Supporter restriction (ZH + JA)
+  if (
+    has('支援者卡只可使用', '支援者卡只可使用1張') ||
+    has('サポートは使えない', 'サポートを使えない')
+  ) {
     primary.add('支援者限制');
+  }
+
+  // --- Japanese-only patterns (JA_JP cards without Chinese translations) ---
+
+  // Hand discard (手牌丟棄)
+  if (has('手札を', 'トラッシュ') && !primary.has('能量操作')) {
+    primary.add('手牌丟棄');
+  }
+
+  // Field removal / bounce
+  if (has('手札に戻す') && has('ポケモン')) {
+    primary.add('手牌回收');
+  }
+
+  // Item lock (JA)
+  if (has('グッズを使えない', 'グッズカードは使えない', 'グッズカードを手札から出せない')) {
+    primary.add('物品卡封鎖');
+  }
+
+  // Energy requirement increase (JA)
+  if (has('使用するためのエネルギー') && has('多く', '1個多く')) {
+    primary.add('能量需求增加');
+  }
+
+  // Graveyard bonus (JA)
+  if (has('トラッシュ') && has('枚数×', '枚×', '数×') && has('ダメージ')) {
+    primary.add('棄牌區傷害加成');
   }
 
   // --- Special ---
@@ -309,15 +524,18 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     special.add('進化效果');
   }
 
-  if (has('競技場')) {
+  if (has('競技場') || has('スタジアム')) {
     special.add('競技場效果');
   }
 
-  if (has('特性')) {
+  if (has('特性') || has('このポケモンの特性', 'この特性')) {
     special.add('特性效果');
   }
 
-  if (has('特殊狀態', '狀態') && has('不會', '不能', '無法')) {
+  if (
+    (has('特殊狀態', '狀態') && has('不會', '不能', '無法')) ||
+    has('特殊状態にならない', '状態異常にならない', '特殊状態を受けない')
+  ) {
     special.add('狀態免疫');
   }
 
@@ -325,7 +543,7 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
   if (
     primary.size === 0 &&
     special.size === 0 &&
-    !has('可不限張數使用', '可使用', '只能使用')
+    !has('可不限張數使用', '可使用', '只能使用', '使えない場合', 'ことはできない')
   ) {
     primary.add('其他效果');
   }
@@ -333,7 +551,7 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
   return [primary, special];
 }
 
-function classifyCard(attacks: Attack[], abilities: Ability[]): [string[], string[]] {
+function classifyCard(attacks: Attack[], abilities: Ability[], cardText?: string | null): [string[], string[]] {
   const primary = new Set<string>();
   const special = new Set<string>();
 
@@ -350,6 +568,8 @@ function classifyCard(attacks: Attack[], abilities: Ability[]): [string[], strin
   for (const atk of attacks ?? []) {
     processText(atk.effect ?? atk.text ?? '');
   }
+  // Also process root card text (used by ENERGY and TRAINER cards)
+  if (cardText) processText(cardText);
 
   return [
     [...primary].sort(),
@@ -441,6 +661,7 @@ async function main() {
             language: true,
             attacks: true,
             abilities: true,
+            text: true,
           },
         },
       },
@@ -457,10 +678,10 @@ async function main() {
     }> = [];
 
     for (const pc of primaryCards) {
-      // Pick best card: prefer ZH_HK > ZH_TW > others
+      // Pick best card: prefer ZH_TW (HK Chinese) > JA_JP > EN_US
       const card =
-        pc.cards.find(c => c.language === 'ZH_HK') ??
         pc.cards.find(c => c.language === 'ZH_TW') ??
+        pc.cards.find(c => c.language === 'JA_JP') ??
         pc.cards[0];
 
       if (!card) {
@@ -470,8 +691,9 @@ async function main() {
 
       const attacks = (card.attacks ?? []) as Attack[];
       const abilities = (card.abilities ?? []) as Ability[];
+      const cardText = (card as { text?: string | null }).text ?? null;
 
-      const [primaryTags, specialTags] = classifyCard(attacks, abilities);
+      const [primaryTags, specialTags] = classifyCard(attacks, abilities, cardText);
       const effectScore = computeEffectScore(primaryTags, specialTags);
       const cardTier = computeTier(effectScore);
 

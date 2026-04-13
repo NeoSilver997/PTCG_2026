@@ -758,29 +758,43 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
               </div>
             )}
 
-            {/* Trainer Card Text/Description */}
-            {card?.supertype === 'TRAINER' && card?.text && card?.text.trim().length > 0 && (
+            {/* Trainer / Energy Card Text/Description */}
+            {(card?.supertype === 'TRAINER' || card?.supertype === 'ENERGY') && (() => {
+              // text may be null for some scraped cards; fall back to abilities[].text
+              const effectText = card.text?.trim() ||
+                (Array.isArray(card.abilities) ? card.abilities.map((a: any) => a.text || a.description).filter(Boolean).join('\n\n') : '') ||
+                '';
+              if (!effectText) return null;
+              let label = '效果';
+              if (card.supertype === 'TRAINER') {
+                if (card.subtypes?.includes('SUPPORTER')) label = '效果 (Supporter Effect)';
+                else if (card.subtypes?.includes('ITEM')) label = '效果 (Item Effect)';
+                else if (card.subtypes?.includes('STADIUM')) label = '效果 (Stadium Effect)';
+                else if (card.subtypes?.includes('TOOL')) label = '效果 (Tool Effect)';
+              } else if (card.supertype === 'ENERGY') {
+                label = '效果 (Energy Effect)';
+              }
+              return (
+                <div className="bg-white rounded-lg p-3 shadow-sm">
+                  <h2 className="text-xl font-semibold mb-3 text-gray-900">{label}</h2>
+                  <p className="text-gray-800 whitespace-pre-wrap leading-relaxed">{effectText}</p>
+                </div>
+              );
+            })()}
+            {/* Abilities — only show for POKEMON cards, or TRAINER/ENERGY with named abilities */}
+            {card.abilities && Array.isArray(card.abilities) && card.abilities.filter((a: any) => (a.text || a.description) && (card.supertype === 'POKEMON' || a.name)).length > 0 && (
               <div className="bg-white rounded-lg p-3 shadow-sm">
                 <h2 className="text-xl font-semibold mb-3 text-gray-900">
-                  {card.subtypes?.includes('SUPPORTER') && '效果 (Supporter Effect)'}
-                  {card.subtypes?.includes('ITEM') && '效果 (Item Effect)'}
-                  {card.subtypes?.includes('STADIUM') && '效果 (Stadium Effect)'}
-                  {card.subtypes?.includes('TOOL') && '效果 (Tool Effect)'}
-                  {!card.subtypes?.includes('SUPPORTER') && !card.subtypes?.includes('ITEM') && !card.subtypes?.includes('STADIUM') && !card.subtypes?.includes('TOOL') && '效果'}
+                  {card.supertype === 'POKEMON' ? '特性' : '效果'}
                 </h2>
-                <p className="text-gray-800 whitespace-pre-wrap leading-relaxed">{card.text}</p>
-              </div>
-            )}
-            {/* Abilities */}
-            {card.abilities && Array.isArray(card.abilities) && card.abilities.length > 0 && (
-              <div className="bg-white rounded-lg p-3 shadow-sm">
-                <h2 className="text-xl font-semibold mb-3 text-gray-900">特性</h2>
-                {card.abilities.map((ability: any, index: number) => (
-                  <div key={index} className="mb-4 last:mb-0">
-                    <div className="font-semibold text-blue-700">{ability.name}</div>
-                    <div className="text-sm text-gray-800 mt-1">{ability.description}</div>
-                  </div>
-                ))}
+                {card.abilities
+                  .filter((a: any) => a.text || a.description)
+                  .map((ability: any, index: number) => (
+                    <div key={index} className="mb-4 last:mb-0">
+                      {ability.name && <div className="font-semibold text-blue-700">{ability.name}</div>}
+                      <div className="text-sm text-gray-800 mt-1">{ability.text || ability.description}</div>
+                    </div>
+                  ))}
               </div>
             )}
             {/* Attacks */}

@@ -403,6 +403,7 @@ export class CardsService {
     hasAttackText?: boolean;
     evolvesTo?: string;
     attackName?: string;
+    effectTag?: string;
   }): Promise<{
     data: any[];
     pagination: {
@@ -437,6 +438,7 @@ export class CardsService {
       hasAttackText,
       evolvesTo,
       attackName,
+      effectTag,
     } = params;
 
     const where: any = {};
@@ -594,7 +596,7 @@ export class CardsService {
     // hasAbilities, hasAttackText, and attackName require raw SQL due to Prisma JSON field limitations
     // evolvesTo requires raw SQL for exact CSV value matching
     // expansionReleaseDate requires raw SQL because Prisma does not support two-level nested orderBy
-    if (hasAbilities !== undefined || hasAttackText !== undefined || evolvesTo || attackName || actualSortBy === 'expansionReleaseDate' || actualSortBy === 'expansionCode' || expansionCode) {
+    if (hasAbilities !== undefined || hasAttackText !== undefined || evolvesTo || attackName || effectTag || actualSortBy === 'expansionReleaseDate' || actualSortBy === 'expansionCode' || expansionCode) {
       const jsonFieldConditions: string[] = [];
 
       // Expansion codes: directly inject as raw SQL OR condition
@@ -647,6 +649,11 @@ export class CardsService {
           WHERE attack->>'name' = '${attackName.replace(/'/g, "''")}'
         ))`;
         jsonFieldConditions.push(attackNameCondition);
+      }
+
+      // effectTag: filter cards whose primaryCard.effectTags contains the given tag
+      if (effectTag) {
+        jsonFieldConditions.push(`pc."effectTags" @> ARRAY['${effectTag.replace(/'/g, "''")}']::text[]`);
       }
 
       const baseWhereConditions = Object.entries(where)
@@ -740,6 +747,10 @@ export class CardsService {
           SELECT c.*, 
                  pc.name as "primaryCardName", 
                  pc."skillsSignature" as "primaryCardSkillsSignature",
+                 pc."effectTags" as "primaryCard_effectTags",
+                 pc."specialEffectTags" as "primaryCard_specialEffectTags",
+                 pc."effectScore" as "primaryCard_effectScore",
+                 pc."cardTier" as "primaryCard_cardTier",
                  re.id as "regionalExpansion_id",
                  re.code as "regionalExpansion_code",
                  re.name as "regionalExpansion_name",
@@ -771,6 +782,10 @@ export class CardsService {
           primaryCard: {
             name: card.primaryCardName,
             skillsSignature: card.primaryCardSkillsSignature,
+            effectTags: card.primaryCard_effectTags ?? [],
+            specialEffectTags: card.primaryCard_specialEffectTags ?? [],
+            effectScore: card.primaryCard_effectScore ?? null,
+            cardTier: card.primaryCard_cardTier ?? null,
             primaryExpansion: card.primaryExpansion_id ? {
               code: card.primaryExpansion_code,
               nameEn: card.primaryExpansion_nameEn,

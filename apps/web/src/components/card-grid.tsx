@@ -3,6 +3,17 @@ interface CardGridProps {
   onCardClick?: (card: any) => void;
 }
 
+const TIER_COLORS: Record<string, string> = {
+  'S+': 'bg-yellow-100 text-yellow-800 border-yellow-400',
+  'S':  'bg-yellow-50 text-yellow-700 border-yellow-300',
+  'A+': 'bg-green-100 text-green-800 border-green-400',
+  'A':  'bg-green-50 text-green-700 border-green-300',
+  'B+': 'bg-blue-100 text-blue-800 border-blue-400',
+  'B':  'bg-blue-50 text-blue-700 border-blue-300',
+  'C+': 'bg-gray-100 text-gray-700 border-gray-400',
+  'C':  'bg-gray-50 text-gray-500 border-gray-300',
+};
+
 export function CardGrid({ cards, onCardClick }: CardGridProps) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
@@ -46,6 +57,27 @@ export function CardGrid({ cards, onCardClick }: CardGridProps) {
                 <TypeIcon type={card.types} size="sm" />
               )}
             </div>
+            {/* Effect tag pills */}
+            {card.primaryCard?.effectTags?.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1">
+                {(card.primaryCard.effectTags as string[])
+                  .filter(t => t !== '其他效果')
+                  .slice(0, 3)
+                  .map((tag: string) => (
+                    <span
+                      key={tag}
+                      className="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium bg-blue-50 text-blue-700 border border-blue-200 leading-tight"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                {card.primaryCard?.cardTier && card.primaryCard.cardTier !== 'D' && (
+                  <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold leading-tight border ${TIER_COLORS[card.primaryCard.cardTier] ?? 'bg-gray-100 text-gray-600 border-gray-300'}`}>
+                    {card.primaryCard.cardTier}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </div>
       ))}
