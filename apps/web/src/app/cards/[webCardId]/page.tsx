@@ -406,14 +406,25 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
   // falling back to primaryExpansion.code only when unavailable.
   const expansionCode = card?.regionalExpansion?.code || card?.primaryCard?.primaryExpansion?.code;
   const cardLanguage = card?.language;
+
+  // Map card language to the product country value used in the DB
+  const LANGUAGE_TO_COUNTRY: Record<string, string> = {
+    JA_JP: 'Japan',
+    ZH_TW: 'Hong Kong (ZH)',
+    EN_US: 'Hong Kong (EN)',
+  };
+  const productCountry = cardLanguage ? LANGUAGE_TO_COUNTRY[cardLanguage] : undefined;
+
   const { data: relatedProducts = [] } = useQuery({
-    queryKey: ['relatedProducts', expansionCode],
+    queryKey: ['relatedProducts', expansionCode, productCountry],
     queryFn: async () => {
       if (!expansionCode) return [];
       try {
         const { data } = await apiClient.get('/products', {
           params: {
             expansionCode,
+            productTypeGroup: 'expansion_series',
+            ...(productCountry ? { country: productCountry } : {}),
             take: 10
           }
         });
