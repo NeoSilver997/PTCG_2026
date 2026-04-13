@@ -213,6 +213,17 @@ async function main() {
     };
   });
 
+  // ── 3b. No-tournament cards: cap S+/S/A+ → A ──────────────────────────────
+  const TIERS_ABOVE_A = ['S+', 'S', 'A+'];
+  const usageIds = new Set(usageRows.map(r => r.primaryCardId));
+  const overRatedNoUsage = await prisma.primaryCard.findMany({
+    where: {
+      cardTier: { in: TIERS_ABOVE_A },
+      NOT: { id: { in: [...usageIds] } },
+    },
+    select: { id: true, cardTier: true },
+  });
+
   // ── 4. Print report ───────────────────────────────────────────────────────
   const display = topN > 0 ? results.slice(0, topN) : results;
   const changed = results.filter(r => r.tierChanged);
@@ -243,6 +254,7 @@ async function main() {
   console.log('='.repeat(90));
   console.log(`\nCards with tournament data:  ${results.length}`);
   console.log(`Tier changes proposed:        ${changed.length}`);
+  console.log(`No-usage cards to cap at A:   ${overRatedNoUsage.length}  (currently: ${overRatedNoUsage.map(c => `${c.cardTier}`).join(', ').slice(0, 120)})`);
 
   // Tier distribution of top cards
   const tierDist: Record<string, number> = {};
@@ -262,25 +274,50 @@ async function main() {
   }
 
   // ── 5. Apply if requested ─────────────────────────────────────────────────
-  if (apply && changed.length > 0) {
-    console.log(`\nApplying ${changed.length} tier updates...`);
-    const BATCH = 100;
-    let done = 0;
-    for (let i = 0; i < changed.length; i += BATCH) {
-      const batch = changed.slice(i, i + BATCH);
-      await prisma.$transaction(
-        batch.map(r =>
-          prisma.primaryCard.update({
-            where: { id: r.primaryCardId },
-            data: { cardTier: r.newTier! },
-          })
-        )
-      );
-      done += batch.length;
-      process.stdout.write(`\r  Updated: ${done}/${changed.length}`);
+  const totalChanges = changed.length + overRatedNoUsage.length;
+  if (apply && totalChanges > 0) {
+    // 5a. Apply usage-based tier updates
+    if (changed.length > 0) {
+      console.log(`\nApplying ${changed.length} usage-based tier updates...`);
+      const BATCH = 100;
+      let done = 0;
+      for (let i = 0; i < changed.length; i += BATCH) {
+        const batch = changed.slice(i, i + BATCH);
+        await prisma.$transaction(
+          batch.map(r =>
+            prisma.primaryCard.update({
+              where: { id: r.primaryCardId },
+              data: { cardTier: r.newTier! },
+            })
+          )
+        );
+        done += batch.length;
+        process.stdout.write(`\r  Updated: ${done}/${changed.length}`);
+      }
+      console.log();
+    }
+    // 5b. Cap no-usage cards at A
+    if (overRatedNoUsage.length > 0) {
+      console.log(`Capping ${overRatedNoUsage.length} no-tournament cards to A...`);
+      const BATCH = 100;
+      let done = 0;
+      for (let i = 0; i < overRatedNoUsage.length; i += BATCH) {
+        const batch = overRatedNoUsage.slice(i, i + BATCH);
+        await prisma.$transaction(
+          batch.map(r =>
+            prisma.primaryCard.update({
+              where: { id: r.id },
+              data: { cardTier: 'A' },
+            })
+          )
+        );
+        done += batch.length;
+        process.stdout.write(`\r  Capped: ${done}/${overRatedNoUsage.length}`);
+      }
+      console.log();
     }
     console.log('\n✅ Done.');
-  } else if (apply && changed.length === 0) {
+  } else if (apply && totalChanges === 0) {
     console.log('\nAll tiers already up to date.');
   } else {
     console.log('\nRun with --apply to write changes.');
