@@ -986,10 +986,14 @@ export class CardsService {
         .map((pc) => ({ ...pc.cards[0], primaryCard: { id: pc.id, cardNumber: pc.cardNumber, primaryExpansion: pc.primaryExpansion } }));
     }
 
+    // Related cards (bidirectional)
+    const relatedCards = await this.getRelatedCards(webCardId);
+
     return {
       ...card,
       languageVariants,
       sameSpeciesCards,
+      relatedCards,
     };
   }
 
@@ -1054,6 +1058,140 @@ export class CardsService {
       where: { webCardId },
       data: updateData,
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Card Relations
+  // ---------------------------------------------------------------------------
+
+  /** Return all cards related to the given webCardId (bidirectional). */
+  async getRelatedCards(webCardId: string): Promise<any[]> {
+    const card = await this.prisma.card.findUnique({
+      where: { webCardId },
+      select: { primaryCardId: true },
+    });
+    if (!card) throw new NotFoundException(`Card ${webCardId} not found`);
+
+    const fromRels = await this.prisma.cardRelation.findMany({
+      where: { fromCardId: card.primaryCardId },
+      include: {
+        toCard: {
+          include: {
+            cards: {
+              where: { language: 'ZH_TW' },
+              select: { webCardId: true, name: true, imageUrl: true, language: true, supertype: true, ruleBox: true },
+              take: 1,
+            },
+          },
+        },
+      },
+    });
+
+    const toRels = await this.prisma.cardRelation.findMany({
+      where: { toCardId: card.primaryCardId },
+      include: {
+        fromCard: {
+          include: {
+            cards: {
+              where: { language: 'ZH_TW' },
+              select: { webCardId: true, name: true, imageUrl: true, language: true, supertype: true, ruleBox: true },
+              take: 1,
+            },
+          },
+        },
+      },
+    });
+
+    const result: any[] = [];
+
+    for (const rel of fromRels) {
+      const rep = (rel.toCard as any).cards[0] ?? null;
+      result.push({
+        relationId: rel.id,
+        relationType: rel.relationType,
+        note: rel.note,
+        direction: 'from',
+        primaryCardId: rel.toCardId,
+        webCardId: rep?.webCardId ?? null,
+        name: rep?.name ?? (rel.toCard as any).name,
+        imageUrl: rep?.imageUrl ?? null,
+        supertype: rep?.supertype ?? null,
+        ruleBox: rep?.ruleBox ?? null,
+      });
+    }
+
+    for (const rel of toRels) {
+      const rep = (rel.fromCard as any).cards[0] ?? null;
+      result.push({
+        relationId: rel.id,
+        relationType: rel.relationType,
+        note: rel.note,
+        direction: 'to',
+        primaryCardId: rel.fromCardId,
+        webCardId: rep?.webCardId ?? null,
+        name: rep?.name ?? (rel.fromCard as any).name,
+        imageUrl: rep?.imageUrl ?? null,
+        supertype: rep?.supertype ?? null,
+        ruleBox: rep?.ruleBox ?? null,
+      });
+    }
+
+    return result;
+  }
+
+  /**
+   * Set related cards for a PrimaryCard.
+   * Each entry: { webCardId, relationType?, note? }
+   * This is a full replace — existing relations for this card will be deleted first.
+   */
+  async setRelatedCards(
+    webCardId: string,
+    relations: Array<{ webCardId: string; relationType?: string; note?: string }>,
+  ): Promise<any[]> {
+    const card = await this.prisma.card.findUnique({
+      where: { webCardId },
+      select: { primaryCardId: true },
+    });
+    if (!card) throw new NotFoundException(`Card ${webCardId} not found`);
+
+    const primaryCardId = card.primaryCardId;
+
+    // Lookup all target primaryCardIds
+    const targetCards = await Promise.all(
+      relations.map(async (r) => {
+        const found = await this.prisma.card.findUnique({
+          where: { webCardId: r.webCardId },
+          select: { primaryCardId: true },
+        });
+        return found ? { ...r, targetPrimaryCardId: found.primaryCardId } : null;
+      }),
+    );
+
+    const validTargets = targetCards.filter(
+      (t): t is NonNullable<typeof t> => t !== null && t.targetPrimaryCardId !== primaryCardId,
+    );
+
+    // Delete all existing relations involving this primary card
+    await this.prisma.cardRelation.deleteMany({
+      where: {
+        OR: [{ fromCardId: primaryCardId }, { toCardId: primaryCardId }],
+      },
+    });
+
+    // Re-create
+    if (validTargets.length > 0) {
+      await this.prisma.cardRelation.createMany({
+        data: validTargets.map((t) => ({
+          fromCardId: primaryCardId,
+          toCardId: t.targetPrimaryCardId,
+          relationType: t.relationType ?? 'SYNERGY',
+          note: t.note ?? null,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    return this.getRelatedCards(webCardId);
   }
 
   async getRelatedDecks(webCardId: string): Promise<any> {

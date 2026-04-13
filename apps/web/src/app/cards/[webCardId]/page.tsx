@@ -107,6 +107,18 @@ interface CardDetail {
       primaryExpansion: { code: string; nameEn: string };
     } | null;
   }>;
+  relatedCards?: Array<{
+    relationId: string;
+    relationType: string;
+    note: string | null;
+    direction: 'from' | 'to';
+    primaryCardId: string;
+    webCardId: string | null;
+    name: string;
+    imageUrl: string | null;
+    supertype: string | null;
+    ruleBox: string | null;
+  }>;
 }
 
 async function fetchCardDetail(webCardId: string) {
@@ -1226,6 +1238,42 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Related Cards — synergy / named-card links */}
+            {card.relatedCards && card.relatedCards.length > 0 && (
+              <div className="bg-white rounded-lg p-3 shadow-sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <h2 className="text-xl font-semibold text-gray-900">相關卡片</h2>
+                  <span className="text-sm text-gray-500">({card.relatedCards.length} 張)</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                  {card.relatedCards.map((rel) => (
+                    <Link
+                      key={rel.relationId}
+                      href={rel.webCardId ? `/cards/${rel.webCardId}` : '#'}
+                      className="group flex flex-col gap-1"
+                    >
+                      <div className="aspect-[2.5/3.5] bg-gray-100 rounded-lg overflow-hidden border border-gray-200 group-hover:border-blue-400 transition-colors">
+                        {rel.imageUrl ? (
+                          <img src={rel.imageUrl} alt={rel.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">無圖片</div>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-700 text-center leading-tight">{rel.name}</div>
+                      <div className="flex gap-1 justify-center flex-wrap">
+                        {rel.ruleBox && (
+                          <span className="text-[10px] px-1 rounded bg-orange-100 text-orange-700">{rel.ruleBox}</span>
+                        )}
+                        {rel.note && (
+                          <span className="text-[10px] px-1 rounded bg-blue-100 text-blue-700 truncate max-w-[80px]" title={rel.note}>{rel.note}</span>
+                        )}
+                      </div>
+                    </Link>
+                  ))}
+                </div>
               </div>
             )}
 

@@ -2,6 +2,7 @@ import {
   Controller, 
   Post, 
   Get, 
+  Put,
   Patch,
   Body, 
   Param, 
@@ -121,6 +122,26 @@ export class CardsController {
   @ApiResponse({ status: 404, description: 'Card not found' })
   async getRelatedDecks(@Param('webCardId') webCardId: string) {
     return await this.cardsService.getRelatedDecks(webCardId);
+  }
+
+  @Get('web/:webCardId/related')
+  @ApiOperation({ summary: 'Get related cards for a card (bidirectional)' })
+  @ApiResponse({ status: 200, description: 'Related cards list' })
+  @ApiResponse({ status: 404, description: 'Card not found' })
+  async getRelatedCards(@Param('webCardId') webCardId: string) {
+    return await this.cardsService.getRelatedCards(webCardId);
+  }
+
+  @Put('web/:webCardId/related')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Set related cards for a card (full replace)' })
+  @ApiResponse({ status: 200, description: 'Related cards updated' })
+  @ApiResponse({ status: 404, description: 'Card not found' })
+  async setRelatedCards(
+    @Param('webCardId') webCardId: string,
+    @Body() body: { relations: Array<{ webCardId: string; relationType?: string; note?: string }> },
+  ) {
+    return await this.cardsService.setRelatedCards(webCardId, body.relations ?? []);
   }
 
   @Get('web/:webCardId')

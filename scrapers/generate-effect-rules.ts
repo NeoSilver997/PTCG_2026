@@ -392,99 +392,93 @@ const RULES: RuleDef[] = [
     jaKeywords: ['弱点を…タイプに変える', '弱点タイプを変え', '弱点がなくなる'],
   },
 ];
+// ---------------------------------------------------------------------------
+// Sample categories — fetch per rule: Pokémon ex / no-rule Pokémon / Trainer
+// ---------------------------------------------------------------------------
 
-// ---------------------------------------------------------------------------
-// Helper – extract readable text from a card's attacks / abilities / text
-// ---------------------------------------------------------------------------
+type CardCategory = 'ex' | 'norule' | 'trainer';
+
 interface SampleCard {
   name: string;
   webCardId: string;
   tier: string | null;
   regMark: string | null;
-  supertype: string | null;
   attackName: string;
   effectText: string;
+  category: CardCategory;
 }
 
-async function getSamplesForTag(tag: string): Promise<SampleCard[]> {
-  const rows = await prisma.$queryRaw<{
-    name: string;
-    web_card_id: string;
-    tier: string | null;
-    reg_mark: string | null;
-    supertype: string | null;
-    attacks: unknown;
-    abilities: unknown;
-    text: string | null;
-  }[]>`
-    SELECT DISTINCT ON (c.name)
-      c.name,
-      c."webCardId"   AS web_card_id,
-      pc."cardTier"   AS tier,
-      c."regulationMark" AS reg_mark,
-      c.supertype,
-      c.attacks,
-      c.abilities,
-      c.text
-    FROM primary_cards pc
-    JOIN cards c ON c."primaryCardId" = pc.id
-    WHERE c.language = 'ZH_TW'
-      AND c."regulationMark" IN ('H','I','J')
-      AND pc."effectTags" @> ARRAY[${tag}]::text[]
-    ORDER BY c.name,
-      CASE pc."cardTier"
-        WHEN 'S+' THEN 1 WHEN 'S' THEN 2
-        WHEN 'A+' THEN 3 WHEN 'A' THEN 4
-        WHEN 'B+' THEN 5 WHEN 'B' THEN 6
-        WHEN 'C'  THEN 7 ELSE 8
-      END
-    LIMIT 3
-  `;
+interface TagSamples {
+  ex: SampleCard[];
+  norule: SampleCard[];
+  trainer: SampleCard[];
+}
 
-  return rows.map(r => {
-    let attackName = '';
-    let effectText = '';
+function parseRow(r: {
+  name: string; web_card_id: string; tier: string | null; reg_mark: string | null;
+  attacks: unknown; abilities: unknown; text: string | null;
+}, category: CardCategory): SampleCard {
+  let attackName = '';
+  let effectText = '';
+  try {
+    const attacks = r.attacks as Array<{ name?: string; effect?: string; text?: string; damage?: string }> | null;
+    const abs = r.abilities as Array<{ name?: string; text?: string; description?: string }> | null;
+    if (attacks?.length) {
+      const best = attacks.map(a => ({
+        len: (a.effect ?? a.text ?? '').length,
+        txt: (a.effect ?? a.text ?? '').trim(),
+        name: a.name ?? '', dmg: a.damage ?? '',
+      })).sort((a, b) => b.len - a.len)[0];
+      attackName = best.name + (best.dmg ? ` (${best.dmg})` : '');
+      effectText = best.txt.replace(/<[^>]+>/g, '').substring(0, 200);
+    }
+    if (!effectText && abs?.length) {
+      attackName = `[特性] ${abs[0].name ?? ''}`;
+      effectText = (abs[0].text ?? abs[0].description ?? '').replace(/<[^>]+>/g, '').substring(0, 200);
+    }
+    if (!effectText && r.text) effectText = r.text.replace(/<[^>]+>/g, '').substring(0, 200);
+  } catch { /* ignore */ }
+  return {
+    name: r.name, webCardId: r.web_card_id, tier: r.tier, regMark: r.reg_mark,
+    attackName, effectText: effectText || '（效果文字暫無）', category,
+  };
+}
 
-    try {
-      const attacks = r.attacks as Array<{ name?: string; effect?: string; text?: string; damage?: string }> | null;
-      const abilities = r.abilities as Array<{ name?: string; text?: string; description?: string }> | null;
+type RawRow = Parameters<typeof parseRow>[0];
 
-      if (attacks && Array.isArray(attacks) && attacks.length > 0) {
-        // Pick the attack whose effect text mentions a tag-related keyword
-        const scored = attacks.map((a, i) => {
-          const txt = (a.effect ?? a.text ?? '').trim();
-          return { idx: i, len: txt.length, txt, name: a.name ?? '', dmg: a.damage ?? '' };
-        });
-        const best = scored.sort((a, b) => b.len - a.len)[0];
-        attackName = best.name + (best.dmg ? ` (${best.dmg})` : '');
-        effectText = best.txt.replace(/<[^>]+>/g, '').substring(0, 200);
-      }
+async function getSamplesForTag(tag: string): Promise<TagSamples> {
+  const sel = [
+    `SELECT DISTINCT ON (c.name)`,
+    `  c.name, c."webCardId" AS web_card_id, pc."cardTier" AS tier,`,
+    `  c."regulationMark" AS reg_mark, c.attacks, c.abilities, c.text`,
+    `FROM primary_cards pc`,
+    `JOIN cards c ON c."primaryCardId" = pc.id`,
+    `WHERE c.language = 'ZH_TW'`,
+    `  AND c."regulationMark" IN ('H','I','J')`,
+    `  AND pc."effectTags" @> ARRAY[$1]::text[]`,
+  ].join('\n');
+  const ord = [
+    `ORDER BY c.name,`,
+    `  CASE pc."cardTier" WHEN 'S+' THEN 1 WHEN 'S' THEN 2`,
+    `    WHEN 'A+' THEN 3 WHEN 'A' THEN 4 WHEN 'B+' THEN 5`,
+    `    WHEN 'B' THEN 6 WHEN 'C' THEN 7 ELSE 8 END`,
+    `LIMIT 2`,
+  ].join('\n');
 
-      if (!effectText && abilities && Array.isArray(abilities) && abilities.length > 0) {
-        const ab = abilities[0];
-        attackName = `[特性] ${ab.name ?? ''}`;
-        effectText = (ab.text ?? ab.description ?? '').replace(/<[^>]+>/g, '').substring(0, 200);
-      }
-
-      if (!effectText && r.text) {
-        effectText = r.text.replace(/<[^>]+>/g, '').substring(0, 200);
-      }
-    } catch { /* ignore */ }
-
-    return {
-      name: r.name,
-      webCardId: r.web_card_id,
-      tier: r.tier,
-      regMark: r.reg_mark,
-      supertype: r.supertype,
-      attackName,
-      effectText: effectText || '（效果文字暫無）',
-    };
-  });
+  const [exRows, noruleRows, trainerRows] = await Promise.all([
+    prisma.$queryRawUnsafe<RawRow[]>(`${sel} AND c."ruleBox" = 'EX'\n${ord}`, tag),
+    prisma.$queryRawUnsafe<RawRow[]>(`${sel} AND c.supertype = 'POKEMON' AND c."ruleBox" IS NULL\n${ord}`, tag),
+    prisma.$queryRawUnsafe<RawRow[]>(`${sel} AND c.supertype = 'TRAINER'\n${ord}`, tag),
+  ]);
+  return {
+    ex:      exRows.map(r => parseRow(r, 'ex')),
+    norule:  noruleRows.map(r => parseRow(r, 'norule')),
+    trainer: trainerRows.map(r => parseRow(r, 'trainer')),
+  };
 }
 
 // ---------------------------------------------------------------------------
-// Tier badge
+// Tier badge colours
 // ---------------------------------------------------------------------------
 const TIER_BG: Record<string, string> = {
   'S+': '#fbbf24', 'S': '#f59e0b',
@@ -497,62 +491,74 @@ const TIER_BG: Record<string, string> = {
 // Main
 // ---------------------------------------------------------------------------
 async function main() {
-  console.log(`Generating effect rules HTML... (${RULES.length} rules)`);
+  console.log(`Generating interactive effect rules HTML... (${RULES.length} rules)`);
 
-  const allSamples: Record<string, SampleCard[]> = {};
+  const allSamples: Record<string, TagSamples> = {};
   for (const rule of RULES) {
     process.stdout.write(`  Querying "${rule.tag}"...`);
     allSamples[rule.tag] = await getSamplesForTag(rule.tag);
-    console.log(` ${allSamples[rule.tag].length} cards`);
+    const ts = allSamples[rule.tag];
+    console.log(` ex:${ts.ex.length} norule:${ts.norule.length} trainer:${ts.trainer.length}`);
   }
 
   await prisma.$disconnect();
 
-  // Group rules by group name
   const groups = [...new Set(RULES.map(r => r.group))];
+  const totalSampleCards = Object.values(allSamples).reduce(
+    (s, ts) => s + ts.ex.length + ts.norule.length + ts.trainer.length, 0
+  );
 
-  // -------------------------------------------------------------------------
-  // Render HTML
-  // -------------------------------------------------------------------------
+  // ── TOC ──────────────────────────────────────────────────────────────────
   const tocItems = RULES.map(r =>
     `<a href="#rule-${r.tag}" class="toc-item" style="--c:${r.color}">${r.tag}</a>`
   ).join('\n');
 
-  // Build a lookup: tag → rendered rule HTML block
-  const ruleHtmlByTag: Record<string, string> = {};
-  for (const r of RULES) {
-    const samples = allSamples[r.tag] ?? [];
-    const sampleHtml = samples.length === 0
-      ? `<div class="no-sample">無符合規格 H/I/J 的樣本卡牌</div>`
-      : samples.map(s => {
-          const tierColor = TIER_BG[s.tier ?? ''] ?? '#475569';
-          const regColor = s.regMark === 'J' ? '#818cf8' : s.regMark === 'I' ? '#34d399' : '#f59e0b';
-          return `
-        <div class="sample-card">
+  // ── Helper: render one sample card ───────────────────────────────────────
+  function renderSample(s: SampleCard): string {
+    const tc = TIER_BG[s.tier ?? ''] ?? '#475569';
+    const rc = s.regMark === 'J' ? '#818cf8' : s.regMark === 'I' ? '#34d399' : '#f59e0b';
+    return `<div class="sample-card">
           <div class="sample-card-header">
-            <span class="reg-badge" style="background:${regColor}20;color:${regColor};border-color:${regColor}40" title="規格標記 ${s.regMark}">${s.regMark ?? '?'}</span>
-            ${s.tier ? `<span class="tier-badge" style="background:${tierColor}20;color:${tierColor};border-color:${tierColor}40">${s.tier}</span>` : ''}
+            <span class="reg-badge" style="background:${rc}20;color:${rc};border-color:${rc}40">${s.regMark ?? '?'}</span>
+            ${s.tier ? `<span class="tier-badge" style="background:${tc}20;color:${tc};border-color:${tc}40">${s.tier}</span>` : ''}
             <span class="card-name">${s.name}</span>
             <span class="card-id">${s.webCardId}</span>
           </div>
           ${s.attackName ? `<div class="attack-name">⚔ ${s.attackName}</div>` : ''}
           <div class="effect-text">${s.effectText}</div>
         </div>`;
-        }).join('');
+  }
+
+  // ── Rule cards ────────────────────────────────────────────────────────────
+  const ruleHtmlByTag: Record<string, string> = {};
+  for (const r of RULES) {
+    const ts = allSamples[r.tag] ?? { ex: [], norule: [], trainer: [] };
+    const hasEx      = ts.ex.length      > 0 ? '1' : '0';
+    const hasNorule  = ts.norule.length  > 0 ? '1' : '0';
+    const hasTrainer = ts.trainer.length > 0 ? '1' : '0';
+
+    const exHtml      = ts.ex.length      ? ts.ex.map(renderSample).join('')
+      : `<div class="no-sample">無符合樣本</div>`;
+    const noruleHtml  = ts.norule.length  ? ts.norule.map(renderSample).join('')
+      : `<div class="no-sample">無符合樣本</div>`;
+    const trainerHtml = ts.trainer.length ? ts.trainer.map(renderSample).join('')
+      : `<div class="no-sample">無符合樣本</div>`;
 
     const zhTagsHtml = r.zhKeywords.map(k => `<span class="kw-chip kw-zh">${k}</span>`).join('');
     const jaTagsHtml = r.jaKeywords.map(k => `<span class="kw-chip kw-ja">${k}</span>`).join('');
+    const searchData = `${r.tag} ${r.group} ${r.zhDesc} ${r.zhKeywords.join(' ')}`.replace(/"/g, '');
 
     ruleHtmlByTag[r.tag] = `
-  <div class="rule-card" id="rule-${r.tag}">
-    <div class="rule-header" style="--rc:${r.color}">
+  <div class="rule-card" id="rule-${r.tag}"
+       data-search="${searchData}"
+       data-has-ex="${hasEx}" data-has-norule="${hasNorule}" data-has-trainer="${hasTrainer}"
+       style="--rc:${r.color}">
+    <div class="rule-header">
       <div class="rule-tag-badge" style="background:${r.color}22;color:${r.color};border:1px solid ${r.color}44">${r.tag}</div>
       <span class="rule-group-label">${r.group}</span>
     </div>
-
     <p class="rule-desc">${r.zhDesc}</p>
     ${r.notes ? `<div class="rule-note">📌 ${r.notes}</div>` : ''}
-
     <div class="keywords-section">
       <div class="kw-row">
         <span class="kw-lang-label lang-zh">繁中關鍵詞</span>
@@ -563,14 +569,25 @@ async function main() {
         <div class="kw-chips">${jaTagsHtml}</div>
       </div>
     </div>
-
-    <div class="samples-label">📋 規格標記 H・I・J 樣本卡牌</div>
-    <div class="samples-grid">
-      ${sampleHtml}
+    <div class="samples-label">📋 規格 H・I・J 樣本（依卡牌類別）</div>
+    <div class="samples-cols">
+      <div class="sample-col" data-cat="ex">
+        <div class="col-label col-label-ex">⚡ 寶可夢 ex</div>
+        ${exHtml}
+      </div>
+      <div class="sample-col" data-cat="norule">
+        <div class="col-label col-label-norule">🔵 一般寶可夢</div>
+        ${noruleHtml}
+      </div>
+      <div class="sample-col" data-cat="trainer">
+        <div class="col-label col-label-trainer">🃏 訓練家</div>
+        ${trainerHtml}
+      </div>
     </div>
   </div>`;
   }
 
+  // ── HTML template ─────────────────────────────────────────────────────────
   const html = `<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -580,184 +597,116 @@ async function main() {
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg:       #0f172a;
-      --surface:  #1e293b;
-      --surface2: #263347;
-      --border:   #334155;
-      --text:     #e2e8f0;
-      --muted:    #64748b;
-      --subtle:   #94a3b8;
+      --bg: #0f172a; --surface: #1e293b; --surface2: #263347;
+      --border: #334155; --text: #e2e8f0; --muted: #64748b; --subtle: #94a3b8;
     }
-    body {
-      font-family: 'Segoe UI', system-ui, -apple-system, 'Noto Sans TC', sans-serif;
-      background: var(--bg); color: var(--text);
-      line-height: 1.6;
-    }
-    a { color: inherit; text-decoration: none; }
+    body { font-family:'Segoe UI',system-ui,-apple-system,'Noto Sans TC',sans-serif; background:var(--bg); color:var(--text); line-height:1.6; }
+    a { color:inherit; text-decoration:none; }
 
-    /* ── HEADER ── */
-    header {
-      background: linear-gradient(135deg, #1e1b4b 0%, #1e3a5f 100%);
-      padding: 2rem 2.5rem 1.5rem;
-      border-bottom: 1px solid var(--border);
-      position: sticky; top: 0; z-index: 100;
-    }
-    header h1 { font-size: 1.6rem; font-weight: 800; }
-    header p  { color: var(--muted); font-size: 0.82rem; margin-top: 0.2rem; }
-    .header-badges { display: flex; gap: 0.5rem; margin-top: 0.6rem; flex-wrap: wrap; }
-    .hbadge {
-      font-size: 0.75rem; padding: 0.2rem 0.6rem; border-radius: 9999px;
-      border: 1px solid; font-weight: 600;
-    }
-    .hbadge-h { background: #fbbf2420; color: #fbbf24; border-color: #fbbf2440; }
-    .hbadge-i { background: #34d39920; color: #34d399; border-color: #34d39940; }
-    .hbadge-j { background: #818cf820; color: #818cf8; border-color: #818cf840; }
-    .hbadge-c { background: #94a3b820; color: #94a3b8; border-color: #94a3b840; }
+    /* HEADER */
+    header { background:linear-gradient(135deg,#1e1b4b 0%,#1e3a5f 100%); padding:1.5rem 2.5rem 1.2rem; border-bottom:1px solid var(--border); position:sticky; top:0; z-index:100; }
+    header h1 { font-size:1.5rem; font-weight:800; }
+    header p  { color:var(--muted); font-size:0.82rem; margin-top:0.2rem; }
+    .header-badges { display:flex; gap:0.5rem; margin-top:0.5rem; flex-wrap:wrap; }
+    .hbadge { font-size:0.73rem; padding:0.18rem 0.6rem; border-radius:9999px; border:1px solid; font-weight:600; }
+    .hbadge-h { background:#fbbf2420;color:#fbbf24;border-color:#fbbf2440; }
+    .hbadge-i { background:#34d39920;color:#34d399;border-color:#34d39940; }
+    .hbadge-j { background:#818cf820;color:#818cf8;border-color:#818cf840; }
+    .hbadge-c { background:#94a3b820;color:#94a3b8;border-color:#94a3b840; }
 
-    /* ── LAYOUT ── */
-    .page { display: flex; max-width: 1400px; margin: 0 auto; }
+    /* LAYOUT */
+    .page { display:flex; max-width:1500px; margin:0 auto; }
 
-    /* ── TOC sidebar ── */
-    .toc {
-      width: 220px; min-width: 220px; padding: 1.25rem 0.75rem;
-      border-right: 1px solid var(--border);
-      position: sticky; top: 85px; height: calc(100vh - 85px);
-      overflow-y: auto; flex-shrink: 0;
-    }
-    .toc h3 { font-size: 0.75rem; color: var(--muted); text-transform: uppercase;
-               letter-spacing: 0.08em; margin-bottom: 0.75rem; padding-left: 0.5rem; }
-    .toc-item {
-      display: block; font-size: 0.78rem; padding: 0.3rem 0.6rem;
-      border-radius: 6px; color: var(--subtle); margin-bottom: 2px;
-      transition: background 0.15s, color 0.15s;
-      border-left: 3px solid transparent;
-    }
-    .toc-item:hover {
-      background: var(--surface2);
-      color: var(--c, #818cf8);
-      border-left-color: var(--c, #818cf8);
-    }
+    /* TOC */
+    .toc { width:210px;min-width:210px;padding:1.2rem 0.75rem;border-right:1px solid var(--border);position:sticky;top:78px;height:calc(100vh - 78px);overflow-y:auto;flex-shrink:0; }
+    .toc h3 { font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.75rem;padding-left:0.5rem; }
+    .toc-item { display:block;font-size:0.77rem;padding:0.28rem 0.6rem;border-radius:6px;color:var(--subtle);margin-bottom:2px;transition:background 0.15s,color 0.15s;border-left:3px solid transparent; }
+    .toc-item:hover { background:var(--surface2);color:var(--c,#818cf8);border-left-color:var(--c,#818cf8); }
+    .toc-item.toc-hidden { display:none; }
+    .back-top { display:block;text-align:center;padding:0.4rem;color:var(--muted);font-size:0.75rem;margin-top:1rem; }
+    .back-top:hover { color:#818cf8; }
+    .toc::-webkit-scrollbar { width:4px; }
+    .toc::-webkit-scrollbar-thumb { background:var(--border);border-radius:4px; }
 
-    /* ── MAIN CONTENT ── */
-    main { flex: 1; padding: 2rem 1.5rem; min-width: 0; }
+    /* MAIN */
+    main { flex:1;padding:1.75rem 1.5rem;min-width:0; }
 
-    /* Summary stats bar */
-    .stats-bar {
-      display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.75rem;
-    }
-    .stat { background: var(--surface); border: 1px solid var(--border);
-             border-radius: 0.6rem; padding: 0.75rem 1.25rem; text-align: center; }
-    .stat .v { font-size: 1.6rem; font-weight: 800; color: #818cf8; line-height: 1; }
-    .stat .l { font-size: 0.72rem; color: var(--muted); margin-top: 0.2rem; }
+    /* Stats */
+    .stats-bar { display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1.25rem; }
+    .stat { background:var(--surface);border:1px solid var(--border);border-radius:0.6rem;padding:0.7rem 1.2rem;text-align:center; }
+    .stat .v { font-size:1.5rem;font-weight:800;color:#818cf8;line-height:1; }
+    .stat .l { font-size:0.72rem;color:var(--muted);margin-top:0.2rem; }
 
-    /* Group dividers */
-    .group-header {
-      font-size: 1rem; font-weight: 700; color: #f1f5f9;
-      margin: 2.5rem 0 1rem;
-      padding-bottom: 0.5rem;
-      border-bottom: 2px solid var(--border);
-    }
-    .group-header span { font-size: 0.75rem; font-weight: 400; color: var(--muted); margin-left: 0.5rem; }
+    /* CONTROLS BAR */
+    .controls-bar { display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center;background:var(--surface);border:1px solid var(--border);padding:0.6rem 1rem;border-radius:0.75rem;margin-bottom:1.5rem; }
+    .search-input { flex:1;min-width:200px;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:0.4rem 0.8rem;border-radius:6px;font-size:0.85rem;outline:none;font-family:inherit; }
+    .search-input:focus { border-color:#818cf8;box-shadow:0 0 0 2px #818cf820; }
+    .cat-tabs { display:flex;gap:0.4rem;flex-wrap:wrap; }
+    .cat-tab { padding:0.28rem 0.85rem;border-radius:999px;font-size:0.78rem;border:1px solid var(--border);background:transparent;color:var(--subtle);cursor:pointer;transition:all 0.15s;font-family:inherit; }
+    .cat-tab:hover { background:var(--surface2);color:var(--text); }
+    .cat-tab.active { font-weight:700; }
+    .cat-tab[data-cat="all"].active    { background:#818cf820;color:#818cf8;border-color:#818cf860; }
+    .cat-tab[data-cat="ex"].active     { background:#f9731620;color:#fb923c;border-color:#f9731660; }
+    .cat-tab[data-cat="norule"].active { background:#3b82f620;color:#60a5fa;border-color:#3b82f660; }
+    .cat-tab[data-cat="trainer"].active{ background:#a855f720;color:#c084fc;border-color:#a855f760; }
+    .result-info { font-size:0.75rem;color:var(--muted);margin-left:auto;white-space:nowrap; }
 
-    /* ── RULE CARD ── */
-    .rule-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-left: 4px solid var(--rc, var(--border));
-      border-radius: 0.75rem;
-      padding: 1.25rem 1.5rem;
-      margin-bottom: 1.5rem;
-      scroll-margin-top: 100px;
-    }
-    .rule-header {
-      display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem;
-    }
-    .rule-tag-badge {
-      font-size: 0.9rem; font-weight: 700;
-      padding: 0.25rem 0.7rem; border-radius: 6px;
-    }
-    .rule-group-label {
-      font-size: 0.72rem; color: var(--muted);
-      background: var(--surface2); padding: 0.15rem 0.5rem; border-radius: 4px;
-    }
-    .rule-desc { color: #cbd5e1; font-size: 0.9rem; margin-bottom: 0.6rem; }
-    .rule-note {
-      font-size: 0.78rem; color: #fbbf24; background: #fbbf2410;
-      border: 1px solid #fbbf2430; border-radius: 6px;
-      padding: 0.4rem 0.75rem; margin-bottom: 0.75rem;
-    }
+    /* GROUP HEADERS */
+    .group-header { font-size:1rem;font-weight:700;color:#f1f5f9;margin:2.25rem 0 1rem;padding-bottom:0.5rem;border-bottom:2px solid var(--border); }
+    .group-header span { font-size:0.75rem;font-weight:400;color:var(--muted);margin-left:0.5rem; }
+    .group-header.all-hidden { display:none; }
+
+    /* RULE CARD */
+    .rule-card { background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--rc,var(--border));border-radius:0.75rem;padding:1.25rem 1.5rem;margin-bottom:1.5rem;scroll-margin-top:100px;transition:opacity 0.2s; }
+    .rule-card.rule-hidden { display:none; }
+    .rule-header { display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem; }
+    .rule-tag-badge { font-size:0.9rem;font-weight:700;padding:0.25rem 0.7rem;border-radius:6px; }
+    .rule-group-label { font-size:0.72rem;color:var(--muted);background:var(--surface2);padding:0.15rem 0.5rem;border-radius:4px; }
+    .rule-desc { color:#cbd5e1;font-size:0.9rem;margin-bottom:0.6rem; }
+    .rule-note { font-size:0.78rem;color:#fbbf24;background:#fbbf2410;border:1px solid #fbbf2430;border-radius:6px;padding:0.4rem 0.75rem;margin-bottom:0.75rem; }
 
     /* Keywords */
-    .keywords-section { margin-bottom: 1rem; }
-    .kw-row { display: flex; align-items: flex-start; gap: 0.6rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
-    .kw-lang-label {
-      font-size: 0.7rem; font-weight: 700; padding: 0.2rem 0.5rem;
-      border-radius: 4px; white-space: nowrap; margin-top: 2px;
-    }
-    .lang-zh { background: #dc262620; color: #fca5a5; border: 1px solid #dc262640; }
-    .lang-ja { background: #7c3aed20; color: #c4b5fd; border: 1px solid #7c3aed40; }
-    .kw-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
-    .kw-chip {
-      font-size: 0.75rem; padding: 0.2rem 0.55rem; border-radius: 4px;
-      font-family: 'Noto Sans JP', monospace;
-    }
-    .kw-zh { background: #1e1921; color: #fca5a5; border: 1px solid #7f1d1d; }
-    .kw-ja { background: #1a1025; color: #c4b5fd; border: 1px solid #4c1d95; }
+    .keywords-section { margin-bottom:1rem; }
+    .kw-row { display:flex;align-items:flex-start;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap; }
+    .kw-lang-label { font-size:0.7rem;font-weight:700;padding:0.2rem 0.5rem;border-radius:4px;white-space:nowrap;margin-top:2px; }
+    .lang-zh { background:#dc262620;color:#fca5a5;border:1px solid #dc262640; }
+    .lang-ja { background:#7c3aed20;color:#c4b5fd;border:1px solid #7c3aed40; }
+    .kw-chips { display:flex;flex-wrap:wrap;gap:0.35rem; }
+    .kw-chip { font-size:0.75rem;padding:0.2rem 0.55rem;border-radius:4px;font-family:'Noto Sans JP',monospace; }
+    .kw-zh { background:#1e1921;color:#fca5a5;border:1px solid #7f1d1d; }
+    .kw-ja { background:#1a1025;color:#c4b5fd;border:1px solid #4c1d95; }
 
-    /* Samples */
-    .samples-label { font-size: 0.75rem; color: var(--muted); margin-bottom: 0.6rem; }
-    .samples-grid {
-      display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-      gap: 0.75rem;
-    }
-    .sample-card {
-      background: #0f172a; border: 1px solid var(--border);
-      border-radius: 8px; padding: 0.75rem 1rem;
-    }
-    .sample-card-header { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.4rem; flex-wrap: wrap; }
-    .reg-badge, .tier-badge {
-      font-size: 0.68rem; font-weight: 800; padding: 0.1rem 0.4rem;
-      border-radius: 4px; border: 1px solid; white-space: nowrap;
-    }
-    .card-name { font-size: 0.83rem; font-weight: 600; color: #e2e8f0; flex: 1; }
-    .card-id   { font-size: 0.65rem; color: var(--muted); }
-    .attack-name {
-      font-size: 0.72rem; color: #818cf8; margin-bottom: 0.3rem;
-      font-weight: 600;
-    }
-    .effect-text {
-      font-size: 0.75rem; color: var(--subtle); line-height: 1.55;
-    }
-    .no-sample { font-size: 0.78rem; color: var(--muted); padding: 0.5rem; }
+    /* SAMPLES 3-COL */
+    .samples-label { font-size:0.75rem;color:var(--muted);margin-bottom:0.5rem; }
+    .samples-cols { display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.75rem;margin-top:0.35rem; }
+    .sample-col { min-width:0; }
+    .sample-col.hide-cat { display:none; }
+    .col-label { font-size:0.7rem;font-weight:700;padding:0.18rem 0.6rem;border-radius:4px;display:inline-block;margin-bottom:0.5rem;border:1px solid; }
+    .col-label-ex      { background:#f9731615;color:#fb923c;border-color:#f9731640; }
+    .col-label-norule  { background:#3b82f615;color:#60a5fa;border-color:#3b82f640; }
+    .col-label-trainer { background:#a855f715;color:#c084fc;border-color:#a855f740; }
+    .sample-card { background:#0f172a;border:1px solid var(--border);border-radius:8px;padding:0.7rem 1rem;margin-bottom:0.5rem; }
+    .sample-card-header { display:flex;align-items:center;gap:0.4rem;margin-bottom:0.4rem;flex-wrap:wrap; }
+    .reg-badge,.tier-badge { font-size:0.68rem;font-weight:800;padding:0.1rem 0.4rem;border-radius:4px;border:1px solid;white-space:nowrap; }
+    .card-name { font-size:0.83rem;font-weight:600;color:#e2e8f0;flex:1;min-width:0; }
+    .card-id   { font-size:0.65rem;color:var(--muted); }
+    .attack-name { font-size:0.72rem;color:#818cf8;margin-bottom:0.3rem;font-weight:600; }
+    .effect-text { font-size:0.75rem;color:var(--subtle);line-height:1.55; }
+    .no-sample { font-size:0.78rem;color:var(--muted);padding:0.4rem 0; }
 
-    /* Scrollbar */
-    .toc::-webkit-scrollbar { width: 4px; }
-    .toc::-webkit-scrollbar-track { background: transparent; }
-    .toc::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    footer { border-top:1px solid var(--border);padding:1.5rem;text-align:center;font-size:0.78rem;color:var(--muted); }
 
-    /* Back to top */
-    .back-top {
-      display: block; text-align: center; padding: 0.4rem;
-      color: var(--muted); font-size: 0.75rem; margin-top: 1rem;
-    }
-    .back-top:hover { color: #818cf8; }
-
-    footer { border-top: 1px solid var(--border); padding: 1.5rem;
-              text-align: center; font-size: 0.78rem; color: var(--muted); }
-
-    @media (max-width: 768px) {
-      .toc { display: none; }
-      header { position: relative; }
-    }
+    @media (max-width:900px) { .samples-cols { grid-template-columns:1fr; } }
+    @media (max-width:768px) { .toc { display:none; } header { position:relative; } }
   </style>
 </head>
 <body>
 
 <header>
   <h1>PTCG 效果標籤規則手冊</h1>
-  <p>共 ${RULES.length} 條效果規則 ｜ 每條附規格標記 H・I・J 真實樣本卡牌</p>
+  <p>共 ${RULES.length} 條效果規則 ｜ 每條附寶可夢 ex、一般寶可夢、訓練家三類樣本</p>
   <div class="header-badges">
-    <span class="hbadge hbadge-h">規格 H (Scarlet &amp; Violet)</span>
+    <span class="hbadge hbadge-h">規格 H (SV1–SV4)</span>
     <span class="hbadge hbadge-i">規格 I (SV5–SV7)</span>
     <span class="hbadge hbadge-j">規格 J (SV8–SV9)</span>
     <span class="hbadge hbadge-c">Standard 合法</span>
@@ -765,40 +714,112 @@ async function main() {
 </header>
 
 <div class="page">
-
-  <!-- TOC -->
   <nav class="toc">
     <h3>效果標籤索引</h3>
     ${tocItems}
     <a href="#top" class="back-top">↑ 返回頂部</a>
   </nav>
 
-  <!-- Main -->
   <main id="top">
     <div class="stats-bar">
       <div class="stat"><div class="v">${RULES.length}</div><div class="l">效果規則</div></div>
       <div class="stat"><div class="v">${RULES.reduce((s, r) => s + r.zhKeywords.length, 0)}</div><div class="l">繁中關鍵詞</div></div>
       <div class="stat"><div class="v">${RULES.reduce((s, r) => s + r.jaKeywords.length, 0)}</div><div class="l">日文關鍵詞</div></div>
-      <div class="stat"><div class="v">${Object.values(allSamples).reduce((s, a) => s + a.length, 0)}</div><div class="l">H/I/J 樣本卡</div></div>
+      <div class="stat"><div class="v">${totalSampleCards}</div><div class="l">H/I/J 樣本卡</div></div>
+    </div>
+
+    <div class="controls-bar">
+      <input type="search" id="searchInput" placeholder="🔍 搜尋效果標籤、說明關鍵詞..." class="search-input" autocomplete="off">
+      <div class="cat-tabs">
+        <button class="cat-tab active" data-cat="all">全部</button>
+        <button class="cat-tab" data-cat="ex">⚡ 寶可夢 ex</button>
+        <button class="cat-tab" data-cat="norule">🔵 一般寶可夢</button>
+        <button class="cat-tab" data-cat="trainer">🃏 訓練家</button>
+      </div>
+      <span class="result-info" id="resultCount">${RULES.length} / ${RULES.length} 條規則</span>
     </div>
 
     ${groups.map(g => {
       const groupRules = RULES.filter(r => r.group === g);
-      const groupColor = groupRules[0]?.color ?? '#6366f1';
+      const gc = groupRules[0]?.color ?? '#6366f1';
       return `
-    <div class="group-header" style="border-color:${groupColor}60">
-      <span style="color:${groupColor}">▍</span> ${g}
+    <div class="group-header" id="group-${g}" style="border-color:${gc}60">
+      <span style="color:${gc}">▍</span> ${g}
       <span>(${groupRules.length} 條規則)</span>
     </div>
     ${groupRules.map(r => ruleHtmlByTag[r.tag] ?? '').join('')}`;
     }).join('')}
-
   </main>
 </div>
 
 <footer>
-  PTCG CardDB &copy; ${new Date().getFullYear()} ｜ 規格標記說明：H (SV1-SV4) I (SV5-SV7) J (SV8-SV9) ｜ 生成時間: ${new Date().toLocaleString('zh-TW')}
+  PTCG CardDB &copy; ${new Date().getFullYear()} ｜ 規格標記：H (SV1-SV4) I (SV5-SV7) J (SV8-SV9) ｜ 生成時間: ${new Date().toLocaleString('zh-TW')}
 </footer>
+
+<script>
+(function () {
+  var searchInput  = document.getElementById('searchInput');
+  var resultCount  = document.getElementById('resultCount');
+  var tabs         = Array.from(document.querySelectorAll('.cat-tab'));
+  var ruleCards    = Array.from(document.querySelectorAll('.rule-card'));
+  var groupHeaders = Array.from(document.querySelectorAll('.group-header'));
+  var tocLinks     = Array.from(document.querySelectorAll('.toc-item[href^="#rule-"]'));
+  var activeCat    = 'all';
+
+  function applyFilters() {
+    var q = searchInput.value.toLowerCase().trim();
+    var visible = 0;
+    var visibleIds = new Set();
+
+    // Show/hide sample columns
+    document.querySelectorAll('.sample-col').forEach(function (col) {
+      col.classList.toggle('hide-cat', activeCat !== 'all' && col.dataset.cat !== activeCat);
+    });
+
+    // Show/hide rule cards
+    ruleCards.forEach(function (card) {
+      var txt    = (card.dataset.search || '').toLowerCase();
+      var matchQ = !q || txt.includes(q);
+      var hasCat = activeCat === 'all'
+        || (activeCat === 'ex'      && card.dataset.hasEx      === '1')
+        || (activeCat === 'norule'  && card.dataset.hasNorule  === '1')
+        || (activeCat === 'trainer' && card.dataset.hasTrainer === '1');
+      var show = matchQ && hasCat;
+      card.classList.toggle('rule-hidden', !show);
+      if (show) { visible++; visibleIds.add(card.id); }
+    });
+
+    // Hide group headers with no visible rules
+    groupHeaders.forEach(function (hdr) {
+      var el = hdr.nextElementSibling;
+      var any = false;
+      while (el && !el.classList.contains('group-header')) {
+        if (el.classList.contains('rule-card') && !el.classList.contains('rule-hidden')) { any = true; break; }
+        el = el.nextElementSibling;
+      }
+      hdr.classList.toggle('all-hidden', !any);
+    });
+
+    // Sync TOC
+    tocLinks.forEach(function (a) {
+      var id = (a.getAttribute('href') || '').slice(1);
+      a.classList.toggle('toc-hidden', id ? !visibleIds.has(id) : false);
+    });
+
+    if (resultCount) resultCount.textContent = visible + ' / ' + ruleCards.length + ' 條規則';
+  }
+
+  searchInput.addEventListener('input', applyFilters);
+  tabs.forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      tabs.forEach(function (t) { t.classList.remove('active'); });
+      tab.classList.add('active');
+      activeCat = tab.dataset.cat;
+      applyFilters();
+    });
+  });
+})();
+</script>
 </body>
 </html>`;
 
@@ -806,7 +827,9 @@ async function main() {
   fs.writeFileSync(outPath, html, 'utf-8');
   console.log(`\n✅ Generated: ${outPath}`);
   console.log(`   Rules: ${RULES.length}`);
-  console.log(`   Total sample cards: ${Object.values(allSamples).reduce((s, a) => s + a.length, 0)}`);
+  console.log(`   Sample cards: ${totalSampleCards}`);
 }
 
-main().catch(console.error);
+main()
+  .catch(e => { console.error(e); process.exit(1); })
+  .finally(() => prisma.$disconnect());

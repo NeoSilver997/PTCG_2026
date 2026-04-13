@@ -188,6 +188,21 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
         region: card.region || '',
         scrapedAt: card.scrapedAt,
       });
+
+      // Populate existing related cards
+      const existingRelated = (card as any).relatedCards as Array<{
+        relationId: string; webCardId: string | null; name: string;
+        imageUrl: string | null; note: string | null; relationType: string;
+      }> | undefined;
+      if (existingRelated && existingRelated.length > 0) {
+        setRelatedCards(existingRelated.map(r => ({
+          webCardId: r.webCardId ?? '',
+          note: r.note ?? '',
+          searchQuery: r.name,
+          searchResults: [],
+          isSearching: false,
+        })));
+      }
     }
   }, [card]);
 
@@ -382,6 +397,12 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
       if (cardData.evolutionStage) updateData.evolutionStage = cardData.evolutionStage;
 
       await apiClient.patch(`/cards/web/${webCardId}`, updateData);
+
+      // Save related cards
+      const validRelations = relatedCards
+        .filter(r => r.webCardId.trim())
+        .map(r => ({ webCardId: r.webCardId.trim(), note: r.note || undefined }));
+      await apiClient.put(`/cards/web/${webCardId}/related`, { relations: validRelations });
 
       // Redirect to card detail page on success
       window.location.href = `/cards/${webCardId}`;

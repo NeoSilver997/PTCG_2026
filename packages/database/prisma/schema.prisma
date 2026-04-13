@@ -116,6 +116,8 @@ model PrimaryCard {
   cards              Card[]
   primaryExpansion   PrimaryExpansion? @relation(fields: [primaryExpansionId], references: [id])
   pokemonSpecies     PokemonSpecies?  @relation(fields: [pokemonSpeciesId], references: [id])
+  relationsFrom      CardRelation[]   @relation("RelationsFrom")
+  relationsTo        CardRelation[]   @relation("RelationsTo")
 
   @@unique([name, skillsSignature])
   @@index([name])
@@ -124,6 +126,22 @@ model PrimaryCard {
   @@index([effectTags])
   @@index([cardTier])
   @@map("primary_cards")
+}
+
+model CardRelation {
+  id            String      @id @default(cuid())
+  fromCardId    String
+  toCardId      String
+  relationType  String      @default("SYNERGY") // SYNERGY | NAMED_CARD | COMBO | EVOLUTION_SUPPORT
+  note          String?
+  createdAt     DateTime    @default(now())
+  fromCard      PrimaryCard @relation("RelationsFrom", fields: [fromCardId], references: [id], onDelete: Cascade)
+  toCard        PrimaryCard @relation("RelationsTo", fields: [toCardId], references: [id], onDelete: Cascade)
+
+  @@unique([fromCardId, toCardId])
+  @@index([fromCardId])
+  @@index([toCardId])
+  @@map("card_relations")
 }
 
 model Card {
