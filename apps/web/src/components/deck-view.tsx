@@ -54,6 +54,10 @@ export interface DeckCardEntry {
   card: DeckCardDetail;
   zhPricing?: { lowest: number; highest: number; currency: string; lastUpdated?: string } | null;
   zhVariantPricing?: { lowestRarity: number; highestRarity: number; currency: string } | null;
+  /** Up to 3 price tiers: [cheapest, mid, most expensive] ZH_TW variants */
+  zhTiers?: Array<{ variantType: string; rarity: string | null; imageUrl: string | null; price: number; currency: string; inStock: boolean }> | null;
+  /** User-saved purchase price (source: USER) — overrides min price display */
+  userPrice?: number | null;
 }
 
 export type SectionKey =
@@ -223,13 +227,25 @@ export function DeckSummary({ entries, pricing, priceBreakdownHref }: {
       {/* Deck Pricing */}
       {pricing?.zh && (pricing.zh.lowestTotal > 0 || pricing.zh.budgetTotal > 0) && (() => {
         const zh = pricing.zh!;
-        const low = zh.budgetTotal || zh.lowestTotal || 0;
+        // Recalculate budget using user prices where saved, falling back to server value per card.
+        // Only recompute if at least one entry has a userPrice set.
+        const hasUserPrices = entries.some((e) => e.userPrice != null);
+        let low: number;
+        if (hasUserPrices) {
+          low = entries.reduce((sum, e) => {
+            if (!e.zhVariantPricing && !e.zhPricing && !isBasicEnergy(e)) return sum;
+            const base = isBasicEnergy(e) ? 1 : (e.zhVariantPricing?.lowestRarity ?? e.zhPricing?.lowest ?? 0);
+            return sum + (e.userPrice ?? base) * e.quantity;
+          }, 0);
+        } else {
+          low = zh.budgetTotal || zh.lowestTotal || 0;
+        }
         const high = zh.premiumTotal || zh.highestTotal || 0;
         return (
           <div className="bg-slate-800/60 rounded-lg p-3 border border-yellow-900/40 text-center">
             <div className="text-slate-400 text-[10px] uppercase tracking-wide mb-1">港幣價格</div>
             <div className="text-sm font-bold leading-tight">
-              <span className="text-green-400">HK${low.toLocaleString()}</span>
+              <span className={`${hasUserPrices ? 'text-blue-400' : 'text-green-400'}`}>HK${low.toLocaleString()}</span>
               <span className="text-slate-500 mx-1">–</span>
               <span className="text-red-400">HK${high.toLocaleString()}</span>
             </div>
@@ -355,14 +371,18 @@ function isBasicEnergy(entry: DeckCardEntry): boolean {
 }
 
 export function DeckPriceBreakdown({ entries }: { entries: DeckCardEntry[] }) {
-  // Include all entries; basic energies default to price 1 if no pricing data
-  const allRows = entries.filter((e) => e.zhPricing || e.zhVariantPricing || isBasicEnergy(e));
+  const [priceOverrides, setPriceOverrides] = useState<Map<string, number>>(
+    () => new Map(entries.filter((e) => e.userPrice != null).map((e) => [e.card.webCardId, e.userPrice!]))
+  );
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveResult, setSaveResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const allRows = entries.filter((e) => e.zhPricing || e.zhVariantPricing || e.zhTiers?.length || isBasicEnergy(e));
 
   if (allRows.length === 0) {
     return <div className="text-slate-400 text-sm text-center py-6">無定價資料</div>;
   }
 
-  // Sort: by type group first, then by highestRarity desc within group
   const sorted = [...allRows].sort((a, b) => {
     const typeA = TYPE_ORDER[a.card.supertype ?? ''] ?? 3;
     const typeB = TYPE_ORDER[b.card.supertype ?? ''] ?? 3;
@@ -372,109 +392,244 @@ export function DeckPriceBreakdown({ entries }: { entries: DeckCardEntry[] }) {
     return bMax - aMax;
   });
 
-  // Budget = cheapest variant per card (basic energy = 1)
-  // Premium = most expensive variant per card (basic energy = 1)
-  let budgetTotal = 0;
-  let premiumTotal = 0;
-  for (const e of allRows) {
-    const basic = isBasicEnergy(e);
-    const minP = basic ? 1 : (e.zhVariantPricing?.lowestRarity ?? e.zhPricing?.lowest ?? 0);
-    const maxP = basic ? 1 : (e.zhVariantPricing?.highestRarity ?? e.zhPricing?.highest ?? 0);
-    budgetTotal += minP * e.quantity;
-    premiumTotal += maxP * e.quantity;
-  }
+  const getMinPrice = (e: DeckCardEntry): number => {
+    const override = priceOverrides.get(e.card.webCardId);
+    if (override !== undefined) return override;
+    if (isBasicEnergy(e)) return 1;
+    return e.zhVariantPricing?.lowestRarity ?? e.zhPricing?.lowest ?? 0;
+  };
+
+  const budgetTotal = allRows.reduce((s, e) => s + getMinPrice(e) * e.quantity, 0);
+  const premiumTotal = allRows.reduce((s, e) => {
+    const max = isBasicEnergy(e) ? 1 : (e.zhVariantPricing?.highestRarity ?? e.zhPricing?.highest ?? 0);
+    return s + max * e.quantity;
+  }, 0);
+
+  const handleSavePrices = async () => {
+    if (priceOverrides.size === 0) return;
+    setIsSaving(true);
+    setSaveResult(null);
+
+    // Build a lookup: JP webCardId → DeckCardEntry
+    const entryMap = new Map(sorted.map((e) => [e.card.webCardId, e]));
+
+    const requests = Array.from(priceOverrides.entries()).map(([jpWebCardId, price]) => {
+      const entry = entryMap.get(jpWebCardId);
+      const zhWebCardId = entry?.card.zhWebCardId;
+      if (!zhWebCardId) return null;
+      return apiClient.post('/prices', {
+        webCardId: zhWebCardId,
+        source: 'USER',
+        price,
+        currency: 'HKD',
+      });
+    }).filter(Boolean);
+
+    if (requests.length === 0) {
+      setIsSaving(false);
+      setSaveResult({ ok: false, message: '找不到對應的中文卡牌 ID' });
+      return;
+    }
+
+    try {
+      await Promise.all(requests);
+      setSaveResult({ ok: true, message: `已儲存 ${requests.length} 張卡牌的買價` });
+    } catch {
+      setSaveResult({ ok: false, message: '儲存失敗，請稍後再試' });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const TIER_LABELS = ['普通', '稀有', 'SR'];
+  const TIER_COLORS = ['text-slate-300', 'text-blue-300', 'text-yellow-300'];
+
+  const maxTiers = allRows.reduce((m, e) => Math.max(m, isBasicEnergy(e) ? 1 : (e.zhTiers?.length ?? 1)), 0);
+  const tierCols = Math.min(maxTiers, 3);
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm border-collapse">
-        <thead>
-          <tr className="border-b border-slate-700">
-            <th className="text-left text-slate-400 text-xs font-medium py-2 pr-3 min-w-[140px]">卡牌</th>
-            <th className="text-right text-slate-400 text-xs font-medium py-2 px-2">稀有度</th>
-            <th className="text-right text-slate-400 text-xs font-medium py-2 px-2">最低價</th>
-            <th className="text-right text-slate-400 text-xs font-medium py-2 px-2">SR最高價</th>
-            <th className="text-right text-slate-400 text-xs font-medium py-2 px-2">數量</th>
-            <th className="text-right text-slate-400 text-xs font-medium py-2 pl-2">小計</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((entry) => {
-            const { card, quantity, zhPricing, zhVariantPricing } = entry;
-            const basic = isBasicEnergy(entry);
-            const minP = basic ? 1 : (zhVariantPricing?.lowestRarity ?? zhPricing?.lowest ?? 0);
-            const srP = basic ? 0 : (zhVariantPricing?.highestRarity ?? 0);
-            const maxP = basic ? 1 : (zhPricing?.highest ?? srP);
-            const subtotalMin = minP * quantity;
-            const subtotalMax = Math.max(maxP, srP) * quantity;
-            const imgSrc = card.zhImageUrl ?? card.imageUrl;
-            const rarityLabel = card.rarity ? (RARITY_SHORT[card.rarity] ?? card.rarity.replace(/_/g, ' ')) : '—';
+    <div className="space-y-2">
+      {/* Header row */}
+      <div className="grid items-center gap-3 pb-2 border-b border-slate-700 text-slate-400 text-xs font-medium"
+        style={{ gridTemplateColumns: `1fr repeat(${tierCols}, minmax(80px,1fr)) 80px 48px 80px` }}
+      >
+        <div>卡牌</div>
+        {Array.from({ length: tierCols }, (_, i) => (
+          <div key={i} className="text-center">{TIER_LABELS[i] ?? `版本${i + 1}`}</div>
+        ))}
+        <div className="text-center">我的買價</div>
+        <div className="text-center">數量</div>
+        <div className="text-right">小計</div>
+      </div>
 
-            return (
-              <tr key={card.webCardId} className="border-b border-slate-800 hover:bg-slate-800/40 transition-colors">
-                <td className="py-2 pr-3">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="relative w-8 flex-shrink-0 rounded overflow-hidden bg-slate-700"
-                      style={{ aspectRatio: '2.5/3.5' }}
-                    >
-                      {imgSrc ? (
-                        <Image
-                          src={imgSrc}
-                          alt={card.zhName ?? card.name}
-                          fill
-                          sizes="32px"
-                          className="object-contain"
-                          unoptimized
-                        />
-                      ) : (
-                        <div className="absolute inset-0 bg-slate-700" />
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-white text-xs font-medium truncate max-w-[160px]">
-                        {card.zhName ?? card.name}
-                      </div>
-                      {card.zhName && card.zhName !== card.name && (
-                        <div className="text-slate-500 text-[10px] truncate max-w-[160px]">{card.name}</div>
-                      )}
-                    </div>
+      {/* Card rows */}
+      {sorted.map((entry) => {
+        const { card, quantity, zhTiers, zhPricing, zhVariantPricing } = entry;
+        const basic = isBasicEnergy(entry);
+        const mainImg = card.zhImageUrl ?? card.imageUrl;
+        const cardLink = `/cards/${card.supertype === 'POKEMON' ? (card.canonicalWebCardId ?? card.webCardId) : card.webCardId}`;
+        const override = priceOverrides.get(card.webCardId);
+        const minP = getMinPrice(entry);
+        const maxP = basic ? 1 : (zhVariantPricing?.highestRarity ?? zhPricing?.highest ?? 0);
+        const subtotalMin = minP * quantity;
+        const subtotalMax = maxP * quantity;
+
+        // Build tiers, deduplicating by price
+        let rawTiers: Array<{ imageUrl: string | null; rarity: string | null; price: number; inStock: boolean }>;
+        if (basic) {
+          rawTiers = [{ imageUrl: mainImg ?? null, rarity: null, price: 1, inStock: true }];
+        } else if (zhTiers && zhTiers.length > 0) {
+          rawTiers = zhTiers.slice(0, 3).map((t) => ({ imageUrl: t.imageUrl, rarity: t.rarity, price: t.price, inStock: t.inStock }));
+        } else {
+          const lo = zhVariantPricing?.lowestRarity ?? zhPricing?.lowest ?? 0;
+          const hi = zhVariantPricing?.highestRarity ?? zhPricing?.highest ?? lo;
+          rawTiers = lo === hi
+            ? [{ imageUrl: mainImg ?? null, rarity: card.rarity ?? null, price: lo, inStock: true }]
+            : [{ imageUrl: mainImg ?? null, rarity: card.rarity ?? null, price: lo, inStock: true }, { imageUrl: null, rarity: null, price: hi, inStock: true }];
+        }
+        // Deduplicate consecutive tiers with same price
+        const tiers = rawTiers.filter((t, i) => i === 0 || t.price !== rawTiers[i - 1].price);
+
+        return (
+          <div
+            key={card.webCardId}
+            className="grid items-center gap-3 py-3 border-b border-slate-800/70 hover:bg-slate-800/20 transition-colors rounded-lg px-1"
+            style={{ gridTemplateColumns: `1fr repeat(${tierCols}, minmax(80px,1fr)) 80px 48px 80px` }}
+          >
+            {/* Card identity */}
+            <div className="flex items-center gap-3 min-w-0">
+              <Link href={cardLink} target="_blank" className="relative flex-shrink-0 rounded-lg overflow-hidden bg-slate-700 shadow-md hover:ring-2 hover:ring-blue-400 transition-all"
+                style={{ width: 56, height: 78 }}>
+                {mainImg ? (
+                  <Image src={mainImg} alt={card.zhName ?? card.name} fill sizes="56px" className="object-contain" unoptimized />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center text-slate-500 text-[9px] text-center px-1 leading-tight">
+                    {card.zhName ?? card.name}
                   </div>
-                </td>
-                <td className="text-right text-slate-400 text-xs py-2 px-2 whitespace-nowrap">{rarityLabel}</td>
-                <td className="text-right text-green-400 text-xs py-2 px-2 whitespace-nowrap">
-                  ${minP}
-                </td>
-                <td className="text-right text-yellow-400 text-xs py-2 px-2 whitespace-nowrap">
-                  {srP > 0 ? `$${srP}` : '—'}
-                </td>
-                <td className="text-right text-slate-300 text-xs py-2 px-2">×{quantity}</td>
-                <td className="text-right py-2 pl-2">
-                  <div>
-                    <div className="text-green-400 text-xs font-medium whitespace-nowrap">${subtotalMin.toLocaleString()}</div>
-                    {subtotalMax > subtotalMin && (
-                      <div className="text-red-400 text-[10px] whitespace-nowrap">${subtotalMax.toLocaleString()}</div>
+                )}
+              </Link>
+              <div className="min-w-0">
+                <Link href={cardLink} target="_blank" className="group flex items-center gap-1 hover:underline">
+                  <span className="text-white text-sm font-semibold truncate">{card.zhName ?? card.name}</span>
+                  <ExternalLink className="h-3 w-3 text-slate-500 group-hover:text-blue-400 flex-shrink-0 transition-colors" />
+                </Link>
+                {card.zhName && card.zhName !== card.name && (
+                  <div className="text-slate-500 text-[10px] truncate">{card.name}</div>
+                )}
+                {card.supertype && (
+                  <div className="text-slate-600 text-[10px] mt-0.5">{card.supertype}</div>
+                )}
+              </div>
+            </div>
+
+            {/* Price tiers — deduplicated */}
+            {Array.from({ length: tierCols }, (_, i) => {
+              const tier = tiers[i];
+              if (!tier) return <div key={i} className="text-center text-slate-700 text-xs">—</div>;
+              const rarityLabel = tier.rarity ? (RARITY_SHORT[tier.rarity] ?? tier.rarity.replace(/_/g, ' ')) : null;
+              return (
+                <div key={i} className="flex flex-col items-center gap-1">
+                  <div className="relative rounded overflow-hidden bg-slate-800 shadow" style={{ width: 48, height: 67 }}>
+                    {tier.imageUrl ? (
+                      <Image src={tier.imageUrl} alt={rarityLabel ?? ''} fill sizes="48px" className="object-contain" unoptimized />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center text-slate-600 text-[9px]">
+                        {rarityLabel ?? '?'}
+                      </div>
                     )}
                   </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-        <tfoot>
-          <tr className="border-t-2 border-slate-600">
-            <td colSpan={4} className="text-right text-slate-400 text-xs font-medium py-3 pr-2">總計</td>
-            <td className="text-right text-slate-300 text-xs py-3 px-2">
-              ×{allRows.reduce((s, e) => s + e.quantity, 0)}
-            </td>
-            <td className="text-right py-3 pl-2">
-              <div className="text-green-400 text-sm font-bold whitespace-nowrap">HK${budgetTotal.toLocaleString()}</div>
-              {premiumTotal > budgetTotal && (
-                <div className="text-red-400 text-xs font-bold whitespace-nowrap">HK${premiumTotal.toLocaleString()}</div>
+                  {rarityLabel && (
+                    <div className={`text-[10px] font-medium ${TIER_COLORS[i] ?? 'text-slate-400'}`}>{rarityLabel}</div>
+                  )}
+                  <div className={`text-xs font-bold ${tier.inStock === false ? 'text-slate-500 line-through' : (TIER_COLORS[i] ?? 'text-slate-300')}`}>
+                    ${tier.price.toLocaleString()}
+                  </div>
+                  {tier.inStock === false && (
+                    <div className="text-[9px] text-orange-400 font-medium">無貨</div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Min price override input */}
+            <div className="flex flex-col items-center gap-1">
+              <input
+                type="number"
+                min={0}
+                value={override ?? ''}
+                placeholder={`${isBasicEnergy(entry) ? 1 : (zhVariantPricing?.lowestRarity ?? zhPricing?.lowest ?? 0)}`}
+                onChange={(e) => {
+                  const val = e.target.value === '' ? undefined : Number(e.target.value);
+                  setPriceOverrides((prev) => {
+                    const next = new Map(prev);
+                    if (val === undefined) next.delete(card.webCardId);
+                    else next.set(card.webCardId, val);
+                    return next;
+                  });
+                }}
+                className="w-16 bg-slate-700 border border-slate-600 rounded px-1.5 py-1 text-xs text-center text-white focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder-slate-500"
+              />
+              {override !== undefined && (
+                <button
+                  onClick={() => setPriceOverrides((prev) => { const next = new Map(prev); next.delete(card.webCardId); return next; })}
+                  className="text-slate-500 hover:text-red-400 text-[9px] transition-colors"
+                >
+                  重置
+                </button>
               )}
-            </td>
-          </tr>
-        </tfoot>
-      </table>
+            </div>
+
+            {/* Quantity */}
+            <div className="text-center text-slate-300 text-sm font-medium">×{quantity}</div>
+
+            {/* Subtotal */}
+            <div className="text-right">
+              <div className={`text-sm font-bold whitespace-nowrap ${override !== undefined ? 'text-blue-400' : 'text-green-400'}`}>
+                ${subtotalMin.toLocaleString()}
+              </div>
+              {subtotalMax > subtotalMin && override === undefined && (
+                <div className="text-red-400 text-[11px] whitespace-nowrap">${subtotalMax.toLocaleString()}</div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Totals */}
+      <div className="grid items-center gap-3 pt-3 border-t-2 border-slate-600"
+        style={{ gridTemplateColumns: `1fr repeat(${tierCols}, minmax(80px,1fr)) 80px 48px 80px` }}
+      >
+        <div className="text-slate-400 text-sm font-semibold">總計</div>
+        {Array.from({ length: tierCols + 1 }, (_, i) => <div key={i} />)}
+        <div className="text-center text-slate-300 text-sm">×{allRows.reduce((s, e) => s + e.quantity, 0)}</div>
+        <div className="text-right">
+          <div className="text-green-400 text-base font-bold whitespace-nowrap">HK${budgetTotal.toLocaleString()}</div>
+          {premiumTotal > budgetTotal && priceOverrides.size === 0 && (
+            <div className="text-red-400 text-sm font-bold whitespace-nowrap">HK${premiumTotal.toLocaleString()}</div>
+          )}
+        </div>
+      </div>
+
+      {/* Save user prices */}
+      {priceOverrides.size > 0 && (
+        <div className="flex items-center justify-end gap-3 pt-2">
+          {saveResult && (
+            <span className={`text-xs ${saveResult.ok ? 'text-green-400' : 'text-red-400'}`}>
+              {saveResult.message}
+            </span>
+          )}
+          <button
+            onClick={handleSavePrices}
+            disabled={isSaving}
+            className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed rounded text-white text-sm font-medium transition-colors"
+          >
+            {isSaving ? '儲存中...' : `儲存買價 (${priceOverrides.size})`}
+          </button>
+        </div>
+      )}
+      {saveResult?.ok && priceOverrides.size === 0 && (
+        <div className="text-green-400 text-xs text-right pt-1">{saveResult.message}</div>
+      )}
     </div>
   );
 }

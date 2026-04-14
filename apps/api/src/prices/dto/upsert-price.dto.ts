@@ -7,8 +7,8 @@ export class UpsertPriceDto {
   @IsString()
   webCardId: string;
 
-  @ApiProperty({ enum: ['YUYU_TEI', 'HARERUYA', 'CARDMARKET', 'TCGPLAYER', 'OTHER'] })
-  @IsEnum(['YUYU_TEI', 'HARERUYA', 'CARDMARKET', 'TCGPLAYER', 'OTHER'])
+  @ApiProperty({ enum: ['YUYU_TEI', 'HARERUYA', 'CARDMARKET', 'TCGPLAYER', 'OTHER', 'USER'] })
+  @IsEnum(['YUYU_TEI', 'HARERUYA', 'CARDMARKET', 'TCGPLAYER', 'OTHER', 'USER'])
   source: string;
 
   @ApiProperty()

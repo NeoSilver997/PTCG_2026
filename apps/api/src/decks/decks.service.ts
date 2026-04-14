@@ -187,9 +187,9 @@ export class DecksService {
     const cardIds = deckCards.map((dc: any) => dc.cardId) as string[];
     const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
 
-    // Single query: for each deck card (JP), find the cheapest and most expensive ZH_TW price
-    // across ALL rarity variants of the same primaryCard. Also get the exact ZH_TW card price
-    // for the NORMAL variant (or best available).
+    // Single query: for each deck card (JP), get the LATEST price per ZH_TW variant.
+    // Uses DISTINCT ON to pick only the most recent price record per card — avoids stale
+    // min/max across 90 days pulling in outdated prices (e.g. old $2 record hiding new $580).
     const priceRows = await this.prisma.$queryRaw<Array<{
       deckCardId: string;
       primaryCardId: string;
@@ -197,11 +197,22 @@ export class DecksService {
       zhName: string;
       zhWebCardId: string;
       zhImageUrl: string | null;
+      variantType: string;
+      rarity: string | null;
       minPrice: number;
       maxPrice: number;
       currency: string;
       latestFetchedAt: Date;
+      inStock: boolean;
     }>>`
+      WITH latest_prices AS (
+        SELECT DISTINCT ON ("cardId")
+          "cardId", price, "inStock", currency, "fetchedAt"
+        FROM card_prices
+        WHERE price > 0
+          AND "fetchedAt" >= ${ninetyDaysAgo}
+        ORDER BY "cardId", "fetchedAt" DESC
+      )
       SELECT
         jp_c.id                          AS "deckCardId",
         jp_c."primaryCardId"             AS "primaryCardId",
@@ -209,36 +220,33 @@ export class DecksService {
         zh_c.name                        AS "zhName",
         zh_c."webCardId"                 AS "zhWebCardId",
         zh_c."imageUrl"                  AS "zhImageUrl",
-        MIN(cp.price)                    AS "minPrice",
-        MAX(cp.price)                    AS "maxPrice",
-        cp.currency                      AS "currency",
-        MAX(cp."fetchedAt")              AS "latestFetchedAt"
+        zh_c."variantType"               AS "variantType",
+        zh_c.rarity                      AS "rarity",
+        lp.price                         AS "minPrice",
+        lp.price                         AS "maxPrice",
+        lp.currency                      AS "currency",
+        lp."fetchedAt"                   AS "latestFetchedAt",
+        lp."inStock"                     AS "inStock"
       FROM cards jp_c
       JOIN cards zh_c
         ON zh_c."primaryCardId" = jp_c."primaryCardId"
         AND zh_c.language = 'ZH_TW'
-      JOIN card_prices cp
-        ON cp."cardId" = zh_c.id
-        AND cp.price > 0
-        AND cp."fetchedAt" >= ${ninetyDaysAgo}
+      JOIN latest_prices lp
+        ON lp."cardId" = zh_c.id
       WHERE jp_c.id = ANY(${cardIds})
-      GROUP BY jp_c.id, jp_c."primaryCardId", zh_c.id, zh_c.name, zh_c."webCardId", zh_c."imageUrl", cp.currency
-      ORDER BY MIN(cp.price) ASC
+      ORDER BY lp.price ASC
     `;
 
-    // Build a map: deckCardId (JP card id) → best price row (lowest price wins for "budget" variant)
-    // We also need per-primaryCard min/max across ALL variants for the deck totals.
-    const perCardMap = new Map<string, typeof priceRows[0]>();
+    // Collect ALL rows per deckCardId (sorted ASC by price from SQL)
+    const allRowsMap = new Map<string, typeof priceRows>();
     const primaryMinMap = new Map<string, number>();
     const primaryMaxMap = new Map<string, number>();
     let currency = 'HKD';
 
     for (const row of priceRows) {
       currency = row.currency;
-      // Per deck card: pick the ZH card with the lowest price (budget variant)
-      if (!perCardMap.has(row.deckCardId)) {
-        perCardMap.set(row.deckCardId, row);
-      }
+      if (!allRowsMap.has(row.deckCardId)) allRowsMap.set(row.deckCardId, []);
+      allRowsMap.get(row.deckCardId)!.push(row);
       // Per primaryCard: track global min/max across all ZH variants
       const curMin = primaryMinMap.get(row.primaryCardId);
       const curMax = primaryMaxMap.get(row.primaryCardId);
@@ -248,38 +256,60 @@ export class DecksService {
       if (curMax === undefined || rowMax > curMax) primaryMaxMap.set(row.primaryCardId, rowMax);
     }
 
+    // Fetch USER-source prices via dedicated method keyed by zhWebCardId (the string
+    // the frontend posts when saving — completely independent of internal UUID mapping)
+    const zhWebCardIds = deckCards
+      .map((dc: any) => dc.card?.zhWebCardId as string | undefined)
+      .filter((id: string | undefined): id is string => Boolean(id));
+    const userPriceByWebCardId = await this.fetchUserPrices(zhWebCardIds);
+
     // Annotate each deck card
     for (const deckCard of deckCards) {
-      const row = perCardMap.get(deckCard.cardId);
-      if (!row) continue;
+      const rows = allRowsMap.get(deckCard.cardId);
+      if (!rows || rows.length === 0) continue;
 
-      const minPrice = Number(row.minPrice);
-      const maxPrice = Number(row.maxPrice);
+      const lowRow  = rows[0];
+      const highRow = rows[rows.length - 1];
+      const midRow  = rows.length > 2 ? rows[Math.floor((rows.length - 1) / 2)] : (rows.length === 2 ? rows[1] : null);
 
-      // Attach Chinese card identity for UI display
+      // Attach Chinese card identity from cheapest variant
       if (!deckCard.card.zhName) {
-        deckCard.card.zhName = row.zhName;
-        deckCard.card.zhWebCardId = row.zhWebCardId;
-        deckCard.card.zhImageUrl = row.zhImageUrl;
+        deckCard.card.zhName    = lowRow.zhName;
+        deckCard.card.zhWebCardId = lowRow.zhWebCardId;
+        deckCard.card.zhImageUrl  = lowRow.zhImageUrl;
       }
 
-      // Exact price for this ZH variant (lowest available)
+      // Build up to 3 price tiers: low / mid / high
+      const tierRows = [lowRow, ...(midRow && midRow !== lowRow ? [midRow] : []), ...(highRow !== lowRow ? [highRow] : [])];
+      deckCard.zhTiers = tierRows.map((r) => ({
+        variantType: r.variantType,
+        rarity: r.rarity,
+        imageUrl: r.zhImageUrl,
+        price: Number(r.minPrice),
+        currency: r.currency,
+        inStock: Boolean(r.inStock),
+      }));
+
+      // Keep zhPricing / zhVariantPricing for backwards compat
       deckCard.zhPricing = {
-        lowest: minPrice,
-        highest: maxPrice,
-        currency: row.currency,
-        lastUpdated: row.latestFetchedAt,
+        lowest: Number(lowRow.minPrice),
+        highest: Number(highRow.maxPrice),
+        currency: lowRow.currency,
+        lastUpdated: lowRow.latestFetchedAt,
       };
 
-      // Rarity variant range for same primaryCard
-      const primaryId = deckCard.card?.primaryCardId ?? row.primaryCardId;
+      const primaryId = deckCard.card?.primaryCardId ?? lowRow.primaryCardId;
       if (primaryMinMap.has(primaryId)) {
         deckCard.zhVariantPricing = {
           lowestRarity: primaryMinMap.get(primaryId)!,
           highestRarity: primaryMaxMap.get(primaryId)!,
-          currency: row.currency,
+          currency: lowRow.currency,
         };
       }
+
+      // Attach USER price — keyed by the zhWebCardId string set by resolveChineseVariants
+      const userPrice = userPriceByWebCardId.get(deckCard.card?.zhWebCardId);
+      if (userPrice !== undefined) deckCard.userPrice = userPrice;
     }
 
     // Deck-level totals
@@ -295,7 +325,9 @@ export class DecksService {
         zhHighestTotal += deckCard.zhPricing.highest * qty;
       }
       if (deckCard.zhVariantPricing) {
-        zhBudgetTotal += deckCard.zhVariantPricing.lowestRarity * qty;
+        // Use USER price as budget floor if saved
+        const budgetMin = deckCard.userPrice ?? deckCard.zhVariantPricing.lowestRarity;
+        zhBudgetTotal += budgetMin * qty;
         zhPremiumTotal += deckCard.zhVariantPricing.highestRarity * qty;
       }
     }
@@ -310,6 +342,28 @@ export class DecksService {
         currency,
       },
     };
+  }
+
+  /**
+   * Fetch USER-source prices keyed by ZH card webCardId string.
+   * Completely separate from the main price query — uses the same webCardId
+   * the frontend posts to /prices when saving, so there is no UUID mismatch.
+   */
+  private async fetchUserPrices(zhWebCardIds: string[]): Promise<Map<string, number>> {
+    const result = new Map<string, number>();
+    if (zhWebCardIds.length === 0) return result;
+
+    const rows = await this.prisma.$queryRaw<Array<{ webCardId: string; price: number }>>`
+      SELECT DISTINCT ON (c."webCardId")
+        c."webCardId", cp.price
+      FROM card_prices cp
+      JOIN cards c ON c.id = cp."cardId"
+      WHERE c."webCardId" = ANY(${zhWebCardIds})
+        AND cp.source = 'USER'
+      ORDER BY c."webCardId", cp."fetchedAt" DESC
+    `;
+    for (const r of rows) result.set(r.webCardId, Number(r.price));
+    return result;
   }
 
   private buildEffectSummary(deck: any): void {
