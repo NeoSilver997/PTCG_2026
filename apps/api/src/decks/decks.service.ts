@@ -68,6 +68,7 @@ export class DecksService {
                 rarity: true,
                 hp: true,
                 attacks: true,
+                abilities: true,
                 evolutionStage: true,
                 primaryCardId: true,
                 language: true,
@@ -75,6 +76,21 @@ export class DecksService {
             },
           },
           orderBy: [{ card: { supertype: 'asc' } }],
+        },
+        tournamentResults: {
+          include: {
+            tournament: {
+              select: {
+                date: true,
+                name: true,
+                location: true,
+                type: true,
+                playerCount: true,
+                region: true,
+                eventId: true,
+              },
+            },
+          },
         },
       },
     });
@@ -85,6 +101,9 @@ export class DecksService {
 
     await this.hydrateDeckExtras(deck);
     await this.resolveCanonicalWebCardIds(deck);
+    await this.resolveChineseVariants(deck);
+    await this.addPricingInfo(deck);
+    this.buildEffectSummary(deck);
 
     return deck;
   }
@@ -126,6 +145,206 @@ export class DecksService {
         dc.card.canonicalWebCardId = canonical;
       }
     }
+  }
+
+  private async resolveChineseVariants(deck: any): Promise<void> {
+    const allEntries = (deck.cards ?? []).filter((dc: any) => dc.card?.primaryCardId);
+    if (allEntries.length === 0) return;
+
+    const primaryCardIds = [...new Set<string>(allEntries.map((dc: any) => dc.card.primaryCardId))];
+
+    // Fetch ZH_TW variants; prefer NORMAL variantType as the canonical Chinese card
+    const zhVariants = await this.prisma.card.findMany({
+      where: { primaryCardId: { in: primaryCardIds }, language: 'ZH_TW' },
+      select: { id: true, primaryCardId: true, name: true, webCardId: true, imageUrl: true, variantType: true },
+      orderBy: { variantType: 'asc' },
+    });
+
+    // Build map: primaryCardId → best ZH_TW card (NORMAL wins)
+    const zhMap = new Map<string, { id: string; name: string; webCardId: string; imageUrl: string | null }>();
+    for (const v of zhVariants) {
+      const existing = zhMap.get(v.primaryCardId);
+      if (!existing || v.variantType === 'NORMAL') {
+        zhMap.set(v.primaryCardId, { id: v.id, name: v.name, webCardId: v.webCardId, imageUrl: v.imageUrl });
+      }
+    }
+
+    for (const dc of allEntries) {
+      const zh = zhMap.get(dc.card.primaryCardId);
+      if (zh) {
+        dc.card.zhName = zh.name;
+        dc.card.zhWebCardId = zh.webCardId;
+        dc.card.zhImageUrl = zh.imageUrl;
+        dc.card.zhCardId = zh.id;
+      }
+    }
+  }
+
+  private async addPricingInfo(deck: any): Promise<void> {
+    const deckCards = deck.cards ?? [];
+    if (deckCards.length === 0) return;
+
+    const cardIds = deckCards.map((dc: any) => dc.cardId) as string[];
+    const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+
+    // Single query: for each deck card (JP), find the cheapest and most expensive ZH_TW price
+    // across ALL rarity variants of the same primaryCard. Also get the exact ZH_TW card price
+    // for the NORMAL variant (or best available).
+    const priceRows = await this.prisma.$queryRaw<Array<{
+      deckCardId: string;
+      primaryCardId: string;
+      zhCardId: string;
+      zhName: string;
+      zhWebCardId: string;
+      zhImageUrl: string | null;
+      minPrice: number;
+      maxPrice: number;
+      currency: string;
+      latestFetchedAt: Date;
+    }>>`
+      SELECT
+        jp_c.id                          AS "deckCardId",
+        jp_c."primaryCardId"             AS "primaryCardId",
+        zh_c.id                          AS "zhCardId",
+        zh_c.name                        AS "zhName",
+        zh_c."webCardId"                 AS "zhWebCardId",
+        zh_c."imageUrl"                  AS "zhImageUrl",
+        MIN(cp.price)                    AS "minPrice",
+        MAX(cp.price)                    AS "maxPrice",
+        cp.currency                      AS "currency",
+        MAX(cp."fetchedAt")              AS "latestFetchedAt"
+      FROM cards jp_c
+      JOIN cards zh_c
+        ON zh_c."primaryCardId" = jp_c."primaryCardId"
+        AND zh_c.language = 'ZH_TW'
+      JOIN card_prices cp
+        ON cp."cardId" = zh_c.id
+        AND cp.price > 0
+        AND cp."fetchedAt" >= ${ninetyDaysAgo}
+      WHERE jp_c.id = ANY(${cardIds})
+      GROUP BY jp_c.id, jp_c."primaryCardId", zh_c.id, zh_c.name, zh_c."webCardId", zh_c."imageUrl", cp.currency
+      ORDER BY MIN(cp.price) ASC
+    `;
+
+    // Build a map: deckCardId (JP card id) → best price row (lowest price wins for "budget" variant)
+    // We also need per-primaryCard min/max across ALL variants for the deck totals.
+    const perCardMap = new Map<string, typeof priceRows[0]>();
+    const primaryMinMap = new Map<string, number>();
+    const primaryMaxMap = new Map<string, number>();
+    let currency = 'HKD';
+
+    for (const row of priceRows) {
+      currency = row.currency;
+      // Per deck card: pick the ZH card with the lowest price (budget variant)
+      if (!perCardMap.has(row.deckCardId)) {
+        perCardMap.set(row.deckCardId, row);
+      }
+      // Per primaryCard: track global min/max across all ZH variants
+      const curMin = primaryMinMap.get(row.primaryCardId);
+      const curMax = primaryMaxMap.get(row.primaryCardId);
+      const rowMin = Number(row.minPrice);
+      const rowMax = Number(row.maxPrice);
+      if (curMin === undefined || rowMin < curMin) primaryMinMap.set(row.primaryCardId, rowMin);
+      if (curMax === undefined || rowMax > curMax) primaryMaxMap.set(row.primaryCardId, rowMax);
+    }
+
+    // Annotate each deck card
+    for (const deckCard of deckCards) {
+      const row = perCardMap.get(deckCard.cardId);
+      if (!row) continue;
+
+      const minPrice = Number(row.minPrice);
+      const maxPrice = Number(row.maxPrice);
+
+      // Attach Chinese card identity for UI display
+      if (!deckCard.card.zhName) {
+        deckCard.card.zhName = row.zhName;
+        deckCard.card.zhWebCardId = row.zhWebCardId;
+        deckCard.card.zhImageUrl = row.zhImageUrl;
+      }
+
+      // Exact price for this ZH variant (lowest available)
+      deckCard.zhPricing = {
+        lowest: minPrice,
+        highest: maxPrice,
+        currency: row.currency,
+        lastUpdated: row.latestFetchedAt,
+      };
+
+      // Rarity variant range for same primaryCard
+      const primaryId = deckCard.card?.primaryCardId ?? row.primaryCardId;
+      if (primaryMinMap.has(primaryId)) {
+        deckCard.zhVariantPricing = {
+          lowestRarity: primaryMinMap.get(primaryId)!,
+          highestRarity: primaryMaxMap.get(primaryId)!,
+          currency: row.currency,
+        };
+      }
+    }
+
+    // Deck-level totals
+    let zhLowestTotal = 0;
+    let zhHighestTotal = 0;
+    let zhBudgetTotal = 0;
+    let zhPremiumTotal = 0;
+
+    for (const deckCard of deckCards) {
+      const qty = deckCard.quantity ?? 1;
+      if (deckCard.zhPricing) {
+        zhLowestTotal += deckCard.zhPricing.lowest * qty;
+        zhHighestTotal += deckCard.zhPricing.highest * qty;
+      }
+      if (deckCard.zhVariantPricing) {
+        zhBudgetTotal += deckCard.zhVariantPricing.lowestRarity * qty;
+        zhPremiumTotal += deckCard.zhVariantPricing.highestRarity * qty;
+      }
+    }
+
+    deck.pricing = {
+      currency,
+      zh: {
+        lowestTotal: zhLowestTotal,    // total using cheapest ZH variant per card
+        highestTotal: zhHighestTotal,  // total using priciest ZH variant per card
+        budgetTotal: zhBudgetTotal,    // total using cheapest rarity across all ZH prints
+        premiumTotal: zhPremiumTotal,  // total using priciest rarity across all ZH prints
+        currency,
+      },
+    };
+  }
+
+  private buildEffectSummary(deck: any): void {
+    const abilities: Array<{ cardName: string; name: string; effect: string }> = [];
+    const attacks: Array<{ cardName: string; name: string; damage: string; effect: string }> = [];
+
+    for (const deckCard of deck.cards ?? []) {
+      const card = deckCard.card;
+      if (!card) continue;
+
+      const displayName = card.zhName ?? card.name;
+
+      if (Array.isArray(card.abilities)) {
+        for (const ab of card.abilities) {
+          if (ab?.name) {
+            abilities.push({ cardName: displayName, name: ab.name, effect: ab.effect ?? ab.text ?? '' });
+          }
+        }
+      }
+
+      if (Array.isArray(card.attacks)) {
+        for (const atk of card.attacks) {
+          if (atk?.name) {
+            attacks.push({
+              cardName: displayName,
+              name: atk.name,
+              damage: atk.damage ?? '',
+              effect: atk.effect ?? atk.text ?? '',
+            });
+          }
+        }
+      }
+    }
+
+    deck.effectSummary = { abilities, attacks };
   }
 
   async findOneByCode(deckCode: string): Promise<any> {

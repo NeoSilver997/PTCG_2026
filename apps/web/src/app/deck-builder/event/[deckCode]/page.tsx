@@ -17,6 +17,7 @@ import {
   DeckSummary,
   CardDetailModal,
   CopyDeckModal,
+  EffectsSummary,
 } from '@/components/deck-view';
 
 /* ---- Deck response from API ---- */
@@ -26,6 +27,19 @@ interface DeckResponse {
   deckCode?: string | null;
   cards?: DeckCardEntry[];
   deckData?: Array<{ cardId: string; cardName: string; quantity: number; imageUrl?: string }>;
+  tournamentResults?: Array<{
+    tournament: {
+      date: string;
+      name: string;
+      location?: string;
+    };
+  }>;
+  pricing?: {
+    currency?: string;
+    lowestTotal?: number;
+    highestTotal?: number;
+    zh?: { lowestTotal: number; highestTotal: number; budgetTotal: number; premiumTotal: number; currency: string };
+  };
 }
 
 /* ---- Inner page ---- */
@@ -279,8 +293,26 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
 
         {/* Header + Summary */}
         <div className="bg-slate-700/60 rounded-xl p-4 mb-6 border border-slate-600">
-          <h1 className="text-white text-xl font-bold mb-4">{data.name}</h1>
-          <DeckSummary entries={deckEntries} />
+          <div className="flex items-start justify-between mb-4">
+            <h1 className="text-white text-xl font-bold">{data.name}</h1>
+            {data.tournamentResults?.[0] && (
+              <div className="text-right text-slate-300 text-sm">
+                <div className="text-slate-400 text-xs uppercase tracking-wide">Event Date</div>
+                <div className="font-medium">
+                  {new Date(data.tournamentResults[0].tournament.date).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric'
+                  })}
+                </div>
+                {data.tournamentResults[0].tournament.location && (
+                  <div className="text-slate-400 text-xs">{data.tournamentResults[0].tournament.location}</div>
+                )}
+              </div>
+            )}
+          </div>
+          
+          <DeckSummary entries={deckEntries} pricing={data.pricing} priceBreakdownHref={`/deck-builder/event/${deckCode}/prices`} />
         </div>
 
         {/* Pokémon: Main attackers + Evolution chain (same row) */}
@@ -331,6 +363,12 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
           entriesB={sections.get('special-energy') ?? []}
           onCardClick={setSelectedCard}
         />
+
+        {/* Effects Summary */}
+        <div className="bg-slate-700/60 rounded-xl p-4 mb-6 border border-slate-600">
+          <h2 className="text-white text-lg font-bold mb-4">效果摘要</h2>
+          <EffectsSummary entries={deckEntries} />
+        </div>
       </div>
 
       {/* Card detail modal */}

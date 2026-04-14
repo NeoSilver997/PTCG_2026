@@ -23,6 +23,12 @@ export interface AttackData {
   text?: string;
 }
 
+export interface AbilityData {
+  name: string;
+  text?: string;
+  type?: string;
+}
+
 export interface DeckCardDetail {
   webCardId: string;
   name: string;
@@ -32,17 +38,22 @@ export interface DeckCardDetail {
   types?: string[];
   rarity?: string | null;
   hp?: number | null;
-  attacks?: AttackData[] | null;
-  evolutionStage?: string | null;
+  attacks?: AttackData[] | null;  abilities?: AbilityData[] | null;  evolutionStage?: string | null;
   /** Resolved canonical webCardId for primary-card-based linking (Pokémon only). */
   canonicalWebCardId?: string | null;
   /** Primary card UUID – preferred key for role storage across language variants. */
   primaryCardId?: string | null;
+  /** Chinese (ZH_TW) variant fields resolved by the API */
+  zhName?: string | null;
+  zhWebCardId?: string | null;
+  zhImageUrl?: string | null;
 }
 
 export interface DeckCardEntry {
   quantity: number;
   card: DeckCardDetail;
+  zhPricing?: { lowest: number; highest: number; currency: string; lastUpdated?: string } | null;
+  zhVariantPricing?: { lowestRarity: number; highestRarity: number; currency: string } | null;
 }
 
 export type SectionKey =
@@ -152,7 +163,17 @@ export function sortSection(entries: DeckCardEntry[], section: SectionKey): Deck
 
 /* ─── Deck Summary ───────────────────────────────────────────────── */
 
-export function DeckSummary({ entries }: { entries: DeckCardEntry[] }) {
+export function DeckSummary({ entries, pricing, priceBreakdownHref }: { 
+  entries: DeckCardEntry[];
+  priceBreakdownHref?: string;
+  pricing?: {
+    currency?: string;
+    zh?: { lowestTotal: number; highestTotal: number; budgetTotal: number; premiumTotal: number; currency: string };
+    // legacy fields kept for backwards compat
+    lowestTotal?: number;
+    highestTotal?: number;
+  };
+}) {
   const pokemon = entries.filter((e) => e.card.supertype === 'POKEMON');
 
   const highestHp = pokemon.reduce<DeckCardEntry | null>((best, e) => {
@@ -199,6 +220,28 @@ export function DeckSummary({ entries }: { entries: DeckCardEntry[] }) {
         </div>
       </div>
 
+      {/* Deck Pricing */}
+      {pricing?.zh && (pricing.zh.lowestTotal > 0 || pricing.zh.budgetTotal > 0) && (() => {
+        const zh = pricing.zh!;
+        const low = zh.budgetTotal || zh.lowestTotal || 0;
+        const high = zh.premiumTotal || zh.highestTotal || 0;
+        return (
+          <div className="bg-slate-800/60 rounded-lg p-3 border border-yellow-900/40 text-center">
+            <div className="text-slate-400 text-[10px] uppercase tracking-wide mb-1">港幣價格</div>
+            <div className="text-sm font-bold leading-tight">
+              <span className="text-green-400">HK${low.toLocaleString()}</span>
+              <span className="text-slate-500 mx-1">–</span>
+              <span className="text-red-400">HK${high.toLocaleString()}</span>
+            </div>
+            {priceBreakdownHref && (
+              <a href={priceBreakdownHref} className="text-blue-400 text-[9px] underline inline-flex items-center gap-0.5 mt-1 hover:text-blue-300 transition-colors">
+                詳細價格 <ExternalLink size={8} />
+              </a>
+            )}
+          </div>
+        );
+      })()}
+
       {/* Highest HP */}
       <div className="bg-slate-800/60 rounded-lg p-3 border border-red-900/40 text-center">
         <div className="text-slate-400 text-[10px] uppercase tracking-wide mb-1">最高 HP</div>
@@ -235,6 +278,203 @@ export function DeckSummary({ entries }: { entries: DeckCardEntry[] }) {
         </div>
         <div className="text-slate-500 text-[9px] mt-0.5">Main / Support</div>
       </div>
+    </div>
+  );
+}
+
+/* ─── Effects Summary ───────────────────────────────────────────────── */
+
+export function EffectsSummary({ entries }: { entries: DeckCardEntry[] }) {
+  const pokemonCards = entries.filter(e => e.card.supertype === 'POKEMON' && e.card.abilities);
+
+  // Extract and count abilities
+  const abilityCounts = new Map<string, number>();
+  const abilityCards = new Map<string, string[]>(); // ability -> [card names]
+
+  for (const entry of pokemonCards) {
+    if (entry.card.abilities) {
+      for (const ability of entry.card.abilities) {
+        const abilityName = ability.name;
+        abilityCounts.set(abilityName, (abilityCounts.get(abilityName) || 0) + entry.quantity);
+        
+        if (!abilityCards.has(abilityName)) {
+          abilityCards.set(abilityName, []);
+        }
+        abilityCards.get(abilityName)!.push(entry.card.name);
+      }
+    }
+  }
+
+  // Sort by frequency
+  const sortedAbilities = Array.from(abilityCounts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8); // Top 8 abilities
+
+  if (sortedAbilities.length === 0) {
+    return (
+      <div className="text-slate-400 text-sm text-center py-4">
+        沒有特殊能力
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      {sortedAbilities.map(([abilityName, count]) => (
+        <div key={abilityName} className="bg-slate-800/60 rounded-lg p-3 border border-slate-600">
+          <div className="text-purple-400 font-bold text-sm mb-1">{abilityName}</div>
+          <div className="text-slate-300 text-xs mb-2">{count} 張卡牌</div>
+          <div className="text-slate-400 text-[10px] leading-tight">
+            {abilityCards.get(abilityName)?.slice(0, 2).join(', ')}
+            {abilityCards.get(abilityName) && abilityCards.get(abilityName)!.length > 2 && '...'}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ─── Deck Price Breakdown Table ────────────────────────────────── */
+
+const RARITY_SHORT: Record<string, string> = {
+  COMMON: 'C', UNCOMMON: 'U', RARE: 'R', DOUBLE_RARE: 'RR',
+  ULTRA_RARE: 'SR', ILLUSTRATION_RARE: 'AR', SPECIAL_ILLUSTRATION_RARE: 'SAR',
+  HYPER_RARE: 'UR', PROMO: 'P', ACE_SPEC: 'ACE', AMAZING_RARE: 'AR',
+  SHINY_RARE: 'SHR',
+};
+
+// Type order for price breakdown: Pokemon first, then Trainer, then Energy
+const TYPE_ORDER: Record<string, number> = { POKEMON: 0, TRAINER: 1, ENERGY: 2 };
+
+function isBasicEnergy(entry: DeckCardEntry): boolean {
+  const card = entry.card;
+  if (card.supertype !== 'ENERGY') return false;
+  if (card.subtypes?.some((s) => s === 'BASIC_ENERGY' || s === 'BASIC')) return true;
+  const name = card.zhName ?? card.name ?? '';
+  return /基本/.test(name);
+}
+
+export function DeckPriceBreakdown({ entries }: { entries: DeckCardEntry[] }) {
+  // Include all entries; basic energies default to price 1 if no pricing data
+  const allRows = entries.filter((e) => e.zhPricing || e.zhVariantPricing || isBasicEnergy(e));
+
+  if (allRows.length === 0) {
+    return <div className="text-slate-400 text-sm text-center py-6">無定價資料</div>;
+  }
+
+  // Sort: by type group first, then by highestRarity desc within group
+  const sorted = [...allRows].sort((a, b) => {
+    const typeA = TYPE_ORDER[a.card.supertype ?? ''] ?? 3;
+    const typeB = TYPE_ORDER[b.card.supertype ?? ''] ?? 3;
+    if (typeA !== typeB) return typeA - typeB;
+    const aMax = a.zhVariantPricing?.highestRarity ?? a.zhPricing?.highest ?? 0;
+    const bMax = b.zhVariantPricing?.highestRarity ?? b.zhPricing?.highest ?? 0;
+    return bMax - aMax;
+  });
+
+  // Budget = cheapest variant per card (basic energy = 1)
+  // Premium = most expensive variant per card (basic energy = 1)
+  let budgetTotal = 0;
+  let premiumTotal = 0;
+  for (const e of allRows) {
+    const basic = isBasicEnergy(e);
+    const minP = basic ? 1 : (e.zhVariantPricing?.lowestRarity ?? e.zhPricing?.lowest ?? 0);
+    const maxP = basic ? 1 : (e.zhVariantPricing?.highestRarity ?? e.zhPricing?.highest ?? 0);
+    budgetTotal += minP * e.quantity;
+    premiumTotal += maxP * e.quantity;
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm border-collapse">
+        <thead>
+          <tr className="border-b border-slate-700">
+            <th className="text-left text-slate-400 text-xs font-medium py-2 pr-3 min-w-[140px]">卡牌</th>
+            <th className="text-right text-slate-400 text-xs font-medium py-2 px-2">稀有度</th>
+            <th className="text-right text-slate-400 text-xs font-medium py-2 px-2">最低價</th>
+            <th className="text-right text-slate-400 text-xs font-medium py-2 px-2">SR最高價</th>
+            <th className="text-right text-slate-400 text-xs font-medium py-2 px-2">數量</th>
+            <th className="text-right text-slate-400 text-xs font-medium py-2 pl-2">小計</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((entry) => {
+            const { card, quantity, zhPricing, zhVariantPricing } = entry;
+            const basic = isBasicEnergy(entry);
+            const minP = basic ? 1 : (zhVariantPricing?.lowestRarity ?? zhPricing?.lowest ?? 0);
+            const srP = basic ? 0 : (zhVariantPricing?.highestRarity ?? 0);
+            const maxP = basic ? 1 : (zhPricing?.highest ?? srP);
+            const subtotalMin = minP * quantity;
+            const subtotalMax = Math.max(maxP, srP) * quantity;
+            const imgSrc = card.zhImageUrl ?? card.imageUrl;
+            const rarityLabel = card.rarity ? (RARITY_SHORT[card.rarity] ?? card.rarity.replace(/_/g, ' ')) : '—';
+
+            return (
+              <tr key={card.webCardId} className="border-b border-slate-800 hover:bg-slate-800/40 transition-colors">
+                <td className="py-2 pr-3">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="relative w-8 flex-shrink-0 rounded overflow-hidden bg-slate-700"
+                      style={{ aspectRatio: '2.5/3.5' }}
+                    >
+                      {imgSrc ? (
+                        <Image
+                          src={imgSrc}
+                          alt={card.zhName ?? card.name}
+                          fill
+                          sizes="32px"
+                          className="object-contain"
+                          unoptimized
+                        />
+                      ) : (
+                        <div className="absolute inset-0 bg-slate-700" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-white text-xs font-medium truncate max-w-[160px]">
+                        {card.zhName ?? card.name}
+                      </div>
+                      {card.zhName && card.zhName !== card.name && (
+                        <div className="text-slate-500 text-[10px] truncate max-w-[160px]">{card.name}</div>
+                      )}
+                    </div>
+                  </div>
+                </td>
+                <td className="text-right text-slate-400 text-xs py-2 px-2 whitespace-nowrap">{rarityLabel}</td>
+                <td className="text-right text-green-400 text-xs py-2 px-2 whitespace-nowrap">
+                  ${minP}
+                </td>
+                <td className="text-right text-yellow-400 text-xs py-2 px-2 whitespace-nowrap">
+                  {srP > 0 ? `$${srP}` : '—'}
+                </td>
+                <td className="text-right text-slate-300 text-xs py-2 px-2">×{quantity}</td>
+                <td className="text-right py-2 pl-2">
+                  <div>
+                    <div className="text-green-400 text-xs font-medium whitespace-nowrap">${subtotalMin.toLocaleString()}</div>
+                    {subtotalMax > subtotalMin && (
+                      <div className="text-red-400 text-[10px] whitespace-nowrap">${subtotalMax.toLocaleString()}</div>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+        <tfoot>
+          <tr className="border-t-2 border-slate-600">
+            <td colSpan={4} className="text-right text-slate-400 text-xs font-medium py-3 pr-2">總計</td>
+            <td className="text-right text-slate-300 text-xs py-3 px-2">
+              ×{allRows.reduce((s, e) => s + e.quantity, 0)}
+            </td>
+            <td className="text-right py-3 pl-2">
+              <div className="text-green-400 text-sm font-bold whitespace-nowrap">HK${budgetTotal.toLocaleString()}</div>
+              {premiumTotal > budgetTotal && (
+                <div className="text-red-400 text-xs font-bold whitespace-nowrap">HK${premiumTotal.toLocaleString()}</div>
+              )}
+            </td>
+          </tr>
+        </tfoot>
+      </table>
     </div>
   );
 }
