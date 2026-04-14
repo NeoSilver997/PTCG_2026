@@ -61,6 +61,7 @@ interface FilterPanelProps {
     hasAttackText?: string;
     effectTag?: string;
     cardTier?: string;
+    abilityText?: string;
   };
   onFilterChange: (filters: any) => void;
   stats?: {
@@ -99,6 +100,7 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
       hasAttackText: '',
       effectTag: '',
       cardTier: '',
+      abilityText: '',
     });
   };
 
@@ -116,7 +118,7 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
     filters.rarity || filters.language || filters.webCardId || filters.subtypes ||
     filters.variantType || filters.minHp || filters.maxHp || filters.artist ||
     filters.regulationMark || filters.expansionCode || filters.hasAbilities || filters.hasAttackText ||
-    filters.effectTag || filters.cardTier;
+    filters.effectTag || filters.cardTier || filters.abilityText;
   
   return (
     <div className="bg-white rounded-lg shadow-md p-4 mb-6">
@@ -604,6 +606,20 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
                   <option value="弱點改變">弱點改變</option>
                 </optgroup>
               </select>
+            </div>
+
+            {/* Ability / Attack Text Search */}
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                效果文字搜索
+              </label>
+              <input
+                type="text"
+                placeholder="例: 超、鬥、雷、太晶"
+                value={filters.abilityText || ''}
+                onChange={(e) => updateFilter('abilityText', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900 bg-white placeholder:text-gray-400"
+              />
             </div>
 
             {/* Card Tier */}

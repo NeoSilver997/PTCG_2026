@@ -155,4 +155,9 @@ export class FindAllCardsDto {
   @IsOptional()
   @IsString()
   cardTier?: string;
+
+  @ApiProperty({ required: false, example: '超', description: 'Search within ability/attack text (useful for finding trainers that reference a Pokémon type)' })
+  @IsOptional()
+  @IsString()
+  abilityText?: string;
 }

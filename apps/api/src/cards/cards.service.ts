@@ -405,6 +405,7 @@ export class CardsService {
     attackName?: string;
     effectTag?: string;
     cardTier?: string;
+    abilityText?: string;
   }): Promise<{
     data: any[];
     pagination: {
@@ -441,6 +442,7 @@ export class CardsService {
       attackName,
       effectTag,
       cardTier,
+      abilityText,
     } = params;
 
     const where: any = {};
@@ -601,7 +603,7 @@ export class CardsService {
     // Detect multi-value regulationMark (Prisma { in: [...] }) — must use raw SQL path
     const regulationMarkIsMulti = where.regulationMark !== undefined && typeof where.regulationMark === 'object' && 'in' in (where.regulationMark as any);
 
-    if (hasAbilities !== undefined || hasAttackText !== undefined || evolvesTo || attackName || effectTag || cardTier || regulationMarkIsMulti || actualSortBy === 'expansionReleaseDate' || actualSortBy === 'expansionCode' || expansionCode) {
+    if (hasAbilities !== undefined || hasAttackText !== undefined || evolvesTo || attackName || effectTag || cardTier || abilityText || regulationMarkIsMulti || actualSortBy === 'expansionReleaseDate' || actualSortBy === 'expansionCode' || expansionCode) {
       const jsonFieldConditions: string[] = [];
 
       // Expansion codes: directly inject as raw SQL OR condition
@@ -666,6 +668,12 @@ export class CardsService {
         jsonFieldConditions.push(`pc."cardTier" = '${cardTier.replace(/'/g, "''")}'`);
       }
 
+      // abilityText: search within abilities or attacks JSON text (e.g. find trainers referencing 超-type)
+      if (abilityText) {
+        const escaped = abilityText.replace(/'/g, "''");
+        jsonFieldConditions.push(`(c.abilities::text ILIKE '%${escaped}%' OR c.attacks::text ILIKE '%${escaped}%')`);
+      }
+
       const baseWhereConditions = Object.entries(where)
         .map(([key, value]) => {
           if (value === null || value === undefined) return null;
@@ -683,7 +691,7 @@ export class CardsService {
             return equalsConditions.length > 0 ? `NOT (${equalsConditions.join(' OR ')})` : null;
           }
           if (key === 'types' && typeof value === 'object' && value !== null && 'has' in value)
-            return `c."${key}" @> '["${value.has}"]'::jsonb`;
+            return `'${(value as any).has}'::"PokemonType" = ANY(c."${key}")`;
           if (key === 'evolutionStage' && typeof value === 'string') return `c."${key}" = '${value}'`;
           if (key === 'ruleBox' && typeof value === 'string') return `c."${key}" = '${value}'`;
           if (key === 'rarity' && typeof value === 'string') return `c."${key}" = '${value}'`;
