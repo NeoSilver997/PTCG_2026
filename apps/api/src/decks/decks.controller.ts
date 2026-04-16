@@ -13,15 +13,17 @@ import {
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { DecksService } from './decks.service';
+import { DeckPriceCacheService } from './deck-price-cache.service';
 import { CreateDeckDto, DeckCardInputDto } from './dto/create-deck.dto';
 import { FindAllDecksDto } from './dto/find-all-decks.dto';
 
 @ApiTags('decks')
 @Controller('decks')
 export class DecksController {
-  constructor(private readonly decksService: DecksService) {}
-
-  /* ── Pokémon role overrides — MUST be declared BEFORE generic :id routes ── */
+  constructor(
+    private readonly decksService: DecksService,
+    private readonly deckPriceCacheService: DeckPriceCacheService,
+  ) {}
 
   @Get('roles/lookup')
   @Throttle({ long: { limit: 100, ttl: 60000 } })
@@ -29,6 +31,20 @@ export class DecksController {
   lookupCardRoles(@Query('cards') cards: string) {
     const cardIds = (cards ?? '').split(',').map((s) => s.trim()).filter(Boolean);
     return this.decksService.lookupCardRoles(cardIds);
+  }
+
+  @Post('admin/refresh-price-cache')
+  @Throttle({ medium: { limit: 5, ttl: 60000 } })
+  @ApiOperation({ summary: 'Manually trigger price cache refresh for last-7-day event decks' })
+  refreshPriceCache() {
+    return this.deckPriceCacheService.run();
+  }
+
+  @Get('admin/price-cache-stats')
+  @Throttle({ long: { limit: 30, ttl: 60000 } })
+  @ApiOperation({ summary: 'Get deck price cache stats (cached count, stale count, last updated)' })
+  getPriceCacheStats() {
+    return this.deckPriceCacheService.getStats();
   }
 
   @Get('code/:deckCode/roles')

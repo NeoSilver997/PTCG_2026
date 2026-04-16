@@ -254,6 +254,18 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
     sections.get(key)!.push(entry);
   }
 
+  // Derive archetype name from main pokemon section
+  const archetypeName = (sections.get('pokemon-main') ?? [])
+    .map((e) => e.card.name)
+    .filter((n): n is string => !!n)
+    .filter((n, i, arr) => arr.indexOf(n) === i)
+    .slice(0, 2)
+    .join(' + ');
+
+  // ACE SPEC card from ace section
+  const aceEntry = (sections.get('ace') ?? [])[0];
+  const aceName = aceEntry?.card.name ?? null;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
@@ -294,7 +306,21 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
         {/* Header + Summary */}
         <div className="bg-slate-700/60 rounded-xl p-4 mb-6 border border-slate-600">
           <div className="flex items-start justify-between mb-4">
-            <h1 className="text-white text-xl font-bold">{data.name}</h1>
+            <div>
+              <h1 className="text-white text-xl font-bold">{data.name}</h1>
+              {(archetypeName || aceName) && (
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  {archetypeName && (
+                    <span className="text-slate-300 text-sm">{archetypeName}</span>
+                  )}
+                  {aceName && (
+                    <span className="bg-violet-700/50 text-violet-200 text-xs font-bold px-2 py-0.5 rounded border border-violet-500/50">
+                      ACE · {aceName}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
             {data.tournamentResults?.[0] && (
               <div className="text-right text-slate-300 text-sm">
                 <div className="text-slate-400 text-xs uppercase tracking-wide">Event Date</div>

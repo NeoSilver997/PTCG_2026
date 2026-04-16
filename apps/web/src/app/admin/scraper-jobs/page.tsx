@@ -526,6 +526,99 @@ function MaintenanceForm({ s, set }: { s: MaintenanceState; set: (p: Partial<Mai
   );
 }
 
+// ── Deck Price Cache Panel ─────────────────────────────────────────────────
+
+function DeckPriceCachePanel() {
+  const [status, setStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
+  const [result, setResult] = useState<string | null>(null);
+
+  const { data: statsData, refetch: refetchStats, isFetching: isFetchingStats } = useQuery({
+    queryKey: ['deck-price-cache-stats'],
+    queryFn: () => apiClient.get('/decks/admin/price-cache-stats'),
+    staleTime: 30_000,
+    retry: false,
+  });
+  const stats = statsData?.data ?? null;
+
+  const handleRun = async () => {
+    setStatus('running');
+    setResult(null);
+    try {
+      const res = await apiClient.post('/decks/admin/refresh-price-cache', {});
+      const r = res.data;
+      setResult(
+        typeof r?.updated === 'number'
+          ? `Updated ${r.updated} decks in ${r.durationMs ?? '?'}ms`
+          : 'Done',
+      );
+      setStatus('done');
+      refetchStats();
+    } catch (e: unknown) {
+      setResult(String((e as any)?.response?.data?.message ?? e));
+      setStatus('error');
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm overflow-hidden border-l-4 border-violet-400">
+      <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center gap-2">
+          <span className="text-violet-500 font-bold text-lg">💰</span>
+          <h3 className="font-semibold text-gray-800 text-sm">Event Deck Price Cache</h3>
+          {stats?.cachedCount != null && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 font-medium">
+              {stats.cachedCount} decks cached
+            </span>
+          )}
+          {stats?.pendingCount != null && stats.pendingCount > 0 && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 font-medium">
+              {stats.pendingCount} stale
+            </span>
+          )}
+        </div>
+        <button
+          onClick={() => refetchStats()}
+          disabled={isFetchingStats}
+          className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-40"
+        >
+          {isFetchingStats ? '⟳' : '↻'}
+        </button>
+      </div>
+
+      <div className="px-4 pb-4 space-y-2">
+        {stats?.lastUpdatedAt && (
+          <p className="text-xs text-gray-500">
+            Last run: <span className="font-mono text-gray-700">{new Date(stats.lastUpdatedAt).toLocaleString()}</span>
+          </p>
+        )}
+        <p className="text-xs text-gray-400">
+          Computes <code className="bg-gray-100 px-1 rounded">cachedBudgetMin</code> / <code className="bg-gray-100 px-1 rounded">cachedBudgetMax</code> for all event decks from the last 7 days.
+          Runs automatically every 6 hours on startup.
+        </p>
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleRun}
+            disabled={status === 'running'}
+            className={`px-3 py-1.5 text-xs font-medium rounded transition ${
+              status === 'running'
+                ? 'bg-violet-300 text-violet-800 cursor-wait'
+                : 'bg-violet-700 text-white hover:bg-violet-800'
+            }`}
+          >
+            {status === 'running' ? '⟳ Running…' : '▶ Run Now'}
+          </button>
+          {result && (
+            <span className={`text-xs font-mono ${status === 'error' ? 'text-red-500' : 'text-green-600'}`}>
+              {status === 'done' ? '✓ ' : '✗ '}{result}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function usePersistedState<T>(key: string, defaults: T): [T, React.Dispatch<React.SetStateAction<T>>] {
   const [state, setState] = useState<T>(() => {
     if (typeof window === 'undefined') return defaults;
@@ -970,6 +1063,9 @@ export default function ScraperJobsPage() {
 
           {/* Missing Effects Review */}
           <MissingEffectsPanel onRunJob={handleRunEffectTagger} />
+
+          {/* Deck Price Cache */}
+          <DeckPriceCachePanel />
         </div>
       </div>
     </div>

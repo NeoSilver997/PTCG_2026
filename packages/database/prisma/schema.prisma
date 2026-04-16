@@ -307,6 +307,9 @@ model Deck {
   tournamentResultId String?
   deckCode           String?            // Official deck code (e.g. "pMMyyp-Bj58oH-M2MpyS")
   deckData           Json?              // Raw card list: [{cardId, cardName, quantity, imageUrl}]
+  cachedBudgetMin    Float?             // Cached budget price (cheapest rarity per card, HKD)
+  cachedBudgetMax    Float?             // Cached premium price (most expensive rarity, HKD)
+  priceUpdatedAt     DateTime?          // When the price cache was last computed
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
   cards              DeckCard[]
@@ -316,6 +319,7 @@ model Deck {
   @@index([userId])
   @@index([archetype])
   @@index([isPublic])
+  @@index([cachedBudgetMin])
   @@map("decks")
 }
 
