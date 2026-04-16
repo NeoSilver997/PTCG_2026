@@ -288,6 +288,8 @@ async function importCardOptimized(prisma: PrismaClient, card: any) {
       skillsSignature: skillsSignature,
       primaryExpansionId: primaryExpansion.id,
       cardNumber,
+      effectTags: [],
+      specialEffectTags: [],
     },
   });
 

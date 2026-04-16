@@ -346,6 +346,7 @@ model CardPrice {
   price     Float
   currency  String      @default("JPY")
   inStock   Boolean     @default(true)
+  stockQty  Int?
   fetchedAt DateTime    @default(now())
   createdAt DateTime    @default(now())
   card      Card        @relation(fields: [cardId], references: [id], onDelete: Cascade)
@@ -361,6 +362,8 @@ model PriceHistory {
   source   PriceSource
   price    Float
   currency String      @default("JPY")
+  inStock  Boolean     @default(true)
+  stockQty Int?
   date     DateTime    @default(now())
 
   @@index([cardId, source, date])

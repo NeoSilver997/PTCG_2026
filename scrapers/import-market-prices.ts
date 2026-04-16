@@ -96,7 +96,7 @@ interface ImportResult { matched: number; created: number; updated: number; hist
 
 // ── Shared upsert helper ───────────────────────────────────────────────────────
 async function upsertPrices(
-  entries: Array<{ cardId: string; price: number; currency: string; inStock: boolean; fetchedAt: Date }>,
+  entries: Array<{ cardId: string; price: number; currency: string; inStock: boolean; stockQty?: number; fetchedAt: Date }>,
   db: typeof prisma,
   verbose: boolean,
   label: (id: string) => string,
@@ -127,9 +127,9 @@ async function upsertPrices(
     for (const r of rows) latestHistory.set(r.cardId, r.date);
   }
 
-  const toCreate: Array<{ cardId: string; source: "OTHER"; price: number; currency: string; inStock: boolean; fetchedAt: Date }> = [];
-  const toUpdate: Array<{ id: string; price: number; currency: string; inStock: boolean; fetchedAt: Date }> = [];
-  const historyRows: Array<{ cardId: string; source: "OTHER"; price: number; currency: string; date: Date }> = [];
+  const toCreate: Array<{ cardId: string; source: "OTHER"; price: number; currency: string; inStock: boolean; stockQty?: number; fetchedAt: Date }> = [];
+  const toUpdate: Array<{ id: string; price: number; currency: string; inStock: boolean; stockQty?: number; fetchedAt: Date }> = [];
+  const historyRows: Array<{ cardId: string; source: "OTHER"; price: number; currency: string; inStock: boolean; stockQty?: number; date: Date }> = [];
 
   const sixDaysMs = HISTORY_INTERVAL_DAYS * 24 * 60 * 60 * 1000;
 
@@ -140,14 +140,14 @@ async function upsertPrices(
     const intervalElapsed = !lastHistDate || (e.fetchedAt.getTime() - lastHistDate.getTime()) >= sixDaysMs;
 
     if (existing) {
-      toUpdate.push({ id: existing.id, price: e.price, currency: e.currency, inStock: e.inStock, fetchedAt: e.fetchedAt });
+      toUpdate.push({ id: existing.id, price: e.price, currency: e.currency, inStock: e.inStock, stockQty: e.stockQty, fetchedAt: e.fetchedAt });
     } else {
-      toCreate.push({ cardId: e.cardId, source: "OTHER", price: e.price, currency: e.currency, inStock: e.inStock, fetchedAt: e.fetchedAt });
+      toCreate.push({ cardId: e.cardId, source: "OTHER", price: e.price, currency: e.currency, inStock: e.inStock, stockQty: e.stockQty, fetchedAt: e.fetchedAt });
     }
 
     // Insert history if price changed OR if 6+ days since last entry
     if (priceChanged || intervalElapsed) {
-      historyRows.push({ cardId: e.cardId, source: "OTHER", price: e.price, currency: e.currency, date: e.fetchedAt });
+      historyRows.push({ cardId: e.cardId, source: "OTHER", price: e.price, currency: e.currency, inStock: e.inStock, stockQty: e.stockQty, date: e.fetchedAt });
     }
 
     if (verbose) console.log(`  [${existing ? "UPDATE" : "CREATE"}] ${label(e.cardId)} → HK$${e.price}`);
@@ -156,7 +156,7 @@ async function upsertPrices(
   for (let i = 0; i < toCreate.length; i += CHUNK)
     await db.cardPrice.createMany({ data: toCreate.slice(i, i + CHUNK), skipDuplicates: true });
   for (const u of toUpdate)
-    await db.cardPrice.update({ where: { id: u.id }, data: { price: u.price, currency: u.currency, inStock: u.inStock, fetchedAt: u.fetchedAt } });
+    await db.cardPrice.update({ where: { id: u.id }, data: { price: u.price, currency: u.currency, inStock: u.inStock, stockQty: u.stockQty, fetchedAt: u.fetchedAt } });
   let histAdded = 0;
   for (let i = 0; i < historyRows.length; i += CHUNK) {
     await db.priceHistory.createMany({ data: historyRows.slice(i, i + CHUNK) });
@@ -193,7 +193,9 @@ async function importCombinedFile(
 
   const upserts = Array.from(cardDbMap).map(([wid, cardId]) => {
     const entry = idMap.get(wid)!;
-    return { cardId, price: resolvePrice(entry), currency: entry.currency ?? "HKD", inStock: resolveInStock(entry), fetchedAt: resolveFetchedAt(entry) };
+    const inStock = resolveInStock(entry);
+    const stockQty = entry.stock ?? entry.listStock ?? (inStock ? undefined : 0);
+    return { cardId, price: resolvePrice(entry), currency: entry.currency ?? "HKD", inStock, stockQty, fetchedAt: resolveFetchedAt(entry) };
   });
   const r = await upsertPrices(upserts, db, verbose, (id) => id);
   return { matched: cardDbMap.size, ...r };
@@ -214,7 +216,7 @@ function expansionCodeFromFilename(filePath: string): string | null {
   return code.toLowerCase();
 }
 
-interface ExpansionEntry { price: number; currency: string; inStock: boolean; date: string }
+interface ExpansionEntry { price: number; currency: string; inStock: boolean; stockQty?: number; date: string; metadata?: { isSoldOut?: boolean; stockQuantity?: number } }
 
 /** Build a collectorNumber → card.id lookup from HK source JSON data.
  *  Falls back gracefully if source file doesn't exist.
@@ -309,9 +311,12 @@ async function importExpansionFile(
     const price = typeof first.price === "number" ? first.price : 0;
     if (price <= 0) continue;
     const currency = first.currency ?? "HKD";
-    const inStock = !(first as any).metadata?.isSoldOut;
+    const meta = first.metadata;
+    const isSoldOut = meta?.isSoldOut ?? false;
+    const inStock = !isSoldOut;
+    const stockQty = meta?.stockQuantity != null ? meta.stockQuantity : (inStock ? undefined : 0);
     const fetchedAt = first.date ? new Date(first.date) : new Date();
-    upserts.push({ cardId: dbId, price, currency, inStock, fetchedAt });
+    upserts.push({ cardId: dbId, price, currency, inStock, stockQty, fetchedAt });
   }
 
   if (dryRun || upserts.length === 0) return { matched: upserts.length, created: 0, updated: 0, histAdded: 0 };

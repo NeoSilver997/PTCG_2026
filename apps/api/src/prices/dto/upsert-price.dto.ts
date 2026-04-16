@@ -35,4 +35,11 @@ export class UpsertPriceDto {
   })
   @IsBoolean()
   inStock?: boolean = true;
+
+  @ApiPropertyOptional({ description: 'Stock quantity (number of units available)' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  stockQty?: number;
 }
