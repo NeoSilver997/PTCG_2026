@@ -255,59 +255,142 @@ export class ProductsService {
 
   async importFromFiles(): Promise<{ imported: number; skipped: number; errors: number }> {
     const logger = new Logger('ProductsImport');
-    const dataDir = path.join(__dirname, '..', '..', '..', '..', '..', 'data');
-    const filePath = path.join(dataDir, 'chinese_products.json');
+
+    // ── Product type definitions ──────────────────────────────────────────────
+    const PRODUCT_TYPES = [
+      { code: 'expansion_pack',     nameJa: '拡張パック',     nameZh: '擴充包系列', nameEn: 'Expansion Pack' },
+      { code: 'enhanced_expansion', nameJa: '強化拡張パック', nameZh: '高級擴充包', nameEn: 'Enhanced Expansion' },
+      { code: 'starter_set',        nameJa: '入門セット',     nameZh: '初階牌組',   nameEn: 'Starter Set' },
+      { code: 'constructed_deck',   nameJa: '構築デッキ',     nameZh: '對戰牌組',   nameEn: 'Constructed Deck' },
+      { code: 'accessories',        nameJa: '周辺グッズ',     nameZh: '相關商品',   nameEn: 'Accessories' },
+      { code: 'special_products',   nameJa: 'その他の商品',   nameZh: '其他商品',   nameEn: 'Special Products' },
+      { code: 'deck',               nameJa: 'デッキ',          nameZh: '收藏牌組',   nameEn: 'Deck' },
+    ];
+    const JP_TYPE_MAP: Record<string, string> = {
+      '拡張パック': 'expansion_pack', '強化拡張パック': 'enhanced_expansion',
+      '入門セット': 'starter_set', '構築デッキ': 'constructed_deck',
+      '周辺グッズ': 'accessories', 'その他の商品': 'special_products', 'デッキ': 'deck',
+    };
+    const inferZhType = (name: string): string => {
+      if (name.includes('高級擴充包') || name.includes('強化擴充包')) return 'enhanced_expansion';
+      if (name.includes('擴充包')) return 'expansion_pack';
+      if (name.includes('初階牌組') || name.includes('V初階牌組') || name.includes('ex初階牌組') ||
+          name.includes('雙ex初階牌組') || name.includes('G超起始牌組') ||
+          name.includes('起始組合') || name.includes('V起始牌組')) return 'starter_set';
+      if (name.includes('挑戰牌組') || name.includes('戰術牌組') ||
+          name.includes('牌組構築BOX') || name.includes('特別牌組組合')) return 'deck';
+      if (name.includes('頂級訓練家收藏箱')) return 'accessories';
+      return 'special_products';
+    };
+
+    // ── Seed product types ────────────────────────────────────────────────────
+    const typeMap = new Map<string, string>();
+    for (const pt of PRODUCT_TYPES) {
+      const record = await this.prisma.productType.upsert({
+        where: { code: pt.code },
+        update: { nameJa: pt.nameJa, nameZh: pt.nameZh, nameEn: pt.nameEn },
+        create: pt,
+      });
+      typeMap.set(record.code, record.id);
+    }
+
+    const upsertProduct = async (p: any, productTypeId: string | null) => {
+      await this.prisma.product.upsert({
+        where: {
+          country_code_productName_releaseDate: {
+            country: p.country,
+            productName: p.product_name,
+            code: p.code || '',
+            releaseDate: p.release_date || '',
+          },
+        },
+        update: {
+          price: p.price || null,
+          releaseDate: p.release_date || '',
+          link: p.link || null,
+          imageUrl: p.image_url || null,
+          include: p.include || null,
+          cardOnly: p.card_only || null,
+          beginnerFlag: p.beginner_flag != null ? Number(p.beginner_flag) : 0,
+          storesAvailable: p.stores_available || null,
+          linkCardList: p.link_card_list || null,
+          linkPokemonCenter: p.link_pokemon_center || null,
+          productTypeId,
+        },
+        create: {
+          country: p.country,
+          productName: p.product_name,
+          price: p.price || null,
+          releaseDate: p.release_date || '',
+          code: p.code || null,
+          link: p.link || null,
+          imageUrl: p.image_url || null,
+          include: p.include || null,
+          cardOnly: p.card_only || null,
+          beginnerFlag: p.beginner_flag != null ? Number(p.beginner_flag) : 0,
+          storesAvailable: p.stores_available || null,
+          linkCardList: p.link_card_list || null,
+          linkPokemonCenter: p.link_pokemon_center || null,
+          productTypeId,
+        },
+      });
+    };
 
     let imported = 0;
     let skipped = 0;
     let errors = 0;
 
-    if (!fs.existsSync(filePath)) {
-      logger.warn(`Product data file not found: ${filePath}`);
-      return { imported, skipped, errors };
+    // ── Source 1: HK Chinese ─────────────────────────────────────────────────
+    const hkZhPath = path.join(process.cwd(), 'data', 'chinese_products.json');
+    if (fs.existsSync(hkZhPath)) {
+      const hkProducts: any[] = JSON.parse(fs.readFileSync(hkZhPath, 'utf-8'));
+      logger.log(`Importing ${hkProducts.length} HK (ZH) products`);
+      for (const p of hkProducts) {
+        try {
+          const typeId = typeMap.get(inferZhType(p.product_name)) ?? null;
+          await upsertProduct(p, typeId);
+          imported++;
+        } catch (e: any) {
+          logger.error(`[HK-ZH] ${p.product_name}: ${e.message}`);
+          errors++;
+        }
+      }
+    } else {
+      logger.warn(`HK Chinese data not found: ${hkZhPath}`);
     }
 
-    const products: any[] = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    logger.log(`Importing ${products.length} products from ${filePath}`);
+    // ── Source 2: Japan + HK (EN) ────────────────────────────────────────────
+    const jpPath = path.join(process.cwd(), '..', 'PTCG_CardDB', 'ptcg_products.json');
+    if (fs.existsSync(jpPath)) {
+      const allProducts: any[] = JSON.parse(fs.readFileSync(jpPath, 'utf-8'));
+      const jpProducts = allProducts.filter((p: any) => p.country === 'Japan');
+      const hkEnProducts = allProducts.filter((p: any) => p.country === 'Hong Kong (EN)');
 
-    for (const p of products) {
-      try {
-        await this.prisma.product.upsert({
-          where: {
-            country_code_productName_releaseDate: {
-              country: p.country,
-              productName: p.product_name,
-              code: p.code || '',
-              releaseDate: p.release_date || null,
-            },
-          },
-          update: {
-            price: p.price || null,
-            releaseDate: p.release_date || null,
-            link: p.link || null,
-            imageUrl: p.image_url || null,
-            include: p.include || null,
-            cardOnly: p.card_only || null,
-            storesAvailable: p.stores_available || null,
-          },
-          create: {
-            country: p.country,
-            productName: p.product_name,
-            price: p.price || null,
-            releaseDate: p.release_date || null,
-            code: p.code || null,
-            link: p.link || null,
-            imageUrl: p.image_url || null,
-            include: p.include || null,
-            cardOnly: p.card_only || null,
-            storesAvailable: p.stores_available || null,
-          },
-        });
-        imported++;
-      } catch (error) {
-        logger.error(`Failed to upsert product ${p.product_name}: ${error.message}`);
-        errors++;
+      logger.log(`Importing ${jpProducts.length} Japan products`);
+      for (const p of jpProducts) {
+        try {
+          const typeCode = JP_TYPE_MAP[p.product_type] ?? 'special_products';
+          await upsertProduct(p, typeMap.get(typeCode) ?? null);
+          imported++;
+        } catch (e: any) {
+          logger.error(`[JP] ${p.product_name}: ${e.message}`);
+          errors++;
+        }
       }
+
+      logger.log(`Importing ${hkEnProducts.length} HK (EN) products`);
+      for (const p of hkEnProducts) {
+        try {
+          const typeCode = p.card_only === 'Yes' ? 'expansion_pack' : 'special_products';
+          await upsertProduct(p, typeMap.get(typeCode) ?? null);
+          imported++;
+        } catch (e: any) {
+          logger.error(`[HK-EN] ${p.product_name}: ${e.message}`);
+          errors++;
+        }
+      }
+    } else {
+      logger.warn(`Japan/HK-EN data not found: ${jpPath}`);
     }
 
     logger.log(`Import complete: ${imported} upserted, ${skipped} skipped, ${errors} errors`);

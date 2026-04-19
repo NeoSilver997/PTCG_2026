@@ -606,6 +606,77 @@ function PokedexPanel({ onRunJob }: { onRunJob: () => void }) {
   );
 }
 
+// ── Product Import Panel ───────────────────────────────────────────────────
+
+function ProductImportPanel() {
+  const [status, setStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
+  const [result, setResult] = useState<string | null>(null);
+
+  const { data: countData, refetch: refetchCount } = useQuery({
+    queryKey: ['products-count'],
+    queryFn: () => apiClient.get('/products?take=1'),
+    staleTime: 30_000,
+    retry: false,
+  });
+  const total: number = (countData?.data as any)?.pagination?.total ?? 0;
+
+  const handleRun = async () => {
+    setStatus('running');
+    setResult(null);
+    try {
+      const res = await apiClient.post('/products/import', {});
+      const r = res.data;
+      setResult(
+        typeof r?.imported === 'number'
+          ? `Imported ${r.imported} products (${r.errors} errors)`
+          : 'Done',
+      );
+      setStatus('done');
+      refetchCount();
+    } catch (e: unknown) {
+      setResult(String((e as any)?.response?.data?.message ?? e));
+      setStatus('error');
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm overflow-hidden border-l-4 border-orange-400">
+      <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center gap-2">
+          <span className="text-orange-500 font-bold text-lg">📦</span>
+          <h3 className="font-semibold text-gray-800 text-sm">Products</h3>
+          {total > 0 && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 font-medium">
+              {total} total
+            </span>
+          )}
+        </div>
+        <button onClick={() => refetchCount()} className="text-xs text-gray-400 hover:text-gray-600">↻</button>
+      </div>
+      <div className="px-4 pb-4 space-y-3">
+        {total === 0 && (
+          <p className="text-xs text-amber-600 bg-amber-50 rounded px-2 py-1">No products in database — reimport needed.</p>
+        )}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleRun}
+            disabled={status === 'running'}
+            className="px-3 py-1.5 text-xs font-medium bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-40"
+          >
+            {status === 'running' ? '⟳ Importing...' : '📦 Reimport Products'}
+          </button>
+          <span className="text-xs text-gray-400">Loads <code className="bg-gray-100 px-1 rounded">data/chinese_products.json</code> → DB</span>
+        </div>
+        {result && (
+          <p className={`text-xs px-2 py-1 rounded ${status === 'error' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'}`}>
+            {result}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Deck Price Cache Panel ─────────────────────────────────────────────────
 
 function DeckPriceCachePanel() {
@@ -1151,6 +1222,9 @@ export default function ScraperJobsPage() {
 
           {/* Pokédex Species */}
           <PokedexPanel onRunJob={handleRunPokedex} />
+
+          {/* Products */}
+          <ProductImportPanel />
 
           {/* Deck Price Cache */}
           <DeckPriceCachePanel />

@@ -93,6 +93,70 @@ PrimaryCards total    : 17956
 
 ---
 
+---
+
+## Product Import Pipeline
+
+### Source Data (Multi-Region)
+| Source | Country | Count | File |
+|--------|---------|-------|------|
+| `data/chinese_products.json` | Hong Kong (ZH) | 126 | Local |
+| `PTCG_CardDB/ptcg_products.json` | Japan | ~1874 | Adjacent repo |
+| `PTCG_CardDB/ptcg_products.json` | Hong Kong (EN) | 41 | Adjacent repo |
+
+**Total: ~2041 products**
+
+### Product Types (類型) — Auto-seeded on import
+| Code | Japanese | Chinese | English |
+|------|----------|---------|---------|
+| `expansion_pack` | 拡張パック | 擴充包系列 | Expansion Pack |
+| `enhanced_expansion` | 強化拡張パック | 高級擴充包 | Enhanced Expansion |
+| `starter_set` | 入門セット | 初階牌組 | Starter Set |
+| `constructed_deck` | 構築デッキ | 對戰牌組 | Constructed Deck |
+| `accessories` | 周辺グッズ | 相關商品 | Accessories |
+| `special_products` | その他の商品 | 其他商品 | Special Products |
+| `deck` | デッキ | 收藏牌組 | Deck |
+
+**Type inference rules:**
+- Japan: mapped directly from `product_type` field (Japanese string → code)
+- HK ZH: inferred from product name patterns (擴充包→expansion_pack, 高級擴充包→enhanced_expansion, 初階/起始→starter_set, 挑戰/戰術牌組→deck, etc.)
+- HK EN: `card_only=Yes` → expansion_pack, otherwise → special_products
+
+### Direct Import Script (Recommended)
+```powershell
+cd C:\AI_Server\Coding\PTCG_2026
+npx tsx scrapers/import-products-direct.ts
+```
+
+**Expected output:**
+```
+Seeding ProductType table...
+  ✓ expansion_pack (擴充包系列)
+  ...7 types total...
+
+Importing 126 HK (ZH) products...
+  → 126 OK, 0 errors
+
+Importing 1874 Japan products...
+  → 1874 OK, 0 errors
+
+Importing 41 HK (EN) products...
+  → 41 OK, 0 errors
+
+IMPORT COMPLETE
+Total products in DB: 2041
+```
+
+### API Endpoint
+`POST /api/v1/products/import` — triggers `importFromFiles()` which reads all three sources, seeds ProductType table, and assigns type IDs.
+
+> **Note:** Uses `process.cwd()/data` for the HK file and `../PTCG_CardDB/ptcg_products.json` for Japan/EN. Run from `apps/api/` or with proper CWD set.
+
+### Admin UI
+`/admin/scraper-jobs` → **📦 Import** tab → **📦 Products** section.
+
+---
+
 ## Next Steps
 To fully integrate this schema with the **Model Context Protocol (MCP)**:
 1. Define MCP configuration matching this schema.
