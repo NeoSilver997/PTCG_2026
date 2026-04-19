@@ -203,6 +203,11 @@ export class ScrapersService implements OnModuleDestroy {
         args = ['tsx', 'scrapers/populate-effect-tags.ts', '--apply'];
         break;
 
+      case JobType.POKEMON_SPECIES:
+        command = 'npx';
+        args = ['tsx', 'scrapers/import-pokemon-species.ts'];
+        break;
+
       default:
         command = 'python';
         args = [

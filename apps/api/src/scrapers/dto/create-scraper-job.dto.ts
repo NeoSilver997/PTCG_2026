@@ -15,6 +15,7 @@ export enum JobType {
   REMOVE_DUPLICATES   = 'REMOVE_DUPLICATES',
   PROMO_RARITY        = 'PROMO_RARITY',
   POPULATE_EFFECTS    = 'POPULATE_EFFECTS',
+  POKEMON_SPECIES     = 'POKEMON_SPECIES',
 }
 
 const boolTransform = ({ value }: { value: unknown }) => {

@@ -28,6 +28,7 @@ const JOB_TYPE_LABELS: Record<string, string> = {
   REMOVE_DUPLICATES: '🧹 Remove Dupes',
   PROMO_RARITY:      '🎫 Promo Rarity',
   POPULATE_EFFECTS:  '🏷️ Effect Tags',
+  POKEMON_SPECIES:   '🔢 Pokédex Import',
 };
 
 interface ScraperJob {
@@ -420,7 +421,7 @@ function ImportForm({ s, set }: { s: ImportState; set: (p: Partial<ImportState>)
 
 // ── Tab: Maintenance ───────────────────────────────────────────────────────
 
-type MaintenanceTool = 'seed_tournaments' | 'resync_decks' | 'remap_decks' | 'remove_duplicates' | 'promo_rarity';
+type MaintenanceTool = 'seed_tournaments' | 'resync_decks' | 'remap_decks' | 'remove_duplicates' | 'promo_rarity' | 'pokemon_species';
 
 interface MaintenanceState {
   tool: MaintenanceTool;
@@ -437,6 +438,7 @@ function MaintenanceForm({ s, set }: { s: MaintenanceState; set: (p: Partial<Mai
     ['remap_decks',       '🗺️ Remap'],
     ['remove_duplicates', '🧹 Dupes'],
     ['promo_rarity',      '🎫 Promo Rarity'],
+    ['pokemon_species',   '🔢 Pokédex'],
   ];
   return (
     <div className="space-y-3">
@@ -522,6 +524,84 @@ function MaintenanceForm({ s, set }: { s: MaintenanceState; set: (p: Partial<Mai
         <p className="text-xs text-gray-500">Runs <code className="bg-gray-100 px-1 rounded">update-promo-rarity.ts --apply</code></p>
         <p className="text-xs text-gray-400">Sets PROMO rarity on cards in promo expansion products. Cards with "ex" in name are set to DOUBLE_RARE (RR) instead.</p>
       </>}
+
+      {s.tool === 'pokemon_species' && <>
+        <p className="text-xs text-gray-500">Runs <code className="bg-gray-100 px-1 rounded">import-pokemon-species.ts</code></p>
+        <p className="text-xs text-gray-400">Upserts all Pokémon species from <span className="font-mono">data/pokemon_names.json</span> and re-links PrimaryCards to their species.</p>
+      </>}
+    </div>
+  );
+}
+
+// ── Pokédex Species Panel ──────────────────────────────────────────────────
+
+function PokedexPanel({ onRunJob }: { onRunJob: () => void }) {
+  const [open, setOpen] = useState(true);
+  const { data, isLoading, refetch, isFetching } = useQuery({
+    queryKey: ['pokedex-species-stats'],
+    queryFn: () => apiClient.get('/cards/species-summary'),
+    staleTime: 60_000,
+    select: (res) => ({
+      total: (res.data as any[]).length,
+      linked: (res.data as any[]).filter((s: any) =>
+        Object.values(s.cardCounts as Record<string, number>).some((v) => v > 0)
+      ).length,
+    }),
+  });
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm overflow-hidden border-l-4 border-teal-400">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-teal-500 font-bold text-lg">🔢</span>
+          <h3 className="font-semibold text-gray-800 text-sm">Pokédex Species</h3>
+          {data && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-teal-100 text-teal-700 font-medium">
+              {data.total.toLocaleString()} species · {data.linked.toLocaleString()} with cards
+            </span>
+          )}
+          {isLoading && <span className="text-xs text-gray-400">Loading…</span>}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={(e) => { e.stopPropagation(); refetch(); }}
+            disabled={isFetching}
+            className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-40"
+          >
+            {isFetching ? '⟳' : '↻ Refresh'}
+          </button>
+          <span className="text-gray-400 text-sm">{open ? '▲' : '▼'}</span>
+        </div>
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 space-y-3">
+          {data && (
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-gray-50 rounded p-2 text-center">
+                <p className="text-xs text-gray-500">Species in DB</p>
+                <p className="font-bold text-gray-800">{data.total.toLocaleString()}</p>
+              </div>
+              <div className="bg-teal-50 rounded p-2 text-center">
+                <p className="text-xs text-gray-500">With Cards</p>
+                <p className="font-bold text-teal-700">{data.linked.toLocaleString()}</p>
+              </div>
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onRunJob}
+              className="px-3 py-1.5 text-xs font-medium bg-teal-700 text-white rounded hover:bg-teal-800"
+            >
+              🔢 Reimport Pokédex
+            </button>
+            <span className="text-xs text-gray-400">Runs import-pokemon-species.ts — upserts all species &amp; relinks PrimaryCards</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -709,7 +789,8 @@ export default function ScraperJobsPage() {
           case 'resync_decks':     return { jobType: 'RESYNC_DECKS',     source: 'JP',     ...base, ...(m.processLimit ? { processLimit: parseInt(m.processLimit) } : {}), ...(m.reportFile ? { reportFile: m.reportFile } : {}) };
           case 'remap_decks':      return { jobType: 'REMAP_DECKS',      source: 'JP',      ...base, ...(m.deckId ? { deckId: m.deckId } : {}) };
           case 'remove_duplicates':return { jobType: 'REMOVE_DUPLICATES', source: 'JP', dryRun: m.dryRun };
-          case 'promo_rarity':      return { jobType: 'PROMO_RARITY',      source: 'JP' };
+          case 'promo_rarity':     return { jobType: 'PROMO_RARITY',      source: 'JP' };
+          case 'pokemon_species':  return { jobType: 'POKEMON_SPECIES',   source: 'JP' };
         }
       }
     }
@@ -854,6 +935,10 @@ export default function ScraperJobsPage() {
 
   const handleRunEffectTagger = useCallback(() => {
     startImportMutation.mutate({ jobType: 'POPULATE_EFFECTS', source: 'JP' });
+  }, [startImportMutation]);
+
+  const handleRunPokedex = useCallback(() => {
+    startImportMutation.mutate({ jobType: 'POKEMON_SPECIES', source: 'JP' });
   }, [startImportMutation]);
 
   const formatDuration = (start?: string, end?: string) => {
@@ -1063,6 +1148,9 @@ export default function ScraperJobsPage() {
 
           {/* Missing Effects Review */}
           <MissingEffectsPanel onRunJob={handleRunEffectTagger} />
+
+          {/* Pokédex Species */}
+          <PokedexPanel onRunJob={handleRunPokedex} />
 
           {/* Deck Price Cache */}
           <DeckPriceCachePanel />
