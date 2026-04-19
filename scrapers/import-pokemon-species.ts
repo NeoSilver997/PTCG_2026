@@ -124,11 +124,19 @@ function buildLookupMaps(rows: SpeciesLookup[]): {
   const byZhHant = new Map<string, SpeciesLookup>();
   const byEn = new Map<string, SpeciesLookup>();
 
+  // Normalize fullwidth ASCII (U+FF01–U+FF5E) → halfwidth so map keys and
+  // card names can be compared consistently (e.g. 謎擬Ｑ → 謎擬Q).
+  const normFW = (s: string) =>
+    s.replace(/[\uFF01-\uFF5E]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+
   for (const row of rows) {
+    const ja = normFW(row.nameJa);
+    const zh = normFW(row.nameZhHant);
+    const en = normFW(row.nameEn);
     // Only set first occurrence (base form preferred over regional forms)
-    if (!byJa.has(row.nameJa)) byJa.set(row.nameJa, row);
-    if (!byZhHant.has(row.nameZhHant)) byZhHant.set(row.nameZhHant, row);
-    if (!byEn.has(row.nameEn)) byEn.set(row.nameEn, row);
+    if (!byJa.has(ja)) byJa.set(ja, row);
+    if (!byZhHant.has(zh)) byZhHant.set(zh, row);
+    if (!byEn.has(en)) byEn.set(en, row);
   }
 
   // Sorted by length desc for greedy prefix matching
@@ -166,13 +174,27 @@ function findSpecies(
     return null;
   }
 
+  // Normalize card name for matching:
+  // • Strip angle-bracket trainer prefix (ZH: <瑪俐的>酷豹 → 酷豹)
+  // • Normalize curly apostrophe U+2019 → straight U+0027 (EN: Farfetch\u2019d → Farfetch'd)
+  // • Normalize fullwidth ASCII letters/digits (U+FF01–U+FF5E) → halfwidth
+  //   e.g. 謎擬Ｑ (U+FF31) → 謎擬Q, so it matches card names with halfwidth Q
+  const normalizeFullwidth = (s: string) =>
+    s.replace(/[\uFF01-\uFF5E]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+
+  const normalizedName = normalizeFullwidth(
+    cardName
+      .replace(/^<[^>]+>\s*/u, '')         // strip <Owner> prefix
+      .replace(/\u2019/g, "'")             // curly → straight apostrophe
+  );
+
   // Exact match
-  const exact = exactMap.get(cardName);
+  const exact = exactMap.get(normalizedName) ?? exactMap.get(cardName);
   if (exact) return exact;
 
   // Prefix match (longest species name first)
   for (const speciesName of sortedNames) {
-    if (cardName.startsWith(speciesName)) {
+    if (normalizedName.startsWith(speciesName)) {
       return lookupMap.get(speciesName)!;
     }
   }
@@ -192,7 +214,7 @@ function findSpecies(
 
   for (const speciesName of sortedNames) {
     for (const particle of particles) {
-      if (cardName.includes(particle + speciesName)) {
+      if (normalizedName.includes(particle + speciesName)) {
         return lookupMap.get(speciesName)!;
       }
     }
@@ -202,9 +224,10 @@ function findSpecies(
   // メガ/超級/Mega (e.g. "メガルチャブルex" → "ルチャブル").
   // sortedNames is already sorted by length DESC so the most-specific (longest)
   // species name wins in case of overlap (e.g. "リザードン" before "リザード").
-  const minLen = language === LanguageCode.EN_US ? 5 : 3;
+  // ZH minLen is 2 to catch short species names like 酷豹 (Liepard).
+  const minLen = language === LanguageCode.EN_US ? 5 : language === LanguageCode.ZH_TW ? 2 : 3;
   for (const speciesName of sortedNames) {
-    if (speciesName.length >= minLen && cardName.includes(speciesName)) {
+    if (speciesName.length >= minLen && normalizedName.includes(speciesName)) {
       return lookupMap.get(speciesName)!;
     }
   }
