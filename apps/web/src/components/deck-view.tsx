@@ -377,7 +377,7 @@ export function DeckPriceBreakdown({ entries }: { entries: DeckCardEntry[] }) {
   const [isSaving, setIsSaving] = useState(false);
   const [saveResult, setSaveResult] = useState<{ ok: boolean; message: string } | null>(null);
 
-  const allRows = entries.filter((e) => e.zhPricing || e.zhVariantPricing || e.zhTiers?.length || isBasicEnergy(e));
+  const allRows = entries.filter((e) => e.zhPricing || e.zhVariantPricing || e.zhTiers?.length || isBasicEnergy(e) || !!e.card.zhWebCardId);
 
   if (allRows.length === 0) {
     return <div className="text-slate-400 text-sm text-center py-6">無定價資料</div>;
@@ -444,8 +444,11 @@ export function DeckPriceBreakdown({ entries }: { entries: DeckCardEntry[] }) {
   const TIER_LABELS = ['普通', '稀有', 'SR'];
   const TIER_COLORS = ['text-slate-300', 'text-blue-300', 'text-yellow-300'];
 
-  const maxTiers = allRows.reduce((m, e) => Math.max(m, isBasicEnergy(e) ? 1 : (e.zhTiers?.length ?? 1)), 0);
-  const tierCols = Math.min(maxTiers, 3);
+  const maxTiers = allRows.reduce((m, e) => {
+    if (isBasicEnergy(e)) return Math.max(m, 1);
+    return Math.max(m, e.zhTiers?.length ?? (e.zhPricing || e.zhVariantPricing ? 1 : 0));
+  }, 0);
+  const tierCols = Math.min(Math.max(maxTiers, 1), 3);
 
   return (
     <div className="space-y-2">
@@ -483,9 +486,13 @@ export function DeckPriceBreakdown({ entries }: { entries: DeckCardEntry[] }) {
         } else {
           const lo = zhVariantPricing?.lowestRarity ?? zhPricing?.lowest ?? 0;
           const hi = zhVariantPricing?.highestRarity ?? zhPricing?.highest ?? lo;
-          rawTiers = lo === hi
-            ? [{ imageUrl: mainImg ?? null, rarity: card.rarity ?? null, price: lo, inStock: true }]
-            : [{ imageUrl: mainImg ?? null, rarity: card.rarity ?? null, price: lo, inStock: true }, { imageUrl: null, rarity: null, price: hi, inStock: true }];
+          if (lo === 0 && hi === 0) {
+            rawTiers = []; // No price data — tier cells will show —
+          } else if (lo === hi) {
+            rawTiers = [{ imageUrl: mainImg ?? null, rarity: card.rarity ?? null, price: lo, inStock: true }];
+          } else {
+            rawTiers = [{ imageUrl: mainImg ?? null, rarity: card.rarity ?? null, price: lo, inStock: true }, { imageUrl: null, rarity: null, price: hi, inStock: true }];
+          }
         }
         // Deduplicate consecutive tiers with same price
         const tiers = rawTiers.filter((t, i) => i === 0 || t.price !== rawTiers[i - 1].price);
@@ -584,11 +591,17 @@ export function DeckPriceBreakdown({ entries }: { entries: DeckCardEntry[] }) {
 
             {/* Subtotal */}
             <div className="text-right">
-              <div className={`text-sm font-bold whitespace-nowrap ${override !== undefined ? 'text-blue-400' : 'text-green-400'}`}>
-                ${subtotalMin.toLocaleString()}
-              </div>
-              {subtotalMax > subtotalMin && override === undefined && (
-                <div className="text-red-400 text-[11px] whitespace-nowrap">${subtotalMax.toLocaleString()}</div>
+              {minP === 0 && override === undefined && !basic ? (
+                <div className="text-slate-600 text-sm">—</div>
+              ) : (
+                <>
+                  <div className={`text-sm font-bold whitespace-nowrap ${override !== undefined ? 'text-blue-400' : 'text-green-400'}`}>
+                    ${subtotalMin.toLocaleString()}
+                  </div>
+                  {subtotalMax > subtotalMin && override === undefined && (
+                    <div className="text-red-400 text-[11px] whitespace-nowrap">${subtotalMax.toLocaleString()}</div>
+                  )}
+                </>
               )}
             </div>
           </div>

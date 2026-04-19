@@ -198,6 +198,17 @@ function findSpecies(
     }
   }
 
+  // Substring match fallback — handles cards with wrapping prefixes like
+  // メガ/超級/Mega (e.g. "メガルチャブルex" → "ルチャブル").
+  // sortedNames is already sorted by length DESC so the most-specific (longest)
+  // species name wins in case of overlap (e.g. "リザードン" before "リザード").
+  const minLen = language === LanguageCode.EN_US ? 5 : 3;
+  for (const speciesName of sortedNames) {
+    if (speciesName.length >= minLen && cardName.includes(speciesName)) {
+      return lookupMap.get(speciesName)!;
+    }
+  }
+
   return null;
 }
 
