@@ -24,8 +24,10 @@ const TYPE_COLORS: Record<string, string> = {
 function CardTooltip({ card }: { card: any }) {
   const abilities: any[] = Array.isArray(card.abilities) ? card.abilities : [];
   const attacks: any[] = Array.isArray(card.attacks) ? card.attacks : [];
+  const weaknesses: any[] = Array.isArray(card.weaknesses) ? card.weaknesses : [];
+  const resistances: any[] = Array.isArray(card.resistances) ? card.resistances : [];
 
-  if (abilities.length === 0 && attacks.length === 0) return null;
+  if (abilities.length === 0 && attacks.length === 0 && weaknesses.length === 0) return null;
 
   return (
     <div className="absolute left-full top-0 ml-2 z-50 w-64 bg-white border border-gray-200 rounded-lg shadow-xl p-3 pointer-events-none text-xs">
@@ -61,6 +63,20 @@ function CardTooltip({ card }: { card: any }) {
           )}
         </div>
       ))}
+      {weaknesses.length > 0 && (attacks.length > 0 || abilities.length > 0) && <hr className="my-2 border-gray-100" />}
+      {weaknesses.length > 0 && (
+        <div className="flex items-center gap-1 flex-wrap">
+          {weaknesses.map((w: any, i: number) => (
+            <span key={i} className="text-[10px] text-gray-600">弱點: <span className={`px-1 rounded text-white font-bold ${TYPE_COLORS[w.type] || 'bg-gray-400'}`}>{w.type}</span> {w.value}</span>
+          ))}
+          {resistances.map((r: any, i: number) => (
+            <span key={i} className="text-[10px] text-gray-600">抵抗: <span className={`px-1 rounded text-white font-bold ${TYPE_COLORS[r.type] || 'bg-gray-400'}`}>{r.type}</span> {r.value}</span>
+          ))}
+          {card.retreatCost != null && (
+            <span className="text-[10px] text-gray-600">退場: {card.retreatCost}</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -109,6 +125,20 @@ export function CardGrid({ cards, onCardClick }: CardGridProps) {
                 <TypeIcon type={card.types} size="sm" />
               )}
             </div>
+            {/* Weakness badge */}
+            {Array.isArray(card.weaknesses) && card.weaknesses.length > 0 && (
+              <div className="mt-1 flex items-center gap-1">
+                <span className="text-[9px] text-gray-500">弱:</span>
+                {card.weaknesses.map((w: any, i: number) => (
+                  <span key={i} className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-white font-bold text-[7px] ${TYPE_COLORS[w.type] || 'bg-gray-400'}`} title={`${w.type} ${w.value}`}>
+                    {w.type?.charAt(0)}
+                  </span>
+                ))}
+                {card.weaknesses[0]?.value && (
+                  <span className="text-[9px] text-gray-500">{card.weaknesses[0].value}</span>
+                )}
+              </div>
+            )}
             {/* Effect tag pills */}
             {card.primaryCard?.effectTags?.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1">

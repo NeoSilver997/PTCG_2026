@@ -158,6 +158,9 @@ model Card {
   ruleBox             RuleBox?
   abilities           Json?
   attacks             Json?
+  weaknesses          Json?
+  resistances         Json?
+  retreatCost         Int?
   rules               String[]
   flavorText          String?
   artist              String?

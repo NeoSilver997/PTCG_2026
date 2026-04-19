@@ -38,7 +38,12 @@ export interface DeckCardDetail {
   types?: string[];
   rarity?: string | null;
   hp?: number | null;
-  attacks?: AttackData[] | null;  abilities?: AbilityData[] | null;  evolutionStage?: string | null;
+  attacks?: AttackData[] | null;
+  abilities?: AbilityData[] | null;
+  weaknesses?: Array<{ type: string; value: string }> | null;
+  resistances?: Array<{ type: string; value: string }> | null;
+  retreatCost?: number | null;
+  evolutionStage?: string | null;
   /** Resolved canonical webCardId for primary-card-based linking (Pokémon only). */
   canonicalWebCardId?: string | null;
   /** Primary card UUID – preferred key for role storage across language variants. */
@@ -346,6 +351,59 @@ export function EffectsSummary({ entries }: { entries: DeckCardEntry[] }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+/* ─── Weakness Summary ─────────────────────────────────────────── */
+
+const TYPE_ZH: Record<string, string> = {
+  FIRE: '🔥 火', WATER: '💧 水', LIGHTNING: '⚡ 雷', GRASS: '🌿 草',
+  FIGHTING: '👊 格鬥', PSYCHIC: '🔮 超', DARKNESS: '🌑 惡',
+  METAL: '⚙️ 鋼', DRAGON: '🐉 龍', FAIRY: '✨ 妖精', COLORLESS: '⬜ 無色',
+};
+
+export function WeaknessSummary({ entries }: { entries: DeckCardEntry[] }) {
+  const pokemonEntries = entries.filter(e => e.card.supertype === 'POKEMON');
+
+  const weaknessCounts = new Map<string, { value: string; count: number; cards: string[] }>();
+
+  for (const entry of pokemonEntries) {
+    const ws = entry.card.weaknesses;
+    if (!ws || !Array.isArray(ws)) continue;
+    for (const w of ws) {
+      if (!w?.type) continue;
+      const existing = weaknessCounts.get(w.type);
+      if (existing) {
+        existing.count += entry.quantity;
+        if (!existing.cards.includes(entry.card.name)) existing.cards.push(entry.card.name);
+      } else {
+        weaknessCounts.set(w.type, { value: w.value, count: entry.quantity, cards: [entry.card.name] });
+      }
+    }
+  }
+
+  const totalPokemon = pokemonEntries.reduce((s, e) => s + e.quantity, 0);
+  const sorted = Array.from(weaknessCounts.entries()).sort((a, b) => b[1].count - a[1].count);
+
+  if (sorted.length === 0) {
+    return <div className="text-slate-400 text-sm text-center py-4">無弱點資料</div>;
+  }
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      {sorted.map(([type, { value, count, cards }]) => {
+        const pct = totalPokemon > 0 ? Math.round((count / totalPokemon) * 100) : 0;
+        return (
+          <div key={type} className="bg-slate-800/60 rounded-lg p-3 border border-slate-600">
+            <div className="text-orange-400 font-bold text-sm mb-1">{TYPE_ZH[type] ?? type} {value}</div>
+            <div className="text-slate-300 text-xs mb-1">{count} 張 ({pct}%)</div>
+            <div className="text-slate-400 text-[10px] leading-tight">
+              {cards.slice(0, 2).join(', ')}{cards.length > 2 ? '...' : ''}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

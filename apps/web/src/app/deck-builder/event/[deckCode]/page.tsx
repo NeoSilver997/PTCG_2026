@@ -18,6 +18,7 @@ import {
   CardDetailModal,
   CopyDeckModal,
   EffectsSummary,
+  WeaknessSummary,
 } from '@/components/deck-view';
 
 /* ---- Deck response from API ---- */
@@ -394,6 +395,12 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
         <div className="bg-slate-700/60 rounded-xl p-4 mb-6 border border-slate-600">
           <h2 className="text-white text-lg font-bold mb-4">效果摘要</h2>
           <EffectsSummary entries={deckEntries} />
+        </div>
+
+        {/* Weakness Summary */}
+        <div className="bg-slate-700/60 rounded-xl p-4 mb-6 border border-slate-600">
+          <h2 className="text-white text-lg font-bold mb-4">弱點摘要</h2>
+          <WeaknessSummary entries={deckEntries} />
         </div>
       </div>
 

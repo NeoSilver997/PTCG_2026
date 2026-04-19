@@ -406,6 +406,7 @@ export class CardsService {
     effectTag?: string;
     cardTier?: string;
     abilityText?: string;
+    weakness?: string;
   }): Promise<{
     data: any[];
     pagination: {
@@ -443,6 +444,7 @@ export class CardsService {
       effectTag,
       cardTier,
       abilityText,
+      weakness,
     } = params;
 
     const where: any = {};
@@ -603,7 +605,7 @@ export class CardsService {
     // Detect multi-value regulationMark (Prisma { in: [...] }) — must use raw SQL path
     const regulationMarkIsMulti = where.regulationMark !== undefined && typeof where.regulationMark === 'object' && 'in' in (where.regulationMark as any);
 
-    if (hasAbilities !== undefined || hasAttackText !== undefined || evolvesTo || attackName || effectTag || cardTier || abilityText || regulationMarkIsMulti || actualSortBy === 'expansionReleaseDate' || actualSortBy === 'expansionCode' || expansionCode) {
+    if (hasAbilities !== undefined || hasAttackText !== undefined || evolvesTo || attackName || effectTag || cardTier || abilityText || weakness || regulationMarkIsMulti || actualSortBy === 'expansionReleaseDate' || actualSortBy === 'expansionCode' || expansionCode) {
       const jsonFieldConditions: string[] = [];
 
       // Expansion codes: directly inject as raw SQL OR condition
@@ -672,6 +674,15 @@ export class CardsService {
       if (abilityText) {
         const escaped = abilityText.replace(/'/g, "''");
         jsonFieldConditions.push(`(c.abilities::text ILIKE '%${escaped}%' OR c.attacks::text ILIKE '%${escaped}%')`);
+      }
+
+      // weakness: filter by weakness type stored as JSON array [{type, value}]
+      if (weakness) {
+        const escapedWeakness = weakness.replace(/'/g, "''");
+        jsonFieldConditions.push(
+          `(c.weaknesses IS NOT NULL AND c.weaknesses != 'null'::jsonb AND EXISTS (` +
+          `SELECT 1 FROM jsonb_array_elements(c.weaknesses) w WHERE w->>'type' = '${escapedWeakness}'))`
+        );
       }
 
       const baseWhereConditions = Object.entries(where)
@@ -1080,40 +1091,32 @@ export class CardsService {
     });
     if (!card) throw new NotFoundException(`Card ${webCardId} not found`);
 
-    const fromRels = await this.prisma.cardRelation.findMany({
-      where: { fromCardId: card.primaryCardId },
+    const cardInclude = {
       include: {
-        toCard: {
-          include: {
-            cards: {
-              where: { language: 'ZH_TW' },
-              select: { webCardId: true, name: true, imageUrl: true, language: true, supertype: true, ruleBox: true },
-              take: 1,
-            },
-          },
+        primaryExpansion: { select: { releaseDate: true } },
+        cards: {
+          where: { language: 'ZH_TW' },
+          select: { webCardId: true, name: true, imageUrl: true, language: true, supertype: true, ruleBox: true },
+          take: 1,
         },
       },
+    };
+
+    const fromRels = await this.prisma.cardRelation.findMany({
+      where: { fromCardId: card.primaryCardId },
+      include: { toCard: cardInclude as any },
     });
 
     const toRels = await this.prisma.cardRelation.findMany({
       where: { toCardId: card.primaryCardId },
-      include: {
-        fromCard: {
-          include: {
-            cards: {
-              where: { language: 'ZH_TW' },
-              select: { webCardId: true, name: true, imageUrl: true, language: true, supertype: true, ruleBox: true },
-              take: 1,
-            },
-          },
-        },
-      },
+      include: { fromCard: cardInclude as any },
     });
 
     const result: any[] = [];
 
     for (const rel of fromRels) {
-      const rep = (rel.toCard as any).cards[0] ?? null;
+      const pc = rel.toCard as any;
+      const rep = pc.cards[0] ?? null;
       result.push({
         relationId: rel.id,
         relationType: rel.relationType,
@@ -1121,15 +1124,17 @@ export class CardsService {
         direction: 'from',
         primaryCardId: rel.toCardId,
         webCardId: rep?.webCardId ?? null,
-        name: rep?.name ?? (rel.toCard as any).name,
+        name: rep?.name ?? pc.name,
         imageUrl: rep?.imageUrl ?? null,
         supertype: rep?.supertype ?? null,
         ruleBox: rep?.ruleBox ?? null,
+        releaseDate: pc.primaryExpansion?.releaseDate ?? null,
       });
     }
 
     for (const rel of toRels) {
-      const rep = (rel.fromCard as any).cards[0] ?? null;
+      const pc = rel.fromCard as any;
+      const rep = pc.cards[0] ?? null;
       result.push({
         relationId: rel.id,
         relationType: rel.relationType,
@@ -1137,14 +1142,34 @@ export class CardsService {
         direction: 'to',
         primaryCardId: rel.fromCardId,
         webCardId: rep?.webCardId ?? null,
-        name: rep?.name ?? (rel.fromCard as any).name,
+        name: rep?.name ?? pc.name,
         imageUrl: rep?.imageUrl ?? null,
         supertype: rep?.supertype ?? null,
         ruleBox: rep?.ruleBox ?? null,
+        releaseDate: pc.primaryExpansion?.releaseDate ?? null,
       });
     }
 
-    return result;
+    // Deduplicate by primaryCardId — bidirectional relations can cause same card to appear
+    // in both fromRels and toRels. Keep first occurrence per primaryCardId.
+    // Also exclude the current card itself.
+    const seen = new Set<string>();
+    seen.add(card.primaryCardId); // exclude self
+    const deduped = result.filter(r => {
+      if (seen.has(r.primaryCardId)) return false;
+      seen.add(r.primaryCardId);
+      return true;
+    });
+
+    // Sort by expansion release date DESC (newest first, nulls last)
+    deduped.sort((a, b) => {
+      if (!a.releaseDate && !b.releaseDate) return 0;
+      if (!a.releaseDate) return 1;
+      if (!b.releaseDate) return -1;
+      return new Date(b.releaseDate).getTime() - new Date(a.releaseDate).getTime();
+    });
+
+    return deduped;
   }
 
   /**

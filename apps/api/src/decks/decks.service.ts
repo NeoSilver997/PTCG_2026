@@ -69,6 +69,8 @@ export class DecksService {
                 hp: true,
                 attacks: true,
                 abilities: true,
+                weaknesses: true,
+                resistances: true,
                 evolutionStage: true,
                 primaryCardId: true,
                 language: true,

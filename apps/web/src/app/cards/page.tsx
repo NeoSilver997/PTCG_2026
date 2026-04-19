@@ -8,7 +8,7 @@ import apiClient from '@/lib/api-client';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 const DEFAULT_EXPANSION_CODES = 'm4,m3,m2a,m2,m1s,m1l,mc,m,sv11w,sv11b,sv10,sv9,sv9a,sv8,sv8a,sv7,sv6a,sv6,sv5a,sv5k,sv5m,sv';
-const FILTER_VERSION = '5';
+const FILTER_VERSION = '6';
 const TAKE = 120;
 
 const DEFAULT_FILTERS = {
@@ -32,6 +32,7 @@ const DEFAULT_FILTERS = {
   effectTag: '',
   cardTier: '',
   abilityText: '',
+  weakness: '',
 };
 
 function getInitialFilters() {

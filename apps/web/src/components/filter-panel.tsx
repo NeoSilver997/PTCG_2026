@@ -62,6 +62,7 @@ interface FilterPanelProps {
     effectTag?: string;
     cardTier?: string;
     abilityText?: string;
+    weakness?: string;
   };
   onFilterChange: (filters: any) => void;
   stats?: {
@@ -101,6 +102,7 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
       effectTag: '',
       cardTier: '',
       abilityText: '',
+      weakness: '',
     });
   };
 
@@ -118,7 +120,7 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
     filters.rarity || filters.language || filters.webCardId || filters.subtypes ||
     filters.variantType || filters.minHp || filters.maxHp || filters.artist ||
     filters.regulationMark || filters.expansionCode || filters.hasAbilities || filters.hasAttackText ||
-    filters.effectTag || filters.cardTier || filters.abilityText;
+    filters.effectTag || filters.cardTier || filters.abilityText || filters.weakness;
   
   return (
     <div className="bg-white rounded-lg shadow-md p-4 mb-6">
@@ -620,6 +622,31 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
                 onChange={(e) => updateFilter('abilityText', e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900 bg-white placeholder:text-gray-400"
               />
+            </div>
+
+            {/* Weakness Type */}
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                弱點屬性
+              </label>
+              <select
+                value={filters.weakness || ''}
+                onChange={(e) => updateFilter('weakness', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900"
+              >
+                <option value="" className="text-gray-900">全部</option>
+                <option value="COLORLESS" className="text-gray-900">無色</option>
+                <option value="DARKNESS" className="text-gray-900">惡</option>
+                <option value="DRAGON" className="text-gray-900">龍</option>
+                <option value="FAIRY" className="text-gray-900">妖精</option>
+                <option value="FIGHTING" className="text-gray-900">格鬥</option>
+                <option value="FIRE" className="text-gray-900">火</option>
+                <option value="GRASS" className="text-gray-900">草</option>
+                <option value="LIGHTNING" className="text-gray-900">雷</option>
+                <option value="METAL" className="text-gray-900">鋼</option>
+                <option value="PSYCHIC" className="text-gray-900">超</option>
+                <option value="WATER" className="text-gray-900">水</option>
+              </select>
             </div>
 
             {/* Card Tier */}

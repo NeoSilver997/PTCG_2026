@@ -133,6 +133,9 @@ interface JapaneseCard {
   pokemonTypes?: string[];
   abilities?: any[];
   attacks?: any[];
+  weakness?: { type: string; value: string } | null;
+  resistance?: { type: string; value: string } | null;
+  retreatCost?: number | null;
   rules?: string[];
   flavorText?: string;
   artist?: string;
@@ -394,6 +397,9 @@ async function importCardOptimized(prisma: PrismaClient, card: any) {
       types,
       abilities: abilities,
       attacks: card.attacks || null,
+      weaknesses: card.weakness ? [card.weakness] : (card.weaknesses || null),
+      resistances: card.resistance ? [card.resistance] : (card.resistances || null),
+      retreatCost: card.retreatCost != null ? Number(card.retreatCost) : null,
       rules: card.rules || [],
       text: card.effectText || card.text || null,
       flavorText: card.flavorText || null,
@@ -422,6 +428,9 @@ async function importCardOptimized(prisma: PrismaClient, card: any) {
       types,
       abilities: abilities,
       attacks: card.attacks || null,
+      weaknesses: card.weakness ? [card.weakness] : (card.weaknesses || null),
+      resistances: card.resistance ? [card.resistance] : (card.resistances || null),
+      retreatCost: card.retreatCost != null ? Number(card.retreatCost) : null,
       rules: card.rules || [],
       text: text,
       flavorText: card.flavorText || null,
