@@ -208,6 +208,11 @@ export class ScrapersService implements OnModuleDestroy {
         args = ['tsx', 'scrapers/import-pokemon-species.ts'];
         break;
 
+      case JobType.MAP_HK_TO_JP:
+        command = 'npx';
+        args = ['tsx', 'scrapers/map-hk-to-jp.ts', '--apply', '--yes'];
+        break;
+
       default:
         command = 'python';
         args = [

@@ -16,6 +16,7 @@ export enum JobType {
   PROMO_RARITY        = 'PROMO_RARITY',
   POPULATE_EFFECTS    = 'POPULATE_EFFECTS',
   POKEMON_SPECIES     = 'POKEMON_SPECIES',
+  MAP_HK_TO_JP        = 'MAP_HK_TO_JP',
 }
 
 const boolTransform = ({ value }: { value: unknown }) => {

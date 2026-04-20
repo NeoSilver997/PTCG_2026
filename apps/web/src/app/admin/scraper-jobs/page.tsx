@@ -29,6 +29,7 @@ const JOB_TYPE_LABELS: Record<string, string> = {
   PROMO_RARITY:      '🎫 Promo Rarity',
   POPULATE_EFFECTS:  '🏷️ Effect Tags',
   POKEMON_SPECIES:   '🔢 Pokédex Import',
+  MAP_HK_TO_JP:      '🔗 Map HK→JP',
 };
 
 interface ScraperJob {
@@ -421,7 +422,7 @@ function ImportForm({ s, set }: { s: ImportState; set: (p: Partial<ImportState>)
 
 // ── Tab: Maintenance ───────────────────────────────────────────────────────
 
-type MaintenanceTool = 'seed_tournaments' | 'resync_decks' | 'remap_decks' | 'remove_duplicates' | 'promo_rarity' | 'pokemon_species';
+type MaintenanceTool = 'seed_tournaments' | 'resync_decks' | 'remap_decks' | 'remove_duplicates' | 'promo_rarity' | 'pokemon_species' | 'map_hk_to_jp';
 
 interface MaintenanceState {
   tool: MaintenanceTool;
@@ -439,6 +440,7 @@ function MaintenanceForm({ s, set }: { s: MaintenanceState; set: (p: Partial<Mai
     ['remove_duplicates', '🧹 Dupes'],
     ['promo_rarity',      '🎫 Promo Rarity'],
     ['pokemon_species',   '🔢 Pokédex'],
+    ['map_hk_to_jp',      '🔗 Map HK→JP'],
   ];
   return (
     <div className="space-y-3">
@@ -528,6 +530,11 @@ function MaintenanceForm({ s, set }: { s: MaintenanceState; set: (p: Partial<Mai
       {s.tool === 'pokemon_species' && <>
         <p className="text-xs text-gray-500">Runs <code className="bg-gray-100 px-1 rounded">import-pokemon-species.ts</code></p>
         <p className="text-xs text-gray-400">Upserts all Pokémon species from <span className="font-mono">data/pokemon_names.json</span> and re-links PrimaryCards to their species.</p>
+      </>}
+
+      {s.tool === 'map_hk_to_jp' && <>
+        <p className="text-xs text-gray-500">Runs <code className="bg-gray-100 px-1 rounded">map-hk-to-jp.ts --apply --yes</code></p>
+        <p className="text-xs text-gray-400">Links HK (ZH_TW) cards to JP primary cards by expansion + collector number. Deletes orphaned ZH-only primary cards and syncs rarity/regulationMark/artist fields.</p>
       </>}
     </div>
   );
@@ -862,6 +869,7 @@ export default function ScraperJobsPage() {
           case 'remove_duplicates':return { jobType: 'REMOVE_DUPLICATES', source: 'JP', dryRun: m.dryRun };
           case 'promo_rarity':     return { jobType: 'PROMO_RARITY',      source: 'JP' };
           case 'pokemon_species':  return { jobType: 'POKEMON_SPECIES',   source: 'JP' };
+          case 'map_hk_to_jp':     return { jobType: 'MAP_HK_TO_JP',       source: 'JP' };
         }
       }
     }
