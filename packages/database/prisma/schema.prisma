@@ -417,6 +417,21 @@ model Product {
   @@map("products")
 }
 
+model EffectKeyword {
+  id         String   @id @default(cuid())
+  pattern    String
+  isRegex    Boolean  @default(true)
+  flags      String   @default("g")
+  colorClass String
+  category   String?
+  sortOrder  Int      @default(0)
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("effect_keywords")
+}
+
 enum UserRole {
   GUEST
   USER

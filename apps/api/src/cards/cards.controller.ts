@@ -94,6 +94,13 @@ export class CardsController {
     return await this.cardsService.getSpeciesSummary();
   }
 
+  @Get('effect-keywords')
+  @ApiOperation({ summary: 'Get all active effect highlight keywords for the card detail UI' })
+  @ApiResponse({ status: 200, description: 'List of active effect keywords' })
+  async getEffectKeywords() {
+    return await this.cardsService.getEffectKeywords();
+  }
+
   @Get('admin/missing-effects')
   @ApiOperation({ summary: 'Get PrimaryCards missing effectTags or tier, with sample cards' })
   @ApiResponse({ status: 200, description: 'Missing effects stats and samples' })

@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Safelist for dynamically-loaded effect keyword color classes (from effect_keywords DB table) */
+@source inline("bg-blue-100 text-blue-800 bg-yellow-100 text-yellow-800 bg-purple-100 text-purple-800 bg-orange-100 text-orange-800 bg-teal-100 text-teal-800 bg-gray-200 text-gray-700 bg-amber-100 text-amber-800 bg-red-100 text-red-700 bg-green-100 text-green-800 bg-pink-100 text-pink-800");
+
 :root {
   --background: #ffffff;
   --foreground: #171717;

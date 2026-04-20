@@ -177,6 +177,49 @@ const TYPE_COLORS: Record<string, string> = {
   COLORLESS: 'bg-gray-300',
 };
 
+// --- Effect keyword highlighting ---
+type EffectKeywordRule = { pattern: string; isRegex: boolean; flags: string; colorClass: string };
+
+function buildHighlightSpans(text: string, rules: EffectKeywordRule[]) {
+  type Span = { start: number; end: number; cls: string };
+  const spans: Span[] = [];
+  for (const rule of rules) {
+    try {
+      const re = rule.isRegex
+        ? new RegExp(rule.pattern, rule.flags)
+        : new RegExp(rule.pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), rule.flags);
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(text)) !== null) {
+        const s = m.index, e = m.index + m[0].length;
+        if (!spans.some(x => s < x.end && e > x.start)) {
+          spans.push({ start: s, end: e, cls: rule.colorClass });
+        }
+        if (!rule.flags.includes('g')) break;
+      }
+    } catch {
+      // skip invalid patterns
+    }
+  }
+  return spans.sort((a, b) => a.start - b.start);
+}
+
+function HighlightedText({ text, rules }: { text: string; rules: EffectKeywordRule[] }) {
+  const spans = buildHighlightSpans(text, rules);
+  const nodes: React.ReactNode[] = [];
+  let pos = 0;
+  for (const { start, end, cls } of spans) {
+    if (start > pos) nodes.push(text.slice(pos, start));
+    nodes.push(
+      <mark key={start} className={`${cls} rounded-sm px-0.5 not-italic font-medium`}>
+        {text.slice(start, end)}
+      </mark>
+    );
+    pos = end;
+  }
+  if (pos < text.length) nodes.push(text.slice(pos));
+  return <span className="whitespace-pre-wrap leading-relaxed">{nodes}</span>;
+}
+
 export default function CardDetailPage({ params }: { params: Promise<{ webCardId: string }> }) {
   const router = useRouter();
   const { webCardId } = use(params);
@@ -192,6 +235,8 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
   const [selectedWeek, setSelectedWeek] = useState<string | null>(null);
   // State to control showing all language variants
   const [showAllVariants, setShowAllVariants] = useState(false);
+  // State for 2-language side-by-side reference
+  const [refCardId, setRefCardId] = useState<string | null>(null);
 
   // Create all variants array including current card
   const allVariants = card ? [card, ...(card.languageVariants || [])] : [];
@@ -502,6 +547,24 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
     staleTime: 1000 * 60 * 5,
   });
 
+  // Fetch full card data for the selected reference language
+  const { data: refCard } = useQuery<CardDetail>({
+    queryKey: ['card', refCardId],
+    queryFn: () => fetchCardDetail(refCardId!),
+    enabled: !!refCardId,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Fetch effect highlight keywords from DB (cached 1 hour — rarely changes)
+  const { data: effectKeywords = [] } = useQuery<EffectKeywordRule[]>({
+    queryKey: ['effect-keywords'],
+    queryFn: async () => {
+      const { data } = await apiClient.get('/cards/effect-keywords');
+      return data as EffectKeywordRule[];
+    },
+    staleTime: 60 * 60 * 1000,
+  });
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -781,6 +844,49 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
               </div>
             )}
 
+            {/* ── Language Reference Picker ─────────────────────────────── */}
+            {card.languageVariants && card.languageVariants.length > 0 && (
+              <div className="bg-white rounded-lg px-4 py-3 shadow-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium text-gray-500 shrink-0">對比語言：</span>
+                  {/* Current card pill */}
+                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-600 text-white ring-2 ring-blue-300">
+                    {LANGUAGE_LABELS[card.language] || card.language} ●
+                  </span>
+                  {/* Linked language variant pills */}
+                  {card.languageVariants.map((v) => {
+                    const isRef = refCardId === v.webCardId;
+                    return (
+                      <button
+                        key={v.webCardId}
+                        onClick={() => setRefCardId(isRef ? null : v.webCardId)}
+                        className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                          isRef
+                            ? 'bg-emerald-600 text-white ring-2 ring-emerald-300'
+                            : 'bg-gray-100 text-gray-700 hover:bg-emerald-100 hover:text-emerald-800'
+                        }`}
+                        title={isRef ? '點擊取消對比' : '點擊對比此語言'}
+                      >
+                        {LANGUAGE_LABELS[v.language] || v.language}
+                        {v.variantType && v.variantType !== 'NORMAL' && (
+                          <span className="ml-1 opacity-70">·{v.variantType}</span>
+                        )}
+                        {isRef && <span className="ml-1">⇄</span>}
+                      </button>
+                    );
+                  })}
+                  {refCardId && (
+                    <button
+                      onClick={() => setRefCardId(null)}
+                      className="ml-auto text-xs text-gray-400 hover:text-gray-600"
+                    >
+                      ✕ 清除對比
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Trainer / Energy Card Text/Description */}
             {(card?.supertype === 'TRAINER' || card?.supertype === 'ENERGY') && (() => {
               // text may be null for some scraped cards; fall back to abilities[].text
@@ -800,7 +906,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
               return (
                 <div className="bg-white rounded-lg p-3 shadow-sm">
                   <h2 className="text-xl font-semibold mb-3 text-gray-900">{label}</h2>
-                  <p className="text-gray-800 whitespace-pre-wrap leading-relaxed">{effectText}</p>
+                  <p className="text-gray-800"><HighlightedText text={effectText} rules={effectKeywords} /></p>
                 </div>
               );
             })()}
@@ -815,7 +921,9 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                   .map((ability: any, index: number) => (
                     <div key={index} className="mb-4 last:mb-0">
                       {ability.name && <div className="font-semibold text-blue-700">{ability.name}</div>}
-                      <div className="text-sm text-gray-800 mt-1">{ability.text || ability.description}</div>
+                      <div className="text-sm text-gray-800 mt-1">
+                        <HighlightedText text={ability.text || ability.description} rules={effectKeywords} />
+                      </div>
                     </div>
                   ))}
               </div>
@@ -830,7 +938,9 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                       <div className="flex-1">
                         <div className="font-semibold text-gray-900">{attack.name}</div>
                         {(attack.effect || attack.text) && (
-                          <div className="text-sm text-gray-800 mt-1">{attack.effect || attack.text}</div>
+                          <div className="text-sm text-gray-800 mt-1">
+                            <HighlightedText text={attack.effect || attack.text} rules={effectKeywords} />
+                          </div>
                         )}
                       </div>
                       {attack.damage && (
@@ -855,6 +965,98 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                 ))}
               </div>
             )}
+
+            {/* ── 2-Language Comparison Panel ───────────────────────────── */}
+            {refCard && (() => {
+              // Always use `card` (fully loaded) for the left column;
+              // language variants from languageVariants[] are partial objects without abilities/attacks.
+              const renderCardContent = (c: CardDetail, label: string, highlight: boolean) => {
+                // For TRAINER/ENERGY: plain text field; for POKEMON: abilities + attacks
+                const trainerText =
+                  (c.supertype === 'TRAINER' || c.supertype === 'ENERGY')
+                    ? (c.text?.trim() ||
+                       (Array.isArray(c.abilities)
+                         ? c.abilities.map((a: any) => a.text || a.description).filter(Boolean).join('\n\n')
+                         : ''))
+                    : '';
+                const abilities = Array.isArray(c.abilities)
+                  ? c.abilities.filter((a: any) => (a.text || a.description) && (c.supertype === 'POKEMON' || a.name))
+                  : [];
+                const attacks = Array.isArray(c.attacks) ? c.attacks : [];
+                const hasContent = trainerText || abilities.length > 0 || attacks.length > 0;
+                return (
+                  <div className="flex-1 min-w-0 space-y-3">
+                    <div className={`text-sm font-semibold pb-1 border-b ${
+                      highlight ? 'text-blue-700 border-blue-200' : 'text-emerald-700 border-emerald-200'
+                    }`}>{label}</div>
+                    {!hasContent && (
+                      <p className="text-xs text-gray-400">無文字資料</p>
+                    )}
+                    {trainerText && (
+                      <p className="text-sm text-gray-800">
+                        {highlight ? <HighlightedText text={trainerText} rules={effectKeywords} /> : <span className="whitespace-pre-wrap">{trainerText}</span>}
+                      </p>
+                    )}
+                    {abilities.map((a: any, i: number) => (
+                      <div key={i}>
+                        {a.name && (
+                          <div className={`text-xs font-semibold mb-0.5 ${
+                            highlight ? 'text-blue-700' : 'text-emerald-700'
+                          }`}>
+                            ★ {a.name}
+                          </div>
+                        )}
+                        <p className="text-sm text-gray-800">
+                          {highlight ? <HighlightedText text={a.text || a.description} rules={effectKeywords} /> : <span className="whitespace-pre-wrap">{a.text || a.description}</span>}
+                        </p>
+                      </div>
+                    ))}
+                    {attacks.map((atk: any, i: number) => (
+                      <div key={i} className="pt-2 border-t border-gray-100 first:border-0 first:pt-0">
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="text-sm font-semibold text-gray-900">{atk.name}</span>
+                          {atk.damage && (
+                            <span className="text-sm font-bold text-red-600">{atk.damage}</span>
+                          )}
+                        </div>
+                        {(atk.effect || atk.text) && (
+                          <p className="text-sm text-gray-700">
+                            {highlight ? <HighlightedText text={atk.effect || atk.text} rules={effectKeywords} /> : <span className="whitespace-pre-wrap">{atk.effect || atk.text}</span>}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                );
+              };
+
+              return (
+                <div className="bg-white rounded-lg p-4 shadow-sm border border-emerald-100">
+                  <div className="flex items-center gap-2 mb-4 text-sm">
+                    <span className="font-semibold text-gray-600">語言對比</span>
+                    <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-medium">
+                      {LANGUAGE_LABELS[card.language] || card.language}
+                    </span>
+                    <span className="text-gray-400">⇄</span>
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-xs font-medium">
+                      {LANGUAGE_LABELS[refCard.language] || refCard.language}
+                    </span>
+                    <button
+                      onClick={() => setRefCardId(null)}
+                      className="ml-auto text-xs text-gray-400 hover:text-gray-600"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 divide-x divide-gray-100">
+                    {renderCardContent(card, LANGUAGE_LABELS[card.language] || card.language, true)}
+                    <div className="pl-4">
+                      {renderCardContent(refCard, LANGUAGE_LABELS[refCard.language] || refCard.language, false)}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Effect Tags */}
             {(card.primaryCard.cardTier || (card.primaryCard.effectTags?.length > 0) || (card.primaryCard.specialEffectTags?.length > 0)) && (

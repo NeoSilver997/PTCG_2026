@@ -1522,6 +1522,22 @@ export class CardsService {
     });
   }
 
+  async getEffectKeywords(): Promise<any[]> {
+    return this.prisma.effectKeyword.findMany({
+      where: { active: true },
+      orderBy: { sortOrder: 'asc' },
+      select: {
+        id: true,
+        pattern: true,
+        isRegex: true,
+        flags: true,
+        colorClass: true,
+        category: true,
+        sortOrder: true,
+      },
+    });
+  }
+
   async getSpeciesSummary(): Promise<any[]> {
     const [allSpecies, latestImages, cardCountsRaw, evolvesFromRaw, evolutionStageRaw] = await Promise.all([
       // 1. All species, sorted by dex number
