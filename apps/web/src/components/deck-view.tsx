@@ -67,6 +67,7 @@ export interface DeckCardEntry {
 
 export type SectionKey =
   | 'pokemon-main'
+  | 'pokemon-secondary'
   | 'pokemon-support'
   | 'pokemon-evolution'
   | 'supporter'
@@ -77,12 +78,13 @@ export type SectionKey =
   | 'basic-energy'
   | 'special-energy';
 
-export type PokemonRole = 'pokemon-main' | 'pokemon-support' | 'pokemon-evolution';
+export type PokemonRole = 'pokemon-main' | 'pokemon-secondary' | 'pokemon-support' | 'pokemon-evolution';
 
 /* ─── Constants ──────────────────────────────────────────────────── */
 
 export const SECTION_ORDER: SectionKey[] = [
   'pokemon-main',
+  'pokemon-secondary',
   'pokemon-support',
   'pokemon-evolution',
   'supporter',
@@ -95,20 +97,22 @@ export const SECTION_ORDER: SectionKey[] = [
 ];
 
 export const SECTION_LABELS: Record<SectionKey, string> = {
-  'pokemon-main': '主力寶可夢',
+  'pokemon-main': '主攻寶可夢',
+  'pokemon-secondary': '副攻寶可夢',
   'pokemon-support': '輔助寶可夢',
   'pokemon-evolution': '進化鏈寶可夢',
-  supporter: 'Supporter',
-  item: 'Item',
+  supporter: '支援者',
+  item: '物品',
   ace: 'ACE SPEC',
-  tool: 'Pokémon Tool',
-  stadium: 'Stadium',
-  'basic-energy': 'Basic Energy',
-  'special-energy': 'Special Energy',
+  tool: '寶可夢道具',
+  stadium: '競技場',
+  'basic-energy': '基本能量',
+  'special-energy': '特殊能量',
 };
 
 export const SECTION_COLORS: Record<SectionKey, string> = {
   'pokemon-main': 'bg-emerald-600',
+  'pokemon-secondary': 'bg-lime-600',
   'pokemon-support': 'bg-teal-600',
   'pokemon-evolution': 'bg-violet-600',
   supporter: 'bg-blue-600',
@@ -138,10 +142,17 @@ export function isMainPokemon(entry: DeckCardEntry): boolean {
   return entry.quantity >= 3 || (entry.card.hp ?? 0) >= 200;
 }
 
+/** Non-main Pokémon with any ability are treated as support/utility rather than secondary attackers. */
+function hasSupportAbility(entry: DeckCardEntry): boolean {
+  return !!(entry.card.abilities && entry.card.abilities.length > 0);
+}
+
 export function getSectionKey(entry: DeckCardEntry): SectionKey {
   const { supertype, subtypes = [], rarity } = entry.card;
   if (supertype === 'POKEMON') {
-    return isMainPokemon(entry) ? 'pokemon-main' : 'pokemon-support';
+    if (isMainPokemon(entry)) return 'pokemon-main';
+    if (hasSupportAbility(entry)) return 'pokemon-support';
+    return 'pokemon-secondary';
   }
   if (supertype === 'ENERGY') {
     return subtypes.includes('BASIC_ENERGY') ? 'basic-energy' : 'special-energy';
@@ -321,7 +332,7 @@ export function EffectsSummary({ entries }: { entries: DeckCardEntry[] }) {
         if (!abilityCards.has(abilityName)) {
           abilityCards.set(abilityName, []);
         }
-        abilityCards.get(abilityName)!.push(entry.card.name);
+        abilityCards.get(abilityName)!.push(entry.card.zhName ?? entry.card.name);
       }
     }
   }
@@ -357,53 +368,95 @@ export function EffectsSummary({ entries }: { entries: DeckCardEntry[] }) {
 
 /* ─── Weakness Summary ─────────────────────────────────────────── */
 
-const TYPE_ZH: Record<string, string> = {
-  FIRE: '🔥 火', WATER: '💧 水', LIGHTNING: '⚡ 雷', GRASS: '🌿 草',
-  FIGHTING: '👊 格鬥', PSYCHIC: '🔮 超', DARKNESS: '🌑 惡',
-  METAL: '⚙️ 鋼', DRAGON: '🐉 龍', FAIRY: '✨ 妖精', COLORLESS: '⬜ 無色',
+const WEAKNESS_TYPE_CONFIG: Record<string, { label: string; emoji: string; bgColor: string; textColor: string }> = {
+  FIRE:      { label: '火',   emoji: '🔥', bgColor: 'bg-red-500',    textColor: 'text-red-400' },
+  WATER:     { label: '水',   emoji: '💧', bgColor: 'bg-blue-500',   textColor: 'text-blue-400' },
+  LIGHTNING: { label: '雷',   emoji: '⚡', bgColor: 'bg-yellow-400', textColor: 'text-yellow-400' },
+  GRASS:     { label: '草',   emoji: '🌿', bgColor: 'bg-green-500',  textColor: 'text-green-400' },
+  FIGHTING:  { label: '格鬥', emoji: '👊', bgColor: 'bg-orange-600', textColor: 'text-orange-400' },
+  PSYCHIC:   { label: '超能', emoji: '🔮', bgColor: 'bg-purple-500', textColor: 'text-purple-400' },
+  DARKNESS:  { label: '惡',   emoji: '🌑', bgColor: 'bg-gray-600',   textColor: 'text-gray-400' },
+  METAL:     { label: '鋼',   emoji: '⚙️', bgColor: 'bg-gray-500',   textColor: 'text-gray-400' },
+  DRAGON:    { label: '龍',   emoji: '🐉', bgColor: 'bg-purple-600', textColor: 'text-purple-400' },
+  FAIRY:     { label: '妖精', emoji: '✨', bgColor: 'bg-pink-400',   textColor: 'text-pink-400' },
+  COLORLESS: { label: '無色', emoji: '⬜', bgColor: 'bg-gray-400',   textColor: 'text-gray-400' },
 };
 
 export function WeaknessSummary({ entries }: { entries: DeckCardEntry[] }) {
   const pokemonEntries = entries.filter(e => e.card.supertype === 'POKEMON');
+  const totalPokemon = pokemonEntries.length;
 
-  const weaknessCounts = new Map<string, { value: string; count: number; cards: string[] }>();
+  if (totalPokemon === 0) {
+    return <div className="text-slate-400 text-sm text-center py-4">無弱點資料</div>;
+  }
+
+  const weaknessCounts = new Map<string, { value: string; count: number }>();
+  let noWeaknessCount = 0;
 
   for (const entry of pokemonEntries) {
     const ws = entry.card.weaknesses;
-    if (!ws || !Array.isArray(ws)) continue;
+    if (!ws || !Array.isArray(ws) || ws.length === 0) {
+      noWeaknessCount += 1;
+      continue;
+    }
     for (const w of ws) {
       if (!w?.type) continue;
       const existing = weaknessCounts.get(w.type);
       if (existing) {
-        existing.count += entry.quantity;
-        if (!existing.cards.includes(entry.card.name)) existing.cards.push(entry.card.name);
+        existing.count += 1;
       } else {
-        weaknessCounts.set(w.type, { value: w.value, count: entry.quantity, cards: [entry.card.name] });
+        weaknessCounts.set(w.type, { value: w.value, count: 1 });
       }
     }
   }
 
-  const totalPokemon = pokemonEntries.reduce((s, e) => s + e.quantity, 0);
   const sorted = Array.from(weaknessCounts.entries()).sort((a, b) => b[1].count - a[1].count);
+  const maxCount = Math.max(sorted[0]?.[1].count ?? 0, noWeaknessCount, 1);
 
-  if (sorted.length === 0) {
+  if (sorted.length === 0 && noWeaknessCount === 0) {
     return <div className="text-slate-400 text-sm text-center py-4">無弱點資料</div>;
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-      {sorted.map(([type, { value, count, cards }]) => {
-        const pct = totalPokemon > 0 ? Math.round((count / totalPokemon) * 100) : 0;
+    <div className="space-y-2">
+      {sorted.map(([type, { value, count }]) => {
+        const cfg = WEAKNESS_TYPE_CONFIG[type] ?? { label: type, emoji: '?', bgColor: 'bg-slate-500', textColor: 'text-slate-400' };
+        const pct = Math.round((count / totalPokemon) * 100);
+        const barPct = Math.round((count / maxCount) * 100);
         return (
-          <div key={type} className="bg-slate-800/60 rounded-lg p-3 border border-slate-600">
-            <div className="text-orange-400 font-bold text-sm mb-1">{TYPE_ZH[type] ?? type} {value}</div>
-            <div className="text-slate-300 text-xs mb-1">{count} 張 ({pct}%)</div>
-            <div className="text-slate-400 text-[10px] leading-tight">
-              {cards.slice(0, 2).join(', ')}{cards.length > 2 ? '...' : ''}
+          <div key={type} className="flex items-center gap-2">
+            <div className={`w-14 text-right text-xs font-medium ${cfg.textColor} shrink-0`}>
+              {cfg.emoji} {cfg.label}
+            </div>
+            <div className="flex-1 bg-slate-700 rounded-full h-2.5 overflow-hidden">
+              <div className={`h-full ${cfg.bgColor} rounded-full transition-all`} style={{ width: `${barPct}%` }} />
+            </div>
+            <div className="text-slate-300 text-xs w-24 text-right shrink-0">
+              {count}/{totalPokemon} 種 ({pct}%)
             </div>
           </div>
         );
       })}
+
+      {noWeaknessCount > 0 && (
+        <>
+          {sorted.length > 0 && <div className="border-t border-dashed border-slate-600 my-1" />}
+          <div className="flex items-center gap-2">
+            <div className="w-14 text-right text-xs font-medium text-purple-400 shrink-0">
+              🐉 龍
+            </div>
+            <div className="flex-1 bg-slate-700 rounded-full h-2.5 overflow-hidden">
+              <div
+                className="h-full bg-purple-600 rounded-full transition-all"
+                style={{ width: `${Math.round((noWeaknessCount / maxCount) * 100)}%` }}
+              />
+            </div>
+            <div className="text-slate-300 text-xs w-24 text-right shrink-0">
+              {noWeaknessCount}/{totalPokemon} 種 無弱點
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -964,7 +1017,8 @@ export function CopyDeckModal({
 /* ─── Card Tile ──────────────────────────────────────────────────── */
 
 const ROLE_LABELS: Record<PokemonRole, string> = {
-  'pokemon-main': '主力',
+  'pokemon-main': '主攻',
+  'pokemon-secondary': '副攻',
   'pokemon-support': '輔助',
   'pokemon-evolution': '進化鏈',
 };
@@ -980,7 +1034,7 @@ export function CardTile({
   onClick?: (entry: DeckCardEntry) => void;
   onRoleChange?: (webCardId: string, role: PokemonRole) => void;
 }) {
-  const isPokemon = section === 'pokemon-main' || section === 'pokemon-support' || section === 'pokemon-evolution';
+  const isPokemon = section === 'pokemon-main' || section === 'pokemon-secondary' || section === 'pokemon-support' || section === 'pokemon-evolution';
   const dmg = isPokemon ? maxDamage(entry.card.attacks) : 0;
   const colorClass = SECTION_COLORS[section] ?? 'bg-slate-600';
 
@@ -1034,7 +1088,7 @@ export function CardTile({
       {/* Role override buttons — Pokémon only, shown when wired up */}
       {onRoleChange && isPokemon && (
         <div className="flex gap-0.5 mt-0.5">
-          {(['pokemon-main', 'pokemon-support', 'pokemon-evolution'] as PokemonRole[]).map((role) => (
+          {(['pokemon-main', 'pokemon-secondary', 'pokemon-support', 'pokemon-evolution'] as PokemonRole[]).map((role) => (
             <button
               key={role}
               onClick={(e) => { e.stopPropagation(); onRoleChange(entry.card.primaryCardId ?? entry.card.canonicalWebCardId ?? entry.card.webCardId, role); }}

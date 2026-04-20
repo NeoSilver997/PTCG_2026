@@ -50,11 +50,13 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
 
   const DB_TO_ROLE: Record<string, PokemonRole> = {
     POKEMON_MAIN: 'pokemon-main',
+    POKEMON_SECONDARY: 'pokemon-secondary',
     POKEMON_SUPPORT: 'pokemon-support',
     POKEMON_EVOLUTION: 'pokemon-evolution',
   };
   const DB_ROLE: Record<PokemonRole, string> = {
     'pokemon-main': 'POKEMON_MAIN',
+    'pokemon-secondary': 'POKEMON_SECONDARY',
     'pokemon-support': 'POKEMON_SUPPORT',
     'pokemon-evolution': 'POKEMON_EVOLUTION',
   };
@@ -340,9 +342,20 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
           </div>
           
           <DeckSummary entries={deckEntries} pricing={data.pricing} priceBreakdownHref={`/deck-builder/event/${deckCode}/prices`} />
+
+          <div className="mt-4 pt-4 border-t border-slate-600 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <h3 className="text-slate-300 text-sm font-bold mb-3">效果摘要</h3>
+              <EffectsSummary entries={deckEntries} />
+            </div>
+            <div>
+              <h3 className="text-slate-300 text-sm font-bold mb-3">弱點摘要</h3>
+              <WeaknessSummary entries={deckEntries} />
+            </div>
+          </div>
         </div>
 
-        {/* Pokémon: Main attackers + Evolution chain (same row) */}
+        {/* Pokémon: Main (主攻) + Evolution chain (same row) */}
         <PairedPokemonSection
           sectionA="pokemon-main"
           sectionB="pokemon-evolution"
@@ -352,7 +365,15 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
           onRoleChange={handleRoleChange}
         />
 
-        {/* Pokémon: Support / tech */}
+        {/* Pokémon: Secondary attackers (副攻) */}
+        <DeckSection
+          section="pokemon-secondary"
+          entries={sections.get('pokemon-secondary') ?? []}
+          onCardClick={setSelectedCard}
+          onRoleChange={handleRoleChange}
+        />
+
+        {/* Pokémon: Support / tech (輔助) */}
         <DeckSection
           section="pokemon-support"
           entries={sections.get('pokemon-support') ?? []}
@@ -391,18 +412,7 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
           onCardClick={setSelectedCard}
         />
 
-        {/* Effects Summary */}
-        <div className="bg-slate-700/60 rounded-xl p-4 mb-6 border border-slate-600">
-          <h2 className="text-white text-lg font-bold mb-4">效果摘要</h2>
-          <EffectsSummary entries={deckEntries} />
-        </div>
-
-        {/* Weakness Summary */}
-        <div className="bg-slate-700/60 rounded-xl p-4 mb-6 border border-slate-600">
-          <h2 className="text-white text-lg font-bold mb-4">弱點摘要</h2>
-          <WeaknessSummary entries={deckEntries} />
-        </div>
-      </div>
+      </div>{/* /max-w-7xl */}
 
       {/* Card detail modal */}
       {selectedCard && (

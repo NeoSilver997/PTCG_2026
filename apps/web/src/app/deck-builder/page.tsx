@@ -87,6 +87,7 @@ function DeckViewMode({ deckId, onEdit }: { deckId: string; onEdit: () => void }
         </div>
 
         <DeckSection section="pokemon-main" entries={sections.get('pokemon-main') ?? []} onCardClick={setSelectedCard} />
+        <DeckSection section="pokemon-secondary" entries={sections.get('pokemon-secondary') ?? []} onCardClick={setSelectedCard} />
         <DeckSection section="pokemon-support" entries={sections.get('pokemon-support') ?? []} onCardClick={setSelectedCard} />
         <DeckSection section="ace" entries={sections.get('ace') ?? []} onCardClick={setSelectedCard} />
         <PairedSection sectionA="supporter" sectionB="stadium"

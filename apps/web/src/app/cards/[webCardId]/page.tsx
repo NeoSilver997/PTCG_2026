@@ -237,6 +237,9 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
   const [showAllVariants, setShowAllVariants] = useState(false);
   // State for 2-language side-by-side reference
   const [refCardId, setRefCardId] = useState<string | null>(null);
+  // Pagination for sameNameCards (其他版本)
+  const [sameNamePage, setSameNamePage] = useState(0);
+  const SAME_NAME_PAGE_SIZE = 12;
 
   // Create all variants array including current card
   const allVariants = card ? [card, ...(card.languageVariants || [])] : [];
@@ -968,64 +971,55 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
 
             {/* ── 2-Language Comparison Panel ───────────────────────────── */}
             {refCard && (() => {
-              // Always use `card` (fully loaded) for the left column;
-              // language variants from languageVariants[] are partial objects without abilities/attacks.
-              const renderCardContent = (c: CardDetail, label: string, highlight: boolean) => {
-                // For TRAINER/ENERGY: plain text field; for POKEMON: abilities + attacks
-                const trainerText =
-                  (c.supertype === 'TRAINER' || c.supertype === 'ENERGY')
-                    ? (c.text?.trim() ||
-                       (Array.isArray(c.abilities)
-                         ? c.abilities.map((a: any) => a.text || a.description).filter(Boolean).join('\n\n')
-                         : ''))
-                    : '';
-                const abilities = Array.isArray(c.abilities)
-                  ? c.abilities.filter((a: any) => (a.text || a.description) && (c.supertype === 'POKEMON' || a.name))
-                  : [];
-                const attacks = Array.isArray(c.attacks) ? c.attacks : [];
-                const hasContent = trainerText || abilities.length > 0 || attacks.length > 0;
+              // Helper: extract all text blocks from a card
+              const getCardBlocks = (c: CardDetail) => {
+                if (c.supertype === 'TRAINER' || c.supertype === 'ENERGY') {
+                  const t = c.text?.trim() ||
+                    (Array.isArray(c.abilities) ? c.abilities.map((a: any) => a.text || a.description).filter(Boolean).join('\n\n') : '');
+                  return t ? [{ type: 'trainer' as const, name: null, text: t }] : [];
+                }
+                const blocks: Array<{ type: 'ability' | 'attack'; name: string | null; text: string; damage?: string }> = [];
+                if (Array.isArray(c.abilities)) {
+                  c.abilities.filter((a: any) => a.text || a.description).forEach((a: any) =>
+                    blocks.push({ type: 'ability', name: a.name || null, text: (a.text || a.description).trim() })
+                  );
+                }
+                if (Array.isArray(c.attacks)) {
+                  c.attacks.forEach((atk: any) =>
+                    blocks.push({ type: 'attack', name: atk.name || null, text: (atk.effect || atk.text || '').trim(), damage: atk.damage })
+                  );
+                }
+                return blocks;
+              };
+
+              const leftBlocks = getCardBlocks(card);
+              const rightBlocks = getCardBlocks(refCard);
+
+              // Pair blocks by index; detect same text
+              const maxLen = Math.max(leftBlocks.length, rightBlocks.length);
+              const pairs = Array.from({ length: maxLen }, (_, i) => ({
+                left: leftBlocks[i] ?? null,
+                right: rightBlocks[i] ?? null,
+                same: !!(leftBlocks[i] && rightBlocks[i] && leftBlocks[i].text === rightBlocks[i].text),
+              }));
+
+              const renderBlock = (b: typeof leftBlocks[0] | null, highlight: boolean) => {
+                if (!b) return <div className="text-xs text-gray-300 italic">—</div>;
                 return (
-                  <div className="flex-1 min-w-0 space-y-3">
-                    <div className={`text-sm font-semibold pb-1 border-b ${
-                      highlight ? 'text-blue-700 border-blue-200' : 'text-emerald-700 border-emerald-200'
-                    }`}>{label}</div>
-                    {!hasContent && (
-                      <p className="text-xs text-gray-400">無文字資料</p>
+                  <div>
+                    {b.name && (
+                      <div className={`text-xs font-semibold mb-0.5 ${
+                        b.type === 'ability' ? (highlight ? 'text-blue-700' : 'text-emerald-700') : 'text-gray-700'
+                      }`}>
+                        {b.type === 'ability' ? '★ ' : ''}{b.name}
+                        {(b as any).damage && <span className="ml-2 font-bold text-red-600">{(b as any).damage}</span>}
+                      </div>
                     )}
-                    {trainerText && (
+                    {b.text && (
                       <p className="text-sm text-gray-800">
-                        {highlight ? <HighlightedText text={trainerText} rules={effectKeywords} /> : <span className="whitespace-pre-wrap">{trainerText}</span>}
+                        {highlight ? <HighlightedText text={b.text} rules={effectKeywords} /> : <span className="whitespace-pre-wrap">{b.text}</span>}
                       </p>
                     )}
-                    {abilities.map((a: any, i: number) => (
-                      <div key={i}>
-                        {a.name && (
-                          <div className={`text-xs font-semibold mb-0.5 ${
-                            highlight ? 'text-blue-700' : 'text-emerald-700'
-                          }`}>
-                            ★ {a.name}
-                          </div>
-                        )}
-                        <p className="text-sm text-gray-800">
-                          {highlight ? <HighlightedText text={a.text || a.description} rules={effectKeywords} /> : <span className="whitespace-pre-wrap">{a.text || a.description}</span>}
-                        </p>
-                      </div>
-                    ))}
-                    {attacks.map((atk: any, i: number) => (
-                      <div key={i} className="pt-2 border-t border-gray-100 first:border-0 first:pt-0">
-                        <div className="flex items-center justify-between mb-0.5">
-                          <span className="text-sm font-semibold text-gray-900">{atk.name}</span>
-                          {atk.damage && (
-                            <span className="text-sm font-bold text-red-600">{atk.damage}</span>
-                          )}
-                        </div>
-                        {(atk.effect || atk.text) && (
-                          <p className="text-sm text-gray-700">
-                            {highlight ? <HighlightedText text={atk.effect || atk.text} rules={effectKeywords} /> : <span className="whitespace-pre-wrap">{atk.effect || atk.text}</span>}
-                          </p>
-                        )}
-                      </div>
-                    ))}
                   </div>
                 );
               };
@@ -1048,11 +1042,39 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                       ✕
                     </button>
                   </div>
-                  <div className="grid grid-cols-2 gap-4 divide-x divide-gray-100">
-                    {renderCardContent(card, LANGUAGE_LABELS[card.language] || card.language, true)}
-                    <div className="pl-4">
-                      {renderCardContent(refCard, LANGUAGE_LABELS[refCard.language] || refCard.language, false)}
-                    </div>
+
+                  {pairs.length === 0 && (
+                    <p className="text-xs text-gray-400">無文字資料</p>
+                  )}
+
+                  <div className="space-y-3">
+                    {pairs.map((pair, i) => (
+                      <div key={i} className={`rounded-lg ${pair.same ? 'bg-gray-50 border border-gray-200' : ''}`}>
+                        {pair.same ? (
+                          /* Grouped: same text on both sides — show once with a badge */
+                          <div className="p-3">
+                            <div className="flex items-center gap-2 mb-1.5">
+                              {pair.left?.name && (
+                                <span className={`text-xs font-semibold ${pair.left.type === 'ability' ? 'text-purple-700' : 'text-gray-700'}`}>
+                                  {pair.left.type === 'ability' ? '★ ' : ''}{pair.left.name}
+                                  {pair.left.damage && <span className="ml-2 font-bold text-red-600">{pair.left.damage}</span>}
+                                </span>
+                              )}
+                              <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">≡ 同文</span>
+                            </div>
+                            <p className="text-sm text-gray-700">
+                              <HighlightedText text={pair.left!.text} rules={effectKeywords} />
+                            </p>
+                          </div>
+                        ) : (
+                          /* Different: show side by side */
+                          <div className="grid grid-cols-2 gap-4 divide-x divide-gray-100">
+                            <div>{renderBlock(pair.left, true)}</div>
+                            <div className="pl-4">{renderBlock(pair.right, false)}</div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </div>
               );
@@ -1402,44 +1424,74 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
             {sameNameCards.length > 0 && (
               <div className="bg-white rounded-lg p-3 shadow-sm">
                 <h2 className="text-xl font-semibold mb-3 text-gray-900">相關卡片</h2>
-                {/* Same Name Cards */}
-                {sameNameCards.length > 0 && (
-                  <div className="mb-3">
-                    <div className="text-sm font-medium text-gray-700 mb-2">
-                      同名卡片 ({sameNameCards.length} 個版本)：
-                    </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
-                      {sameNameCards.slice(0, 10).map((relatedCard: any) => (
-                        <Link
-                          key={relatedCard.webCardId}
-                          href={`/cards/${relatedCard.webCardId}`}
-                          className="block bg-white border-2 border-blue-200 hover:border-blue-400 rounded-lg p-2 transition-all hover:shadow-lg"
-                        >
-                          {relatedCard.imageUrl && (
-                            <img
-                              src={relatedCard.imageUrl}
-                              alt={relatedCard.name}
-                              className="w-full h-24 object-contain mb-1 rounded"
-                            />
-                          )}
-                          <div className="text-sm font-medium text-gray-900 mb-1 truncate" title={relatedCard.name}>
-                            {relatedCard.name}
+                {/* Same Name Cards with pagination */}
+                {sameNameCards.length > 0 && (() => {
+                  const totalPages = Math.ceil(sameNameCards.length / SAME_NAME_PAGE_SIZE);
+                  const paginated = sameNameCards.slice(
+                    sameNamePage * SAME_NAME_PAGE_SIZE,
+                    (sameNamePage + 1) * SAME_NAME_PAGE_SIZE
+                  );
+                  return (
+                    <div className="mb-3">
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
+                        <div className="text-sm font-medium text-gray-700">
+                          同名卡片 ({sameNameCards.length} 個版本)：
+                        </div>
+                        {totalPages > 1 && (
+                          <div className="flex items-center gap-1 ml-auto">
+                            <button
+                              onClick={() => setSameNamePage(p => Math.max(0, p - 1))}
+                              disabled={sameNamePage === 0}
+                              className="px-2 py-0.5 text-xs rounded border border-gray-300 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+                            >
+                              ‹ 上頁
+                            </button>
+                            <span className="text-xs text-gray-500 px-1">
+                              {sameNamePage + 1} / {totalPages}
+                            </span>
+                            <button
+                              onClick={() => setSameNamePage(p => Math.min(totalPages - 1, p + 1))}
+                              disabled={sameNamePage === totalPages - 1}
+                              className="px-2 py-0.5 text-xs rounded border border-gray-300 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+                            >
+                              下頁 ›
+                            </button>
                           </div>
-                          {relatedCard.variantType && (
-                            <div className="text-xs text-blue-600 font-medium">
-                              {relatedCard.variantType}
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
+                        {paginated.map((relatedCard: any) => (
+                          <Link
+                            key={relatedCard.webCardId}
+                            href={`/cards/${relatedCard.webCardId}`}
+                            className="block bg-white border-2 border-blue-200 hover:border-blue-400 rounded-lg p-2 transition-all hover:shadow-lg"
+                          >
+                            {relatedCard.imageUrl && (
+                              <img
+                                src={relatedCard.imageUrl}
+                                alt={relatedCard.name}
+                                className="w-full h-24 object-contain mb-1 rounded"
+                              />
+                            )}
+                            <div className="text-sm font-medium text-gray-900 mb-1 truncate" title={relatedCard.name}>
+                              {relatedCard.name}
                             </div>
-                          )}
-                          {relatedCard.regionalExpansion?.code && (
-                            <div className="text-xs text-gray-600">
-                              {relatedCard.regionalExpansion.code}
-                            </div>
-                          )}
-                        </Link>
-                      ))}
+                            {relatedCard.variantType && (
+                              <div className="text-xs text-blue-600 font-medium">
+                                {relatedCard.variantType}
+                              </div>
+                            )}
+                            {relatedCard.regionalExpansion?.code && (
+                              <div className="text-xs text-gray-600">
+                                {relatedCard.regionalExpansion.code}
+                              </div>
+                            )}
+                          </Link>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             )}
 
@@ -1885,7 +1937,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                             )}
                           </h3>
                           <div className="space-y-2">
-                            {displayWeek.decks.map((deck: any, i: number) => (
+                            {[...(displayWeek.decks)].sort((a: any, b: any) => (a.placement ?? 9999) - (b.placement ?? 9999)).map((deck: any, i: number) => (
                               <div
                                 key={deck.deckId}
                                 className="flex items-center gap-3 p-2.5 bg-gray-50 rounded-lg border border-gray-100 hover:border-gray-300 transition-colors"

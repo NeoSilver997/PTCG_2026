@@ -63,13 +63,25 @@ interface CardStats {
 function CardsPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [filters, setFilters] = useState<typeof DEFAULT_FILTERS>(getInitialFilters);
+
+  // Derive URL params before state initialization so they win on first render
+  const urlEffectTag = searchParams.get('effectTag');
+  const urlCardTier = searchParams.get('cardTier');
+
+  const [filters, setFilters] = useState<typeof DEFAULT_FILTERS>(() => {
+    const base = getInitialFilters();
+    if (urlEffectTag) {
+      return { ...base, effectTag: urlEffectTag, regulationMark: '', expansionCode: '' };
+    }
+    if (urlCardTier) {
+      return { ...base, cardTier: urlCardTier };
+    }
+    return base;
+  });
   const [skip, setSkip] = useState(0);
   const [hideDuplicates, setHideDuplicates] = useState(false);
 
   // Derive URL params so the effect dependency is stable scalars (re-runs on client-side navigation)
-  const urlEffectTag = searchParams.get('effectTag');
-  const urlCardTier = searchParams.get('cardTier');
 
   // Apply URL params each time they change (covers both initial load and client-side navigation)
   useEffect(() => {
