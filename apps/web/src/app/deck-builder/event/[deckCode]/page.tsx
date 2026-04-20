@@ -267,7 +267,7 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
 
   // ACE SPEC card from ace section
   const aceEntry = (sections.get('ace') ?? [])[0];
-  const aceName = aceEntry?.card.name ?? null;
+  const aceName = aceEntry ? (aceEntry.card.zhName ?? aceEntry.card.name ?? null) : null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-4 md:p-6">
@@ -343,15 +343,9 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
           
           <DeckSummary entries={deckEntries} pricing={data.pricing} priceBreakdownHref={`/deck-builder/event/${deckCode}/prices`} />
 
-          <div className="mt-4 pt-4 border-t border-slate-600 grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <h3 className="text-slate-300 text-sm font-bold mb-3">效果摘要</h3>
-              <EffectsSummary entries={deckEntries} />
-            </div>
-            <div>
-              <h3 className="text-slate-300 text-sm font-bold mb-3">弱點摘要</h3>
-              <WeaknessSummary entries={deckEntries} />
-            </div>
+          <div className="mt-4 pt-4 border-t border-slate-600">
+            <h3 className="text-slate-300 text-sm font-bold mb-3">效果摘要</h3>
+            <EffectsSummary entries={deckEntries} />
           </div>
         </div>
 

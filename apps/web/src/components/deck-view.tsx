@@ -314,80 +314,118 @@ export function DeckSummary({ entries, pricing, priceBreakdownHref }: {
     .map((k) => ({ value: sectionQtys.get(k)!, color: SECTION_HEX[k], label: SECTION_LABELS[k] }));
   const totalCards = entries.reduce((s, e) => s + e.quantity, 0);
 
+  // 起手構成% — hypergeometric: P(at least 1 basic pokemon OR energy in opening 7)
+  // Opening hand = 7 cards from 60. P(0 key cards) = C(60-keyQty, 7) / C(60, 7)
+  const basicPokemonQty = entries
+    .filter((e) => e.card.supertype === 'POKEMON' && (e.card.evolutionStage === 'BASIC' || !e.card.evolutionStage))
+    .reduce((s, e) => s + e.quantity, 0);
+  const basicEnergyQty = (sectionQtys.get('basic-energy') ?? 0) + (sectionQtys.get('special-energy') ?? 0);
+  const keyCardQty = basicPokemonQty + basicEnergyQty;
+
+  function comb(n: number, k: number): number {
+    if (k > n || k < 0) return 0;
+    if (k === 0 || k === n) return 1;
+    let result = 1;
+    for (let i = 0; i < k; i++) {
+      result = result * (n - i) / (i + 1);
+    }
+    return result;
+  }
+
+  const deckSize = Math.max(totalCards, 1);
+  const handSize = Math.min(7, deckSize);
+  const nonKey = deckSize - keyCardQty;
+  const pNone = nonKey >= handSize ? comb(nonKey, handSize) / comb(deckSize, handSize) : 0;
+  const openingPct = Math.round((1 - pNone) * 100);
+
   return (
-    <div className="flex flex-wrap gap-4 items-start">
-      {/* Composition donut chart */}
-      <div className="flex items-center gap-3">
-        <DonutChart data={pieSections} size={96} thickness={22} centerLabel={`${totalCards}`} />
-        <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
-          {pieSections.map((s) => (
-            <div key={s.label} className="flex items-center gap-1 min-w-0">
-              <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: s.color }} />
-              <span className="text-slate-300 text-[10px] truncate">{s.label}</span>
-              <span className="text-slate-500 text-[10px] ml-auto pl-1">{s.value}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Stats row */}
-      <div className="flex gap-3 flex-wrap sm:ml-auto">
-        {/* Deck Pricing */}
-        {pricing?.zh && (pricing.zh.lowestTotal > 0 || pricing.zh.budgetTotal > 0) && (() => {
-          const zh = pricing.zh!;
-          const hasUserPrices = entries.some((e) => e.userPrice != null);
-          let low: number;
-          if (hasUserPrices) {
-            low = entries.reduce((sum, e) => {
-              if (!e.zhVariantPricing && !e.zhPricing && !isBasicEnergy(e)) return sum;
-              const base = isBasicEnergy(e) ? 1 : (e.zhVariantPricing?.lowestRarity ?? e.zhPricing?.lowest ?? 0);
-              return sum + (e.userPrice ?? base) * e.quantity;
-            }, 0);
-          } else {
-            low = zh.budgetTotal || zh.lowestTotal || 0;
-          }
-          const high = zh.premiumTotal || zh.highestTotal || 0;
-          return (
-            <div className="bg-slate-800/60 rounded-lg p-3 border border-yellow-900/40 text-center min-w-[100px]">
-              <div className="text-slate-400 text-[10px] uppercase tracking-wide mb-1">港幣價格</div>
-              <div className="text-sm font-bold leading-tight">
-                <span className={`${hasUserPrices ? 'text-blue-400' : 'text-green-400'}`}>HK${low.toLocaleString()}</span>
-                <span className="text-slate-500 mx-1">–</span>
-                <span className="text-red-400">HK${high.toLocaleString()}</span>
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-4 items-start">
+        {/* Composition donut chart */}
+        <div className="flex items-center gap-3">
+          <DonutChart data={pieSections} size={96} thickness={22} centerLabel={`${totalCards}`} />
+          <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+            {pieSections.map((s) => (
+              <div key={s.label} className="flex items-center gap-1 min-w-0">
+                <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: s.color }} />
+                <span className="text-slate-300 text-[10px] truncate">{s.label}</span>
+                <span className="text-slate-500 text-[10px] ml-auto pl-1">{s.value}</span>
               </div>
-              {priceBreakdownHref && (
-                <a href={priceBreakdownHref} className="text-blue-400 text-[9px] underline inline-flex items-center gap-0.5 mt-1 hover:text-blue-300 transition-colors">
-                  詳細價格 <ExternalLink size={8} />
-                </a>
-              )}
-            </div>
-          );
-        })()}
-
-        {/* Highest HP */}
-        <div className="bg-slate-800/60 rounded-lg p-3 border border-red-900/40 text-center min-w-[80px]">
-          <div className="text-slate-400 text-[10px] uppercase tracking-wide mb-1">最高 HP</div>
-          {highestHp ? (
-            <>
-              <div className="text-red-400 font-bold text-xl">{highestHp.card.hp}</div>
-              <div className="text-slate-300 text-[10px] truncate mt-0.5">{highestHp.card.zhName ?? highestHp.card.name}</div>
-            </>
-          ) : (
-            <div className="text-slate-500 text-sm">—</div>
-          )}
+            ))}
+          </div>
         </div>
 
-        {/* Highest Damage */}
-        <div className="bg-slate-800/60 rounded-lg p-3 border border-orange-900/40 text-center min-w-[80px]">
-          <div className="text-slate-400 text-[10px] uppercase tracking-wide mb-1">最高傷害</div>
-          {highestDmg && highestDmg.dmg > 0 ? (
-            <>
-              <div className="text-orange-400 font-bold text-xl">{highestDmg.dmg}</div>
-              <div className="text-slate-300 text-[10px] truncate mt-0.5">{highestDmg.entry.card.zhName ?? highestDmg.entry.card.name}</div>
-            </>
-          ) : (
-            <div className="text-slate-500 text-sm">—</div>
-          )}
+        {/* Weakness donut chart */}
+        <div className="flex-shrink-0">
+          <WeaknessSummary entries={entries} />
+        </div>
+
+        {/* Stats row */}
+        <div className="flex gap-3 flex-wrap sm:ml-auto">
+          {/* Opening hand % */}
+          <div className="bg-slate-800/60 rounded-lg p-3 border border-indigo-900/40 text-center min-w-[80px]">
+            <div className="text-slate-400 text-[10px] uppercase tracking-wide mb-1">起手構成</div>
+            <div className="text-indigo-400 font-bold text-xl">{openingPct}%</div>
+            <div className="text-slate-500 text-[9px] mt-0.5">基礎{basicPokemonQty}+能量{basicEnergyQty}</div>
+          </div>
+
+          {/* Deck Pricing */}
+          {pricing?.zh && (pricing.zh.lowestTotal > 0 || pricing.zh.budgetTotal > 0) && (() => {
+            const zh = pricing.zh!;
+            const hasUserPrices = entries.some((e) => e.userPrice != null);
+            let low: number;
+            if (hasUserPrices) {
+              low = entries.reduce((sum, e) => {
+                if (!e.zhVariantPricing && !e.zhPricing && !isBasicEnergy(e)) return sum;
+                const base = isBasicEnergy(e) ? 1 : (e.zhVariantPricing?.lowestRarity ?? e.zhPricing?.lowest ?? 0);
+                return sum + (e.userPrice ?? base) * e.quantity;
+              }, 0);
+            } else {
+              low = zh.budgetTotal || zh.lowestTotal || 0;
+            }
+            const high = zh.premiumTotal || zh.highestTotal || 0;
+            return (
+              <div className="bg-slate-800/60 rounded-lg p-3 border border-yellow-900/40 text-center min-w-[100px]">
+                <div className="text-slate-400 text-[10px] uppercase tracking-wide mb-1">港幣價格</div>
+                <div className="text-sm font-bold leading-tight">
+                  <span className={`${hasUserPrices ? 'text-blue-400' : 'text-green-400'}`}>HK${low.toLocaleString()}</span>
+                  <span className="text-slate-500 mx-1">–</span>
+                  <span className="text-red-400">HK${high.toLocaleString()}</span>
+                </div>
+                {priceBreakdownHref && (
+                  <a href={priceBreakdownHref} className="text-blue-400 text-[9px] underline inline-flex items-center gap-0.5 mt-1 hover:text-blue-300 transition-colors">
+                    詳細價格 <ExternalLink size={8} />
+                  </a>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Highest HP */}
+          <div className="bg-slate-800/60 rounded-lg p-3 border border-red-900/40 text-center min-w-[80px]">
+            <div className="text-slate-400 text-[10px] uppercase tracking-wide mb-1">最高 HP</div>
+            {highestHp ? (
+              <>
+                <div className="text-red-400 font-bold text-xl">{highestHp.card.hp}</div>
+                <div className="text-slate-300 text-[10px] truncate mt-0.5">{highestHp.card.zhName ?? highestHp.card.name}</div>
+              </>
+            ) : (
+              <div className="text-slate-500 text-sm">—</div>
+            )}
+          </div>
+
+          {/* Highest Damage */}
+          <div className="bg-slate-800/60 rounded-lg p-3 border border-orange-900/40 text-center min-w-[80px]">
+            <div className="text-slate-400 text-[10px] uppercase tracking-wide mb-1">最高傷害</div>
+            {highestDmg && highestDmg.dmg > 0 ? (
+              <>
+                <div className="text-orange-400 font-bold text-xl">{highestDmg.dmg}</div>
+                <div className="text-slate-300 text-[10px] truncate mt-0.5">{highestDmg.entry.card.zhName ?? highestDmg.entry.card.name}</div>
+              </>
+            ) : (
+              <div className="text-slate-500 text-sm">—</div>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -899,7 +937,7 @@ export function CardDetailModal({
             {/* Attacks */}
             {card.attacks && card.attacks.length > 0 && (
               <div>
-                <div className="text-slate-400 text-[10px] uppercase tracking-wide mb-1.5">Attacks</div>
+                <div className="text-slate-400 text-[10px] uppercase tracking-wide mb-1.5">招式</div>
                 {card.attacks.map((atk, i) => (
                   <div key={i} className="mb-2">
                     <div className="flex items-baseline justify-between gap-1">
