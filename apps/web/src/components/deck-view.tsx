@@ -52,6 +52,11 @@ export interface DeckCardDetail {
   zhName?: string | null;
   zhWebCardId?: string | null;
   zhImageUrl?: string | null;
+  /** Chinese abilities/attacks resolved from ZH_TW card variant */
+  zhAbilities?: AbilityData[] | null;
+  zhAttacks?: AttackData[] | null;
+  /** Effect tags from PrimaryCard (e.g. ["傷害防穡", "搜尋加速"]) */
+  effectTags?: string[] | null;
 }
 
 export interface DeckCardEntry {
@@ -126,17 +131,17 @@ export const SECTION_COLORS: Record<SectionKey, string> = {
 
 /** Solid hex colors for SVG pie/donut charts — mirrors SECTION_COLORS Tailwind classes */
 const SECTION_HEX: Record<SectionKey, string> = {
-  'pokemon-main':      '#059669',
-  'pokemon-secondary': '#65a30d',
-  'pokemon-support':   '#0d9488',
-  'pokemon-evolution': '#7c3aed',
-  supporter:           '#2563eb',
-  item:                '#64748b',
-  ace:                 '#eab308',
-  tool:                '#9333ea',
-  stadium:             '#0e7490',
-  'basic-energy':      '#ea580c',
-  'special-energy':    '#db2777',
+  'pokemon-main':      '#10b981',  // emerald-500 — main attacker (bright green)
+  'pokemon-secondary': '#f59e0b',  // amber-500   — secondary (clearly different from green)
+  'pokemon-support':   '#22d3ee',  // cyan-400    — support/utility
+  'pokemon-evolution': '#818cf8',  // indigo-400  — evolution chain
+  supporter:           '#3b82f6',  // blue-500
+  item:                '#94a3b8',  // slate-400   — slightly lighter = more visible
+  ace:                 '#fde047',  // yellow-300  — ACE SPEC bright gold
+  tool:                '#e879f9',  // fuchsia-400 — distinct from evolution indigo
+  stadium:             '#2dd4bf',  // teal-400
+  'basic-energy':      '#fb923c',  // orange-400
+  'special-energy':    '#f472b6',  // pink-400
 };
 
 /* ─── Helpers ────────────────────────────────────────────────────── */
@@ -435,29 +440,32 @@ export function DeckSummary({ entries, pricing, priceBreakdownHref }: {
 /* ─── Effects Summary ───────────────────────────────────────────────── */
 
 export function EffectsSummary({ entries }: { entries: DeckCardEntry[] }) {
-  const pokemonCards = entries.filter(e => e.card.supertype === 'POKEMON' && e.card.abilities);
+  const pokemonCards = entries.filter(e => e.card.supertype === 'POKEMON' && (e.card.zhAbilities ?? e.card.abilities));
 
-  // Extract and count abilities
-  const abilityCounts = new Map<string, number>();
-  const abilityCards = new Map<string, string[]>(); // ability -> [card names]
+  // Extract and count abilities — prefer ZH_TW ability name; fall back to JP
+  // Key: zh name if present (deduplicates across JP/ZH variants of the same ability)
+  const abilityCounts = new Map<string, { count: number; jpName: string }>();
+  const abilityCards = new Map<string, string[]>(); // key -> [card names]
 
   for (const entry of pokemonCards) {
-    if (entry.card.abilities) {
-      for (const ability of entry.card.abilities) {
-        const abilityName = ability.name;
-        abilityCounts.set(abilityName, (abilityCounts.get(abilityName) || 0) + entry.quantity);
-        
-        if (!abilityCards.has(abilityName)) {
-          abilityCards.set(abilityName, []);
-        }
-        abilityCards.get(abilityName)!.push(entry.card.zhName ?? entry.card.name);
+    const abilities = entry.card.zhAbilities ?? entry.card.abilities ?? [];
+    const jpAbilities = entry.card.abilities ?? [];
+    for (let idx = 0; idx < abilities.length; idx++) {
+      const ability = abilities[idx];
+      const jpName = jpAbilities[idx]?.name ?? ability.name;
+      const abilityName = ability.name; // chinese name if zh, else jp
+      if (!abilityCounts.has(abilityName)) {
+        abilityCounts.set(abilityName, { count: 0, jpName });
       }
+      abilityCounts.get(abilityName)!.count += entry.quantity;
+      if (!abilityCards.has(abilityName)) abilityCards.set(abilityName, []);
+      abilityCards.get(abilityName)!.push(entry.card.zhName ?? entry.card.name);
     }
   }
 
   // Sort by frequency
   const sortedAbilities = Array.from(abilityCounts.entries())
-    .sort((a, b) => b[1] - a[1])
+    .sort((a, b) => b[1].count - a[1].count)
     .slice(0, 8); // Top 8 abilities
 
   if (sortedAbilities.length === 0) {
@@ -470,9 +478,12 @@ export function EffectsSummary({ entries }: { entries: DeckCardEntry[] }) {
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-      {sortedAbilities.map(([abilityName, count]) => (
+      {sortedAbilities.map(([abilityName, { count, jpName }]) => (
         <div key={abilityName} className="bg-slate-800/60 rounded-lg p-3 border border-slate-600">
-          <div className="text-purple-400 font-bold text-sm mb-1">{abilityName}</div>
+          <div className="text-purple-400 font-bold text-sm mb-0.5">{abilityName}</div>
+          {abilityName !== jpName && (
+            <div className="text-slate-600 text-[9px] mb-1 truncate">{jpName}</div>
+          )}
           <div className="text-slate-300 text-xs mb-2">{count} 張卡牌</div>
           <div className="text-slate-400 text-[10px] leading-tight">
             {abilityCards.get(abilityName)?.slice(0, 2).join(', ')}
@@ -508,7 +519,8 @@ const WEAKNESS_HEX: Record<string, string> = {
 
 export function WeaknessSummary({ entries }: { entries: DeckCardEntry[] }) {
   const pokemonEntries = entries.filter(e => e.card.supertype === 'POKEMON');
-  const totalPokemon = pokemonEntries.length;
+  // Count by card quantity (not unique types) so eg. 4 copies of a dragon-weak card = 4
+  const totalPokemon = pokemonEntries.reduce((s, e) => s + e.quantity, 0);
 
   if (totalPokemon === 0) {
     return <div className="text-slate-400 text-sm text-center py-4">無弱點資料</div>;
@@ -520,16 +532,16 @@ export function WeaknessSummary({ entries }: { entries: DeckCardEntry[] }) {
   for (const entry of pokemonEntries) {
     const ws = entry.card.weaknesses;
     if (!ws || !Array.isArray(ws) || ws.length === 0) {
-      noWeaknessCount += 1;
+      noWeaknessCount += entry.quantity;
       continue;
     }
     for (const w of ws) {
       if (!w?.type) continue;
       const existing = weaknessCounts.get(w.type);
       if (existing) {
-        existing.count += 1;
+        existing.count += entry.quantity;
       } else {
-        weaknessCounts.set(w.type, { value: w.value, count: 1 });
+        weaknessCounts.set(w.type, { value: w.value, count: entry.quantity });
       }
     }
   }
@@ -560,11 +572,82 @@ export function WeaknessSummary({ entries }: { entries: DeckCardEntry[] }) {
             <div key={d.label} className="flex items-center gap-1.5 text-[10px]">
               <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: d.color }} />
               <span className="text-slate-300 w-14 shrink-0">{d.label}</span>
-              <span className="text-slate-500">{count}/{totalPokemon} 種 ({pct}%)</span>
+              <span className="text-slate-500">{count}/{totalPokemon} 張 ({pct}%)</span>
             </div>
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/* ─── Effect Tag Summary ─────────────────────────────────── */
+
+// Brief colour map for common effect tag categories
+const EFFECT_TAG_COLORS: Record<string, string> = {
+  '傷害防穡': '#6366f1',  // indigo
+  '額外傷害': '#ef4444',  // red
+  '搜尋加速': '#10b981',  // emerald
+  '手牌工具': '#3b82f6',  // blue
+  '投擲控制': '#a855f7',  // purple
+  '狀態控制': '#ec4899',  // pink
+  '能量加速': '#f97316',  // orange
+  '回復治療': '#14b8a6',  // teal
+  '进化加速': '#8b5cf6',  // violet
+  '手牌展開': '#06b6d4',  // cyan
+  '傷害加透': '#f59e0b',  // amber
+  '贸沈控制': '#84cc16',  // lime
+};
+
+const TAG_DEFAULT_COLOR = '#64748b'; // slate
+
+export function EffectTagSummary({ entries }: { entries: DeckCardEntry[] }) {
+  // Collect all effectTags across all cards, weighted by quantity
+  const tagCounts = new Map<string, { qty: number; cards: string[] }>();
+
+  for (const entry of entries) {
+    const tags = entry.card.effectTags;
+    if (!tags?.length) continue;
+    const displayName = entry.card.zhName ?? entry.card.name;
+    for (const tag of tags) {
+      if (!tagCounts.has(tag)) tagCounts.set(tag, { qty: 0, cards: [] });
+      const rec = tagCounts.get(tag)!;
+      rec.qty += entry.quantity;
+      if (!rec.cards.includes(displayName)) rec.cards.push(displayName);
+    }
+  }
+
+  const sorted = Array.from(tagCounts.entries()).sort((a, b) => b[1].qty - a[1].qty);
+
+  if (sorted.length === 0) {
+    return <div className="text-slate-400 text-sm text-center py-2">無效果標籤資料</div>;
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {sorted.map(([tag, { qty, cards }]) => {
+        const color = EFFECT_TAG_COLORS[tag] ?? TAG_DEFAULT_COLOR;
+        return (
+          <div
+            key={tag}
+            className="group relative flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium cursor-default"
+            style={{ borderColor: `${color}60`, background: `${color}18`, color }}
+          >
+            <span>{tag}</span>
+            <span className="text-[10px] opacity-70">×{qty}</span>
+            {/* Styled tooltip */}
+            <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 pointer-events-none">
+              <div className="bg-slate-900 border border-slate-600 rounded-lg shadow-xl px-2.5 py-2 text-[11px] text-slate-200 whitespace-nowrap max-w-[220px]">
+                <div className="text-slate-400 text-[9px] uppercase tracking-wide mb-1">相關卡牌</div>
+                {cards.map((c) => (
+                  <div key={c} className="truncate">{c}</div>
+                ))}
+              </div>
+              <div className="w-2 h-2 bg-slate-900 border-r border-b border-slate-600 rotate-45 mx-auto -mt-1" />
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -935,10 +1018,10 @@ export function CardDetailModal({
           {/* Details */}
           <div className="flex-1 min-w-0 space-y-3">
             {/* Attacks */}
-            {card.attacks && card.attacks.length > 0 && (
+            {(card.zhAttacks ?? card.attacks) && (card.zhAttacks ?? card.attacks)!.length > 0 && (
               <div>
                 <div className="text-slate-400 text-[10px] uppercase tracking-wide mb-1.5">招式</div>
-                {card.attacks.map((atk, i) => (
+                {(card.zhAttacks ?? card.attacks)!.map((atk, i) => (
                   <div key={i} className="mb-2">
                     <div className="flex items-baseline justify-between gap-1">
                       <span className="text-white text-xs font-semibold truncate">{atk.name}</span>
@@ -1216,10 +1299,10 @@ export function CardTile({
       )}
 
       {/* Dark hover tooltip — abilities + attacks + weakness */}
-      {(card.abilities?.length || card.attacks?.length || card.weaknesses?.length) ? (
+      {(card.zhAbilities?.length || card.abilities?.length || card.zhAttacks?.length || card.attacks?.length || card.weaknesses?.length) ? (
         <div className="hidden group-hover:block absolute left-full top-0 ml-2 z-[100] w-52 bg-slate-900 border border-slate-600 rounded-lg shadow-2xl p-2.5 pointer-events-none text-xs">
           <div className="text-white font-bold text-[11px] mb-1.5 truncate">{displayName}</div>
-          {card.abilities?.map((ab, i) => (
+          {(card.zhAbilities ?? card.abilities)?.map((ab, i) => (
             <div key={i} className="mb-1.5">
               <div className="flex items-center gap-1 mb-0.5">
                 <span className="text-[8px] bg-blue-700 text-white px-1 py-0.5 rounded shrink-0">特性</span>
@@ -1228,8 +1311,8 @@ export function CardTile({
               {ab.text && <p className="text-slate-300 text-[9px] leading-snug">{ab.text}</p>}
             </div>
           ))}
-          {card.abilities?.length && card.attacks?.length ? <hr className="border-slate-700 my-1.5" /> : null}
-          {card.attacks?.map((atk, i) => (
+          {(card.zhAbilities ?? card.abilities)?.length && (card.zhAttacks ?? card.attacks)?.length ? <hr className="border-slate-700 my-1.5" /> : null}
+          {(card.zhAttacks ?? card.attacks)?.map((atk, i) => (
             <div key={i} className="mb-1.5">
               <div className="flex items-baseline justify-between gap-1">
                 <span className="text-slate-200 font-semibold text-[10px] truncate">{atk.name}</span>

@@ -19,6 +19,7 @@ import {
   CopyDeckModal,
   EffectsSummary,
   WeaknessSummary,
+  EffectTagSummary,
 } from '@/components/deck-view';
 
 /* ---- Deck response from API ---- */
@@ -47,6 +48,7 @@ interface DeckResponse {
 function DeckViewInner({ deckCode }: { deckCode: string }) {
   const [selectedCard, setSelectedCard] = useState<DeckCardEntry | null>(null);
   const [showCopyModal, setShowCopyModal] = useState(false);
+  const [showEffectsSummary, setShowEffectsSummary] = useState(false);
 
   const DB_TO_ROLE: Record<string, PokemonRole> = {
     POKEMON_MAIN: 'pokemon-main',
@@ -257,9 +259,9 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
     sections.get(key)!.push(entry);
   }
 
-  // Derive archetype name from main pokemon section
+  // Derive archetype name from main pokemon section — prefer Chinese name
   const archetypeName = (sections.get('pokemon-main') ?? [])
-    .map((e) => e.card.name)
+    .map((e) => e.card.zhName ?? e.card.name)
     .filter((n): n is string => !!n)
     .filter((n, i, arr) => arr.indexOf(n) === i)
     .slice(0, 2)
@@ -343,9 +345,21 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
           
           <DeckSummary entries={deckEntries} pricing={data.pricing} priceBreakdownHref={`/deck-builder/event/${deckCode}/prices`} />
 
-          <div className="mt-4 pt-4 border-t border-slate-600">
-            <h3 className="text-slate-300 text-sm font-bold mb-3">效果摘要</h3>
-            <EffectsSummary entries={deckEntries} />
+          <div className="mt-4 pt-4 border-t border-slate-600 space-y-4">
+            <div>
+              <h3 className="text-slate-300 text-sm font-bold mb-3">效果標籤</h3>
+              <EffectTagSummary entries={deckEntries} />
+            </div>
+            <div>
+              <button
+                onClick={() => setShowEffectsSummary((v) => !v)}
+                className="flex items-center gap-2 text-slate-300 text-sm font-bold mb-3 hover:text-white transition-colors"
+              >
+                <span>效果摘要</span>
+                <span className="text-slate-500 text-xs font-normal">{showEffectsSummary ? '▲ 收起' : '▼ 點擊查看'}</span>
+              </button>
+              {showEffectsSummary && <EffectsSummary entries={deckEntries} />}
+            </div>
           </div>
         </div>
 

@@ -604,7 +604,6 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
                   <option value="連續技">連續技</option>
                   <option value="獎賞控制">獎賞控制</option>
                   <option value="情報收集">情報收集</option>
-                  <option value="特殊能量">特殊能量</option>
                   <option value="弱點改變">弱點改變</option>
                 </optgroup>
               </select>

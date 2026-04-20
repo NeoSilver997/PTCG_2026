@@ -271,16 +271,6 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     primary.add('備戰傷害加成');
   }
 
-  // Special energy (ZH + JA)
-  if (
-    (has('視為提供', '重新附於') && has('能量')) ||
-    has('エネルギー1個ぶんとしてはたらく', 'エネルギー2個ぶんとしてはたらく',
-        'すべてのタイプのエネルギー1個ぶん', 'タイプすべてのエネルギー') ||
-    (has('ぶんとしてはたらく') && has('エネルギー'))
-  ) {
-    primary.add('特殊能量');
-  }
-
   // Deck operations (ZH + JA)
   if (
     (has('放回牌庫並重洗', '各自從牌庫抽出') && has('支援者卡')) ||
@@ -383,7 +373,7 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     primary.add('能量需求增加');
   }
 
-  if (has('棄牌區', '張數×') && has('傷害')) {
+  if (has('棄牌區') && has('張數×') && has('傷害')) {
     primary.add('棄牌區傷害加成');
   }
 
@@ -600,7 +590,7 @@ const PRIMARY_SCORES: Record<string, number> = {
   // fine-grained tags
   '昏厥條件': 3, '反噬傷害': 2, '無視弱點/效果': 3,
   '使用限制': 1, '條件失敗': 1, '能量附著': 2, '狀態施加': 2,
-  '備戰傷害加成': 3, '特殊能量': 3, '牌庫重洗': 1,
+  '備戰傷害加成': 3, '牌庫重洗': 1,
   '連續技': 2, '能量條件': 2, '附著干擾': 3,
   'HP提升': 2, '場地增幅': 3, '道具移除': 3, '招式複製': 3,
   '簡單灼傷': 2, '弱點消除': 3, '屬性防禦': 2, '能量需求增加': 3,
@@ -635,6 +625,16 @@ function computeTier(effectScore: number): string {
   if (effectScore >= 1)  return 'C';
   return 'D';
 }
+
+// ---------------------------------------------------------------------------
+// Manual overrides — tags to forcibly remove per primary card name
+// These correct cases where the classifier generates false positives
+// ---------------------------------------------------------------------------
+const MANUAL_REMOVE_TAGS: Record<string, string[]> = {
+  'スペシャルレッドカード': ['抽卡效果', '搜索效果'],  // 特殊紅牌 (hk18898): Only disrupts opponent's hand
+  'メガピクシーex': ['棄牌區傷害加成'],         // 超級皮可西ex: Discard-pile mention is not damage scaling
+  '変化の書': ['棄牌區傷害加成'],               // 變化之書: Same
+};
 
 // ---------------------------------------------------------------------------
 // Main
@@ -697,7 +697,14 @@ async function main() {
       const abilities = (card.abilities ?? []) as Ability[];
       const cardText = (card as { text?: string | null }).text ?? null;
 
-      const [primaryTags, specialTags] = classifyCard(attacks, abilities, cardText);
+      let [primaryTags, specialTags] = classifyCard(attacks, abilities, cardText);
+
+      // Apply manual overrides
+      const tagsToRemove = MANUAL_REMOVE_TAGS[pc.name];
+      if (tagsToRemove?.length) {
+        primaryTags = primaryTags.filter(t => !tagsToRemove.includes(t));
+      }
+
       const effectScore = computeEffectScore(primaryTags, specialTags);
       const cardTier = computeTier(effectScore);
 

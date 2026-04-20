@@ -74,6 +74,12 @@ export class DecksService {
                 evolutionStage: true,
                 primaryCardId: true,
                 language: true,
+                primaryCard: {
+                  select: {
+                    effectTags: true,
+                    specialEffectTags: true,
+                  },
+                },
               },
             },
           },
@@ -158,16 +164,16 @@ export class DecksService {
     // Fetch ZH_TW variants; prefer NORMAL variantType as the canonical Chinese card
     const zhVariants = await this.prisma.card.findMany({
       where: { primaryCardId: { in: primaryCardIds }, language: 'ZH_TW' },
-      select: { id: true, primaryCardId: true, name: true, webCardId: true, imageUrl: true, variantType: true },
+      select: { id: true, primaryCardId: true, name: true, webCardId: true, imageUrl: true, variantType: true, abilities: true, attacks: true },
       orderBy: { variantType: 'asc' },
     });
 
     // Build map: primaryCardId → best ZH_TW card (NORMAL wins)
-    const zhMap = new Map<string, { id: string; name: string; webCardId: string; imageUrl: string | null }>();
+    const zhMap = new Map<string, { id: string; name: string; webCardId: string; imageUrl: string | null; abilities: any; attacks: any }>();
     for (const v of zhVariants) {
       const existing = zhMap.get(v.primaryCardId);
       if (!existing || v.variantType === 'NORMAL') {
-        zhMap.set(v.primaryCardId, { id: v.id, name: v.name, webCardId: v.webCardId, imageUrl: v.imageUrl });
+        zhMap.set(v.primaryCardId, { id: v.id, name: v.name, webCardId: v.webCardId, imageUrl: v.imageUrl, abilities: v.abilities, attacks: v.attacks });
       }
     }
 
@@ -178,6 +184,16 @@ export class DecksService {
         dc.card.zhWebCardId = zh.webCardId;
         dc.card.zhImageUrl = zh.imageUrl;
         dc.card.zhCardId = zh.id;
+        // Only set zh abilities/attacks if the ZH card actually has them
+        if (Array.isArray(zh.abilities) && zh.abilities.length > 0) dc.card.zhAbilities = zh.abilities;
+        if (Array.isArray(zh.attacks) && zh.attacks.length > 0) dc.card.zhAttacks = zh.attacks;
+      }
+      // Flatten effectTags from nested primaryCard relation
+      if (dc.card.primaryCard?.effectTags) {
+        dc.card.effectTags = [
+          ...(dc.card.primaryCard.effectTags ?? []),
+          ...(dc.card.primaryCard.specialEffectTags ?? []),
+        ];
       }
     }
   }
