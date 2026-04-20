@@ -148,6 +148,13 @@ async function main() {
   const jpSrcByWebId = new Map<string, SourceCard>();
   for (const c of jpCards) jpSrcByWebId.set(c.webCardId, c);
 
+  // ── Expansions with known HK/JP collector-number offsets ──
+  // These sets have different card counts between HK and JP (HK is a subset
+  // of JP collector numbers), so they falsely appear as 100%-match but
+  // would be mapped INCORRECTLY by collector number.  They are handled by
+  // dedicated fix scripts (_fix_svk_hk_mappings.ts, _fix_svhk_hk_mappings.ts).
+  const OFFSET_EXPANSIONS = new Set(['SVK', 'SVHK']);
+
   // ── Compute per-expansion match rates (100%-only filter) ──
   // Group all HK JSON cards by expansion code and count JP matches per expansion
   const expTotal = new Map<string, number>();
@@ -162,12 +169,13 @@ async function main() {
   }
   const fullMatchExpansions = new Set<string>();
   for (const [exp, total] of expTotal) {
+    if (OFFSET_EXPANSIONS.has(exp)) continue; // skip known offset expansions
     const matched100 = expMatched.get(exp) ?? 0;
     if (matched100 === total) fullMatchExpansions.add(exp);
   }
   console.log(`\n100%-match expansions: ${fullMatchExpansions.size} of ${expTotal.size} total HK expansions`);
-
-  console.log(`Skipping ${expTotal.size - fullMatchExpansions.size} expansions with partial JP coverage.`);
+  console.log(`Excluded (known offset): ${[...OFFSET_EXPANSIONS].filter(e => expTotal.has(e)).join(', ')}`);
+  console.log(`Skipping ${expTotal.size - fullMatchExpansions.size - [...OFFSET_EXPANSIONS].filter(e => expTotal.has(e)).length} expansions with partial JP coverage.`);
 
   // Stats
   let matched = 0;

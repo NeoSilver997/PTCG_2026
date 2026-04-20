@@ -34,6 +34,8 @@ interface WeeklyTopCard {
   rankChange: number | null;
   /** The card's rank based on the prior 3-week window; null if debut */
   priorRank: number | null;
+  weaknesses?: Array<{ type: string; value: string }> | null;
+  hp?: number | null;
 }
 
 interface TopCardsPeriodData {
@@ -58,6 +60,8 @@ interface RawDeckCard {
     primaryCardId?: string;
     /** Resolved canonical webCardId for the primary card (JA_JP preferred) */
     canonicalWebCardId?: string;
+    weaknesses?: Array<{ type: string; value: string }> | null;
+    hp?: number | null;
   };
 }
 
@@ -213,6 +217,8 @@ async function buildWeeklyTopCards(
   const cardMap = new Map<string, {
     name: string; imageUrl: string | null; supertype: string;
     subtypes: string[]; webCardId?: string; _rarityRank: number;
+    weaknesses?: Array<{ type: string; value: string }> | null;
+    hp?: number | null;
     weeklyUsage: [number, number, number, number];
   }>();
   // Parallel set tracking distinct deckIds per card per week
@@ -247,6 +253,8 @@ async function buildWeeklyTopCards(
           // Prefer canonicalWebCardId so the card-page link goes to the right variant
           webCardId: c.canonicalWebCardId ?? c.webCardId,
           _rarityRank: incomingRarityRank,
+          weaknesses: c.weaknesses ?? null,
+          hp: c.hp ?? null,
           weeklyUsage: [0, 0, 0, 0],
         };
         cardMap.set(mapKey, entry);
@@ -264,6 +272,10 @@ async function buildWeeklyTopCards(
           entry.webCardId = c.canonicalWebCardId;
         } else if (!entry.webCardId && c.webCardId) {
           entry.webCardId = c.webCardId;
+        }
+        // Capture weakness from first instance that has it
+        if (!entry.weaknesses && c.weaknesses?.length) {
+          entry.weaknesses = c.weaknesses;
         }
       }
       cardDeckSets.get(mapKey)![ref.weekIdx].add(ref.deckId);
@@ -322,7 +334,7 @@ async function buildWeeklyTopCards(
     .filter(c => c.totalUsage > 0)
     .sort((a, b) => b.twoWeekUsage - a.twoWeekUsage || b.totalUsage - a.totalUsage);
 
-  const cards: WeeklyTopCard[] = baseCards.slice(0, 100).map((c, i) => {
+  const cards: WeeklyTopCard[] = baseCards.slice(0, 100).map((c: typeof baseCards[number] & { weaknesses?: Array<{ type: string; value: string }> | null }, i) => {
     const cardKey = c.webCardId ?? c.name;
     const priorUsage3w = c.weeklyUsage[0] + c.weeklyUsage[1] + c.weeklyUsage[2];
     const priorRank = priorRankMap.get(cardKey) ?? null;
@@ -336,10 +348,149 @@ async function buildWeeklyTopCards(
       : rank2w <= 20 ? 'H'
       : rank2w <= 50 ? 'M'
       : 'L';
-    return { ...c, isNew, rankChange, priorRank, tier };
+    return { ...c, isNew, rankChange, priorRank, tier, weaknesses: c.weaknesses ?? null };
   });
 
   return { cards, weekLabels, weeklyTotals, periodStart: periodStart.toISOString(), periodEnd: periodEnd.toISOString() };
+}
+
+// ── Weakness type config ──────────────────────────────────────────────────────
+const WEAKNESS_TYPE_CONFIG: Record<string, { label: string; emoji: string; bgColor: string; textColor: string }> = {
+  FIRE:      { label: '火',   emoji: '🔥', bgColor: 'bg-red-500',     textColor: 'text-red-600'     },
+  WATER:     { label: '水',   emoji: '💧', bgColor: 'bg-blue-500',    textColor: 'text-blue-600'    },
+  LIGHTNING: { label: '雷',   emoji: '⚡', bgColor: 'bg-yellow-400',  textColor: 'text-yellow-600'  },
+  GRASS:     { label: '草',   emoji: '🌿', bgColor: 'bg-green-500',   textColor: 'text-green-600'   },
+  FIGHTING:  { label: '格鬥', emoji: '👊', bgColor: 'bg-orange-600',  textColor: 'text-orange-600'  },
+  PSYCHIC:   { label: '超能', emoji: '🔮', bgColor: 'bg-purple-500',  textColor: 'text-purple-600'  },
+  DARKNESS:  { label: '惡',   emoji: '🌑', bgColor: 'bg-gray-700',    textColor: 'text-gray-700'    },
+  METAL:     { label: '鋼',   emoji: '⚙️', bgColor: 'bg-gray-500',    textColor: 'text-gray-600'    },
+  DRAGON:    { label: '龍',   emoji: '🐉', bgColor: 'bg-purple-600',  textColor: 'text-purple-700'  },
+  FAIRY:     { label: '妖精', emoji: '✨', bgColor: 'bg-pink-400',    textColor: 'text-pink-600'    },
+  COLORLESS: { label: '無色', emoji: '⬜', bgColor: 'bg-gray-400',    textColor: 'text-gray-500'    },
+};
+
+// ── MetaWeaknessSummary ───────────────────────────────────────────────────────
+function MetaWeaknessSummary({
+  cards,
+  hpFilter,
+  exOnly,
+}: {
+  cards: WeeklyTopCard[];
+  hpFilter: 'all' | 'gt100';
+  exOnly: boolean;
+}) {
+  // Base: all Pokémon cards, apply shared filters
+  let filteredCards = cards.filter(c => c.supertype === 'POKEMON');
+
+  if (exOnly) {
+    filteredCards = filteredCards.filter(c => /ex$/i.test(c.name));
+  }
+
+  if (hpFilter === 'gt100') {
+    filteredCards = filteredCards.filter(c => c.hp != null && c.hp > 100);
+  }
+
+  if (filteredCards.length === 0) return null;
+
+  // Split: with weakness vs no weakness (e.g. Dragon type)
+  const withWeakness = filteredCards.filter(c => c.weaknesses?.length);
+  const noWeakness = filteredCards.filter(c => !c.weaknesses?.length);
+
+  // Weight by 2-week usage, fall back to total
+  const weaknessMap = new Map<string, { value: string; count: number }>();
+  let totalWeighted = 0;
+  let noWeaknessWeight = 0;
+
+  for (const card of withWeakness) {
+    const weight = card.twoWeekUsage || card.totalUsage;
+    for (const w of (card.weaknesses ?? [])) {
+      if (!w?.type) continue;
+      const ex = weaknessMap.get(w.type);
+      if (ex) { ex.count += weight; } else { weaknessMap.set(w.type, { value: w.value, count: weight }); }
+      totalWeighted += weight;
+    }
+  }
+
+  for (const card of noWeakness) {
+    noWeaknessWeight += card.twoWeekUsage || card.totalUsage;
+  }
+  totalWeighted += noWeaknessWeight;
+
+  const sorted = Array.from(weaknessMap.entries()).sort((a, b) => b[1].count - a[1].count);
+  const maxCount = Math.max(
+    sorted.length > 0 ? sorted[0][1].count : 0,
+    noWeaknessWeight
+  );
+  if (maxCount === 0) return null;
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm p-4 mb-4 border border-gray-100">
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <div>
+          <h3 className="font-bold text-gray-800 text-sm">🎯 弱點分佈 · Meta Weakness</h3>
+          <p className="text-[11px] text-gray-400 mt-0.5">
+            寶可夢弱點 · 依2週使用率加權 · {withWeakness.length} 種有弱點
+            {noWeakness.length > 0 && ` · ${noWeakness.length} 種無弱點`}
+          </p>
+        </div>
+        <span className="text-[10px] text-gray-400 bg-gray-50 px-2 py-1 rounded-lg border">
+          加權總計 {totalWeighted.toLocaleString()}
+        </span>
+      </div>
+      <div className="space-y-2">
+        {sorted.map(([type, { value, count }]) => {
+          const cfg = WEAKNESS_TYPE_CONFIG[type] ?? { label: type, emoji: '?', bgColor: 'bg-gray-400', textColor: 'text-gray-600' };
+          const pct = totalWeighted > 0 ? (count / totalWeighted * 100) : 0;
+          const barWidth = maxCount > 0 ? (count / maxCount * 100) : 0;
+          return (
+            <div key={type} className="flex items-center gap-2.5">
+              <div className="flex items-center gap-1 w-16 shrink-0">
+                <span className="text-sm leading-none">{cfg.emoji}</span>
+                <span className={`text-xs font-bold ${cfg.textColor}`}>{cfg.label}</span>
+              </div>
+              <div className="flex-1 h-6 bg-gray-100 rounded-full overflow-hidden relative">
+                <div
+                  className={`h-full ${cfg.bgColor} rounded-full flex items-center justify-end pr-2 transition-all`}
+                  style={{ width: `${Math.max(8, barWidth)}%` }}
+                />
+                <span className="absolute inset-0 flex items-center px-2 text-gray-700 text-[10px] font-semibold">
+                  {value}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0 w-24 justify-end">
+                <span className="text-xs font-bold text-gray-800 tabular-nums">{pct.toFixed(1)}%</span>
+                <span className="text-[10px] text-gray-400 tabular-nums">{count.toLocaleString()}</span>
+              </div>
+            </div>
+          );
+        })}
+        {/* No Weakness row — Dragon and other types with no weakness */}
+        {noWeaknessWeight > 0 && (
+          <div className="flex items-center gap-2.5 border-t border-dashed border-gray-200 pt-2 mt-1">
+            <div className="flex items-center gap-1 w-16 shrink-0">
+              <span className="text-sm leading-none">🐉</span>
+              <span className="text-xs font-bold text-purple-700">無弱點</span>
+            </div>
+            <div className="flex-1 h-6 bg-gray-100 rounded-full overflow-hidden relative">
+              <div
+                className="h-full bg-purple-400 rounded-full transition-all"
+                style={{ width: `${Math.max(8, maxCount > 0 ? (noWeaknessWeight / maxCount * 100) : 0)}%` }}
+              />
+              <span className="absolute inset-0 flex items-center px-2 text-gray-700 text-[10px] font-semibold">
+                龍型·無弱點
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0 w-24 justify-end">
+              <span className="text-xs font-bold text-gray-800 tabular-nums">
+                {totalWeighted > 0 ? (noWeaknessWeight / totalWeighted * 100).toFixed(1) : '0.0'}%
+              </span>
+              <span className="text-[10px] text-gray-400 tabular-nums">{noWeaknessWeight.toLocaleString()}</span>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ── MiniTrendBar ──────────────────────────────────────────────────────────────
@@ -634,8 +785,8 @@ function RankChangeIndicator({ rankChange, priorRank }: { rankChange: number | n
 }
 
 // ── Weekly top-10 local cache ─────────────────────────────────────────────────
-// v8: deck inclusion rate %, tier H/M/L/S by 2-week rank, 100 cards
-const CACHE_VER = 'v8';
+// v9: added hp field to card data for HP > 100 filter
+const CACHE_VER = 'v9';
 function getCacheKey(region: string, cat: CategoryKey, weekKey: string) {
   return `ptcg-topcards-${CACHE_VER}-${region || 'all'}-${cat}-${weekKey}`;
 }
@@ -668,6 +819,8 @@ export default function TopCardsPage() {
   const [periodEnd, setPeriodEnd] = useState(today);
   const [viewMode, setViewMode] = useState<ViewMode>('pct');
   const [topN, setTopN] = useState<number>(100);
+  const [hpFilter, setHpFilter] = useState<'all' | 'gt100'>('all');
+  const [exOnly, setExOnly] = useState(false);
   const [selectedCard, setSelectedCard] = useState<WeeklyTopCard | null>(null);
 
   // ── Per-week localStorage cache ──
@@ -703,6 +856,22 @@ export default function TopCardsPage() {
   const periodRange = data
     ? `${new Date(data.periodStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${new Date(data.periodEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
     : null;
+
+  // Apply HP / ex filters to the visible card list (affects both grid and weakness chart)
+  const visibleCards = (() => {
+    let cards = data?.cards.slice(0, topN) ?? [];
+    if (category === 'pokemon' || category === 'all') {
+      if (exOnly) {
+        cards = cards.filter(c =>
+          c.supertype !== 'POKEMON' || /ex$/i.test(c.name)
+        );
+      }
+      if (hpFilter === 'gt100') {
+        cards = cards.filter(c => c.supertype !== 'POKEMON' || (c.hp != null && c.hp > 100));
+      }
+    }
+    return cards;
+  })();
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -819,6 +988,51 @@ export default function TopCardsPage() {
               </button>
             ))}
           </div>
+
+          {/* Pokémon sub-filters — only shown when relevant */}
+          {(category === 'pokemon' || category === 'all') && (
+            <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-gray-100">
+              <span className="text-xs text-gray-500 font-medium shrink-0">Pokémon filter:</span>
+              {/* HP filter */}
+              <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs font-semibold">
+                <button
+                  onClick={() => setHpFilter('all')}
+                  className={`px-2.5 py-1 transition-colors ${
+                    hpFilter === 'all' ? 'bg-gray-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  All HP
+                </button>
+                <button
+                  onClick={() => setHpFilter('gt100')}
+                  className={`px-2.5 py-1 border-l border-gray-200 transition-colors ${
+                    hpFilter === 'gt100' ? 'bg-gray-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  HP &gt; 100
+                </button>
+              </div>
+              {/* ex-only toggle */}
+              <button
+                onClick={() => setExOnly(v => !v)}
+                className={`px-2.5 py-1 rounded-lg border text-xs font-semibold transition-colors ${
+                  exOnly
+                    ? 'bg-emerald-600 text-white border-emerald-600'
+                    : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                }`}
+              >
+                ex Only
+              </button>
+              {(hpFilter !== 'all' || exOnly) && (
+                <button
+                  onClick={() => { setHpFilter('all'); setExOnly(false); }}
+                  className="text-xs text-gray-400 hover:text-gray-600 underline"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Week legend */}
@@ -837,6 +1051,12 @@ export default function TopCardsPage() {
               </span>
             )}
           </div>
+        )}
+
+        {/* Meta weakness chart — shown when Pokémon data is available */}
+        {!isLoading && !isFetching && data && data.cards.length > 0 &&
+          (category === 'pokemon' || category === 'all') && (
+          <MetaWeaknessSummary cards={visibleCards} hpFilter={hpFilter} exOnly={exOnly} />
         )}
 
         {/* Loading */}
@@ -872,11 +1092,10 @@ export default function TopCardsPage() {
         {!isLoading && !isFetching && !error && data && data.cards.length > 0 && (
           <>
             <p className="text-xs text-gray-400 mb-4 px-0.5">
-              {data.cards.slice(0, topN).length} 張卡牌 · 依最近2週使用率分級 · 點擊查看詳情
+              {visibleCards.length} 張卡牌 · 依最近2週使用率分級 · 點擊查看詳情
             </p>
             {(['H', 'M', 'L', 'S'] as TierKey[]).map(tier => {
-              const tierEntries = data.cards
-                .slice(0, topN)
+              const tierEntries = visibleCards
                 .map((card, idx) => ({ card, rank: idx + 1 }))
                 .filter(({ card }) => card.tier === tier);
               if (!tierEntries.length) return null;
