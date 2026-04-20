@@ -124,6 +124,21 @@ export const SECTION_COLORS: Record<SectionKey, string> = {
   'special-energy': 'bg-pink-600',
 };
 
+/** Solid hex colors for SVG pie/donut charts — mirrors SECTION_COLORS Tailwind classes */
+const SECTION_HEX: Record<SectionKey, string> = {
+  'pokemon-main':      '#059669',
+  'pokemon-secondary': '#65a30d',
+  'pokemon-support':   '#0d9488',
+  'pokemon-evolution': '#7c3aed',
+  supporter:           '#2563eb',
+  item:                '#64748b',
+  ace:                 '#eab308',
+  tool:                '#9333ea',
+  stadium:             '#0e7490',
+  'basic-energy':      '#ea580c',
+  'special-energy':    '#db2777',
+};
+
 /* ─── Helpers ────────────────────────────────────────────────────── */
 
 export function maxDamage(attacks: AttackData[] | null | undefined): number {
@@ -181,6 +196,87 @@ export function sortSection(entries: DeckCardEntry[], section: SectionKey): Deck
   });
 }
 
+/* ─── SVG Donut Chart ─────────────────────────────────────────────── */
+
+function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
+  const rad = (angleDeg - 90) * (Math.PI / 180);
+  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+}
+
+function donutSegmentPath(
+  cx: number, cy: number,
+  outerR: number, innerR: number,
+  startDeg: number, endDeg: number,
+): string {
+  const end = Math.min(endDeg, startDeg + 359.99);
+  const oS = polarToCartesian(cx, cy, outerR, startDeg);
+  const oE = polarToCartesian(cx, cy, outerR, end);
+  const iS = polarToCartesian(cx, cy, innerR, startDeg);
+  const iE = polarToCartesian(cx, cy, innerR, end);
+  const large = end - startDeg > 180 ? 1 : 0;
+  return [
+    `M ${oS.x} ${oS.y}`,
+    `A ${outerR} ${outerR} 0 ${large} 1 ${oE.x} ${oE.y}`,
+    `L ${iE.x} ${iE.y}`,
+    `A ${innerR} ${innerR} 0 ${large} 0 ${iS.x} ${iS.y}`,
+    'Z',
+  ].join(' ');
+}
+
+function DonutChart({
+  data,
+  size = 80,
+  thickness = 18,
+  centerLabel,
+}: {
+  data: Array<{ value: number; color: string; label: string }>;
+  size?: number;
+  thickness?: number;
+  centerLabel?: string;
+}) {
+  const total = data.reduce((s, d) => s + d.value, 0);
+  if (total === 0) return null;
+  const cx = size / 2;
+  const cy = size / 2;
+  const outerR = (size - 2) / 2;
+  const innerR = outerR - thickness;
+  let angle = 0;
+  const segments = data
+    .filter((d) => d.value > 0)
+    .map((d) => {
+      const startDeg = angle;
+      const span = (d.value / total) * 360;
+      angle += span;
+      return { ...d, startDeg, endDeg: angle };
+    });
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      {segments.map((seg, i) => (
+        <path
+          key={i}
+          d={donutSegmentPath(cx, cy, outerR, innerR, seg.startDeg, seg.endDeg)}
+          fill={seg.color}
+          stroke="rgba(0,0,0,0.15)"
+          strokeWidth={0.5}
+        />
+      ))}
+      {centerLabel && (
+        <text
+          x={cx}
+          y={cy}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fill="#e2e8f0"
+          fontSize={size * 0.16}
+          fontWeight="bold"
+        >
+          {centerLabel}
+        </text>
+      )}
+    </svg>
+  );
+}
+
 /* ─── Deck Summary ───────────────────────────────────────────────── */
 
 export function DeckSummary({ entries, pricing, priceBreakdownHref }: { 
@@ -207,108 +303,92 @@ export function DeckSummary({ entries, pricing, priceBreakdownHref }: {
     return best;
   }, null);
 
-  const pokQty = pokemon.reduce((s, e) => s + e.quantity, 0);
-  const trnQty = entries
-    .filter((e) => e.card.supertype === 'TRAINER')
-    .reduce((s, e) => s + e.quantity, 0);
-  const enrQty = entries
-    .filter((e) => e.card.supertype === 'ENERGY')
-    .reduce((s, e) => s + e.quantity, 0);
-  const mainQty = pokemon.filter(isMainPokemon).reduce((s, e) => s + e.quantity, 0);
-  const suppQty = pokemon.filter((e) => !isMainPokemon(e)).reduce((s, e) => s + e.quantity, 0);
+  // Build section quantity breakdown for pie chart (uses heuristic getSectionKey)
+  const sectionQtys = new Map<SectionKey, number>();
+  for (const entry of entries) {
+    const key = getSectionKey(entry);
+    sectionQtys.set(key, (sectionQtys.get(key) ?? 0) + entry.quantity);
+  }
+  const pieSections = SECTION_ORDER
+    .filter((k) => (sectionQtys.get(k) ?? 0) > 0)
+    .map((k) => ({ value: sectionQtys.get(k)!, color: SECTION_HEX[k], label: SECTION_LABELS[k] }));
+  const totalCards = entries.reduce((s, e) => s + e.quantity, 0);
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-      {/* Total breakdown */}
-      <div className="bg-slate-800/60 rounded-lg p-3 border border-slate-600 text-center">
-        <div className="text-slate-400 text-[10px] uppercase tracking-wide mb-1">構成</div>
-        <div className="flex justify-center gap-2 flex-wrap">
-          <div>
-            <div className="text-emerald-400 font-bold text-lg leading-tight">{pokQty}</div>
-            <div className="text-slate-500 text-[9px]">寶可夢</div>
-          </div>
-          <div className="text-slate-600 self-center text-xs">·</div>
-          <div>
-            <div className="text-blue-400 font-bold text-lg leading-tight">{trnQty}</div>
-            <div className="text-slate-500 text-[9px]">訓練家</div>
-          </div>
-          <div className="text-slate-600 self-center text-xs">·</div>
-          <div>
-            <div className="text-orange-400 font-bold text-lg leading-tight">{enrQty}</div>
-            <div className="text-slate-500 text-[9px]">能量</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Deck Pricing */}
-      {pricing?.zh && (pricing.zh.lowestTotal > 0 || pricing.zh.budgetTotal > 0) && (() => {
-        const zh = pricing.zh!;
-        // Recalculate budget using user prices where saved, falling back to server value per card.
-        // Only recompute if at least one entry has a userPrice set.
-        const hasUserPrices = entries.some((e) => e.userPrice != null);
-        let low: number;
-        if (hasUserPrices) {
-          low = entries.reduce((sum, e) => {
-            if (!e.zhVariantPricing && !e.zhPricing && !isBasicEnergy(e)) return sum;
-            const base = isBasicEnergy(e) ? 1 : (e.zhVariantPricing?.lowestRarity ?? e.zhPricing?.lowest ?? 0);
-            return sum + (e.userPrice ?? base) * e.quantity;
-          }, 0);
-        } else {
-          low = zh.budgetTotal || zh.lowestTotal || 0;
-        }
-        const high = zh.premiumTotal || zh.highestTotal || 0;
-        return (
-          <div className="bg-slate-800/60 rounded-lg p-3 border border-yellow-900/40 text-center">
-            <div className="text-slate-400 text-[10px] uppercase tracking-wide mb-1">港幣價格</div>
-            <div className="text-sm font-bold leading-tight">
-              <span className={`${hasUserPrices ? 'text-blue-400' : 'text-green-400'}`}>HK${low.toLocaleString()}</span>
-              <span className="text-slate-500 mx-1">–</span>
-              <span className="text-red-400">HK${high.toLocaleString()}</span>
+    <div className="flex flex-wrap gap-4 items-start">
+      {/* Composition donut chart */}
+      <div className="flex items-center gap-3">
+        <DonutChart data={pieSections} size={96} thickness={22} centerLabel={`${totalCards}`} />
+        <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+          {pieSections.map((s) => (
+            <div key={s.label} className="flex items-center gap-1 min-w-0">
+              <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: s.color }} />
+              <span className="text-slate-300 text-[10px] truncate">{s.label}</span>
+              <span className="text-slate-500 text-[10px] ml-auto pl-1">{s.value}</span>
             </div>
-            {priceBreakdownHref && (
-              <a href={priceBreakdownHref} className="text-blue-400 text-[9px] underline inline-flex items-center gap-0.5 mt-1 hover:text-blue-300 transition-colors">
-                詳細價格 <ExternalLink size={8} />
-              </a>
-            )}
-          </div>
-        );
-      })()}
-
-      {/* Highest HP */}
-      <div className="bg-slate-800/60 rounded-lg p-3 border border-red-900/40 text-center">
-        <div className="text-slate-400 text-[10px] uppercase tracking-wide mb-1">最高 HP</div>
-        {highestHp ? (
-          <>
-            <div className="text-red-400 font-bold text-xl">{highestHp.card.hp}</div>
-            <div className="text-slate-300 text-[10px] truncate mt-0.5">{highestHp.card.name}</div>
-          </>
-        ) : (
-          <div className="text-slate-500 text-sm">—</div>
-        )}
-      </div>
-
-      {/* Highest Damage */}
-      <div className="bg-slate-800/60 rounded-lg p-3 border border-orange-900/40 text-center">
-        <div className="text-slate-400 text-[10px] uppercase tracking-wide mb-1">最高傷害</div>
-        {highestDmg && highestDmg.dmg > 0 ? (
-          <>
-            <div className="text-orange-400 font-bold text-xl">{highestDmg.dmg}</div>
-            <div className="text-slate-300 text-[10px] truncate mt-0.5">{highestDmg.entry.card.name}</div>
-          </>
-        ) : (
-          <div className="text-slate-500 text-sm">—</div>
-        )}
-      </div>
-
-      {/* Main vs Support Pokémon */}
-      <div className="bg-slate-800/60 rounded-lg p-3 border border-emerald-900/40 text-center">
-        <div className="text-slate-400 text-[10px] uppercase tracking-wide mb-1">主力 / 輔助</div>
-        <div className="flex items-baseline justify-center gap-1">
-          <span className="text-emerald-400 font-bold text-xl">{mainQty}</span>
-          <span className="text-slate-600 text-sm">/</span>
-          <span className="text-teal-400 font-bold text-xl">{suppQty}</span>
+          ))}
         </div>
-        <div className="text-slate-500 text-[9px] mt-0.5">Main / Support</div>
+      </div>
+
+      {/* Stats row */}
+      <div className="flex gap-3 flex-wrap sm:ml-auto">
+        {/* Deck Pricing */}
+        {pricing?.zh && (pricing.zh.lowestTotal > 0 || pricing.zh.budgetTotal > 0) && (() => {
+          const zh = pricing.zh!;
+          const hasUserPrices = entries.some((e) => e.userPrice != null);
+          let low: number;
+          if (hasUserPrices) {
+            low = entries.reduce((sum, e) => {
+              if (!e.zhVariantPricing && !e.zhPricing && !isBasicEnergy(e)) return sum;
+              const base = isBasicEnergy(e) ? 1 : (e.zhVariantPricing?.lowestRarity ?? e.zhPricing?.lowest ?? 0);
+              return sum + (e.userPrice ?? base) * e.quantity;
+            }, 0);
+          } else {
+            low = zh.budgetTotal || zh.lowestTotal || 0;
+          }
+          const high = zh.premiumTotal || zh.highestTotal || 0;
+          return (
+            <div className="bg-slate-800/60 rounded-lg p-3 border border-yellow-900/40 text-center min-w-[100px]">
+              <div className="text-slate-400 text-[10px] uppercase tracking-wide mb-1">港幣價格</div>
+              <div className="text-sm font-bold leading-tight">
+                <span className={`${hasUserPrices ? 'text-blue-400' : 'text-green-400'}`}>HK${low.toLocaleString()}</span>
+                <span className="text-slate-500 mx-1">–</span>
+                <span className="text-red-400">HK${high.toLocaleString()}</span>
+              </div>
+              {priceBreakdownHref && (
+                <a href={priceBreakdownHref} className="text-blue-400 text-[9px] underline inline-flex items-center gap-0.5 mt-1 hover:text-blue-300 transition-colors">
+                  詳細價格 <ExternalLink size={8} />
+                </a>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Highest HP */}
+        <div className="bg-slate-800/60 rounded-lg p-3 border border-red-900/40 text-center min-w-[80px]">
+          <div className="text-slate-400 text-[10px] uppercase tracking-wide mb-1">最高 HP</div>
+          {highestHp ? (
+            <>
+              <div className="text-red-400 font-bold text-xl">{highestHp.card.hp}</div>
+              <div className="text-slate-300 text-[10px] truncate mt-0.5">{highestHp.card.zhName ?? highestHp.card.name}</div>
+            </>
+          ) : (
+            <div className="text-slate-500 text-sm">—</div>
+          )}
+        </div>
+
+        {/* Highest Damage */}
+        <div className="bg-slate-800/60 rounded-lg p-3 border border-orange-900/40 text-center min-w-[80px]">
+          <div className="text-slate-400 text-[10px] uppercase tracking-wide mb-1">最高傷害</div>
+          {highestDmg && highestDmg.dmg > 0 ? (
+            <>
+              <div className="text-orange-400 font-bold text-xl">{highestDmg.dmg}</div>
+              <div className="text-slate-300 text-[10px] truncate mt-0.5">{highestDmg.entry.card.zhName ?? highestDmg.entry.card.name}</div>
+            </>
+          ) : (
+            <div className="text-slate-500 text-sm">—</div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -382,6 +462,12 @@ const WEAKNESS_TYPE_CONFIG: Record<string, { label: string; emoji: string; bgCol
   COLORLESS: { label: '無色', emoji: '⬜', bgColor: 'bg-gray-400',   textColor: 'text-gray-400' },
 };
 
+const WEAKNESS_HEX: Record<string, string> = {
+  FIRE: '#ef4444', WATER: '#3b82f6', LIGHTNING: '#facc15', GRASS: '#22c55e',
+  FIGHTING: '#ea580c', PSYCHIC: '#a855f7', DARKNESS: '#4b5563', METAL: '#6b7280',
+  DRAGON: '#9333ea', FAIRY: '#f472b6', COLORLESS: '#9ca3af',
+};
+
 export function WeaknessSummary({ entries }: { entries: DeckCardEntry[] }) {
   const pokemonEntries = entries.filter(e => e.card.supertype === 'POKEMON');
   const totalPokemon = pokemonEntries.length;
@@ -411,52 +497,36 @@ export function WeaknessSummary({ entries }: { entries: DeckCardEntry[] }) {
   }
 
   const sorted = Array.from(weaknessCounts.entries()).sort((a, b) => b[1].count - a[1].count);
-  const maxCount = Math.max(sorted[0]?.[1].count ?? 0, noWeaknessCount, 1);
 
-  if (sorted.length === 0 && noWeaknessCount === 0) {
+  const pieData = [
+    ...sorted.map(([type, { count }]) => ({
+      value: count,
+      color: WEAKNESS_HEX[type] ?? '#6b7280',
+      label: `${WEAKNESS_TYPE_CONFIG[type]?.emoji ?? ''} ${WEAKNESS_TYPE_CONFIG[type]?.label ?? type}`,
+    })),
+    ...(noWeaknessCount > 0 ? [{ value: noWeaknessCount, color: '#7c3aed', label: '🐉 無弱點（龍）' }] : []),
+  ];
+
+  if (pieData.length === 0) {
     return <div className="text-slate-400 text-sm text-center py-4">無弱點資料</div>;
   }
 
   return (
-    <div className="space-y-2">
-      {sorted.map(([type, { value, count }]) => {
-        const cfg = WEAKNESS_TYPE_CONFIG[type] ?? { label: type, emoji: '?', bgColor: 'bg-slate-500', textColor: 'text-slate-400' };
-        const pct = Math.round((count / totalPokemon) * 100);
-        const barPct = Math.round((count / maxCount) * 100);
-        return (
-          <div key={type} className="flex items-center gap-2">
-            <div className={`w-14 text-right text-xs font-medium ${cfg.textColor} shrink-0`}>
-              {cfg.emoji} {cfg.label}
+    <div className="flex items-center gap-4">
+      <DonutChart data={pieData} size={80} thickness={18} centerLabel={`${totalPokemon}`} />
+      <div className="space-y-1 min-w-0">
+        {pieData.map((d) => {
+          const count = d.value;
+          const pct = Math.round((count / totalPokemon) * 100);
+          return (
+            <div key={d.label} className="flex items-center gap-1.5 text-[10px]">
+              <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: d.color }} />
+              <span className="text-slate-300 w-14 shrink-0">{d.label}</span>
+              <span className="text-slate-500">{count}/{totalPokemon} 種 ({pct}%)</span>
             </div>
-            <div className="flex-1 bg-slate-700 rounded-full h-2.5 overflow-hidden">
-              <div className={`h-full ${cfg.bgColor} rounded-full transition-all`} style={{ width: `${barPct}%` }} />
-            </div>
-            <div className="text-slate-300 text-xs w-24 text-right shrink-0">
-              {count}/{totalPokemon} 種 ({pct}%)
-            </div>
-          </div>
-        );
-      })}
-
-      {noWeaknessCount > 0 && (
-        <>
-          {sorted.length > 0 && <div className="border-t border-dashed border-slate-600 my-1" />}
-          <div className="flex items-center gap-2">
-            <div className="w-14 text-right text-xs font-medium text-purple-400 shrink-0">
-              🐉 龍
-            </div>
-            <div className="flex-1 bg-slate-700 rounded-full h-2.5 overflow-hidden">
-              <div
-                className="h-full bg-purple-600 rounded-full transition-all"
-                style={{ width: `${Math.round((noWeaknessCount / maxCount) * 100)}%` }}
-              />
-            </div>
-            <div className="text-slate-300 text-xs w-24 text-right shrink-0">
-              {noWeaknessCount}/{totalPokemon} 種 無弱點
-            </div>
-          </div>
-        </>
-      )}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -782,7 +852,7 @@ export function CardDetailModal({
         {/* Header */}
         <div className="flex items-start justify-between px-4 py-3 border-b border-slate-700">
           <div className="flex-1 min-w-0 pr-2">
-            <h2 className="text-white font-bold text-base leading-tight">{card.name}</h2>
+            <h2 className="text-white font-bold text-base leading-tight">{card.zhName ?? card.name}</h2>
             <div className="flex items-center gap-2 mt-0.5 flex-wrap">
               {(card.hp ?? 0) > 0 && (
                 <span className="text-red-400 text-xs font-bold">HP {card.hp}</span>
@@ -808,10 +878,10 @@ export function CardDetailModal({
           {/* Card image */}
           <div className="relative w-32 flex-shrink-0 rounded-lg overflow-hidden bg-slate-700"
             style={{ aspectRatio: '2.5 / 3.5' }}>
-            {card.imageUrl ? (
+            {(card.zhImageUrl ?? card.imageUrl) ? (
               <Image
-                src={card.imageUrl}
-                alt={card.name}
+                src={(card.zhImageUrl ?? card.imageUrl)!}
+                alt={card.zhName ?? card.name}
                 fill
                 sizes="128px"
                 className="object-contain"
@@ -819,7 +889,7 @@ export function CardDetailModal({
               />
             ) : (
               <div className="absolute inset-0 flex items-center justify-center text-slate-500 text-xs text-center px-2">
-                {card.name}
+                {card.zhName ?? card.name}
               </div>
             )}
           </div>
@@ -1037,6 +1107,9 @@ export function CardTile({
   const isPokemon = section === 'pokemon-main' || section === 'pokemon-secondary' || section === 'pokemon-support' || section === 'pokemon-evolution';
   const dmg = isPokemon ? maxDamage(entry.card.attacks) : 0;
   const colorClass = SECTION_COLORS[section] ?? 'bg-slate-600';
+  const { card } = entry;
+  const displayName = card.zhName ?? card.name;
+  const displayImage = card.zhImageUrl ?? card.imageUrl;
 
   return (
     <div
@@ -1044,10 +1117,10 @@ export function CardTile({
       onClick={() => onClick?.(entry)}
     >
       <div className="relative w-full aspect-[2.5/3.5] bg-slate-700 rounded-lg overflow-hidden border border-slate-600 group-hover:border-slate-300 transition-all duration-150 group-hover:shadow-lg group-hover:shadow-black/50">
-        {entry.card.imageUrl ? (
+        {displayImage ? (
           <Image
-            src={entry.card.imageUrl}
-            alt={entry.card.name}
+            src={displayImage}
+            alt={displayName}
             fill
             sizes="160px"
             className="object-contain group-hover:scale-105 transition-transform duration-200"
@@ -1055,7 +1128,7 @@ export function CardTile({
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-slate-500 text-[10px] text-center px-1 leading-tight">
-            {entry.card.name}
+            {displayName}
           </div>
         )}
         {/* Hover hint overlay */}
@@ -1071,9 +1144,9 @@ export function CardTile({
         ×{entry.quantity}
       </div>
       {/* HP badge (Pokémon) */}
-      {isPokemon && (entry.card.hp ?? 0) > 0 && (
+      {isPokemon && (card.hp ?? 0) > 0 && (
         <div className="absolute top-1 left-1 bg-red-700/90 text-white text-[9px] font-bold px-1 py-0.5 rounded shadow">
-          {entry.card.hp}
+          {card.hp}
         </div>
       )}
       {/* Max damage badge (Pokémon) */}
@@ -1083,7 +1156,7 @@ export function CardTile({
         </div>
       )}
       <p className="text-slate-300 text-[10px] mt-0.5 text-center line-clamp-1 leading-tight group-hover:text-white transition-colors">
-        {entry.card.name}
+        {displayName}
       </p>
       {/* Role override buttons — Pokémon only, shown when wired up */}
       {onRoleChange && isPokemon && (
@@ -1091,7 +1164,7 @@ export function CardTile({
           {(['pokemon-main', 'pokemon-secondary', 'pokemon-support', 'pokemon-evolution'] as PokemonRole[]).map((role) => (
             <button
               key={role}
-              onClick={(e) => { e.stopPropagation(); onRoleChange(entry.card.primaryCardId ?? entry.card.canonicalWebCardId ?? entry.card.webCardId, role); }}
+              onClick={(e) => { e.stopPropagation(); onRoleChange(card.primaryCardId ?? card.canonicalWebCardId ?? card.webCardId, role); }}
               className={`flex-1 text-[8px] py-0.5 rounded transition-colors ${
                 section === role
                   ? 'bg-indigo-500 text-white font-bold'
@@ -1103,6 +1176,42 @@ export function CardTile({
           ))}
         </div>
       )}
+
+      {/* Dark hover tooltip — abilities + attacks + weakness */}
+      {(card.abilities?.length || card.attacks?.length || card.weaknesses?.length) ? (
+        <div className="hidden group-hover:block absolute left-full top-0 ml-2 z-[100] w-52 bg-slate-900 border border-slate-600 rounded-lg shadow-2xl p-2.5 pointer-events-none text-xs">
+          <div className="text-white font-bold text-[11px] mb-1.5 truncate">{displayName}</div>
+          {card.abilities?.map((ab, i) => (
+            <div key={i} className="mb-1.5">
+              <div className="flex items-center gap-1 mb-0.5">
+                <span className="text-[8px] bg-blue-700 text-white px-1 py-0.5 rounded shrink-0">特性</span>
+                <span className="text-blue-300 font-semibold text-[10px] truncate">{ab.name}</span>
+              </div>
+              {ab.text && <p className="text-slate-300 text-[9px] leading-snug">{ab.text}</p>}
+            </div>
+          ))}
+          {card.abilities?.length && card.attacks?.length ? <hr className="border-slate-700 my-1.5" /> : null}
+          {card.attacks?.map((atk, i) => (
+            <div key={i} className="mb-1.5">
+              <div className="flex items-baseline justify-between gap-1">
+                <span className="text-slate-200 font-semibold text-[10px] truncate">{atk.name}</span>
+                {atk.damage && <span className="text-orange-400 font-bold text-[10px] shrink-0">{atk.damage}</span>}
+              </div>
+              {atk.text && <p className="text-slate-400 text-[9px] leading-snug mt-0.5">{atk.text}</p>}
+            </div>
+          ))}
+          {card.weaknesses?.length ? (
+            <div className="border-t border-slate-700 mt-1.5 pt-1.5 flex gap-3 flex-wrap text-[9px] text-slate-400">
+              {card.weaknesses.map((w, i) => (
+                <span key={i}>弱: <span className="text-white">{w.type} {w.value}</span></span>
+              ))}
+              {card.resistances?.map((r, i) => (
+                <span key={i}>抵: <span className="text-white">{r.type} {r.value}</span></span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
