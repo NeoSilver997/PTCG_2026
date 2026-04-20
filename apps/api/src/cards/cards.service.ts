@@ -721,9 +721,9 @@ export class CardsService {
             return null;
           }
           if (key === 'variantType' && typeof value === 'string') return `c."${key}" = '${value}'`;
-          // Handle subtypes array filter
+          // Handle subtypes array filter (Subtype[] is a native PG enum array, not JSONB)
           if (key === 'subtypes' && typeof value === 'object' && value !== null && 'hasSome' in value && Array.isArray(value.hasSome)) {
-            const subtypeConditions = value.hasSome.map(st => `c."${key}" @> '["${st}"]'::jsonb`);
+            const subtypeConditions = value.hasSome.map(st => `'${st}'::"Subtype" = ANY(c."subtypes")`);
             return subtypeConditions.length > 0 ? `(${subtypeConditions.join(' OR ')})` : null;
           }
           if (key === 'webCardId' && typeof value === 'string')

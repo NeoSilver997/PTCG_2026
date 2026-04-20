@@ -34,6 +34,68 @@ const ARCHETYPE_COLORS: Record<string, string> = {
   AGGRO: 'bg-red-100 text-red-700', CONTROL: 'bg-blue-100 text-blue-700',
   COMBO: 'bg-purple-100 text-purple-700', MIDRANGE: 'bg-yellow-100 text-yellow-700',
   TOOLBOX: 'bg-green-100 text-green-700', OTHER: 'bg-gray-100 text-gray-600',
+  // Inferred archetypes
+  'Drapart': 'bg-violet-100 text-violet-700',
+  'Ogerpon': 'bg-green-100 text-green-700',
+  'Team Rocket': 'bg-red-100 text-red-700',
+  'M.Lucario': 'bg-yellow-100 text-yellow-700',
+  'Takeruraiko': 'bg-blue-100 text-blue-700',
+  'Nyarth ex': 'bg-orange-100 text-orange-700',
+  'Rock Lock': 'bg-stone-100 text-stone-700',
+  'Terapagos': 'bg-teal-100 text-teal-700',
+  'Noctowl': 'bg-indigo-100 text-indigo-700',
+  'Unknown': 'bg-gray-100 text-gray-500',
+};
+
+// Client-side archetype inference from deck Pokemon card names
+const ARCHETYPE_INFER_MAP: Array<[string, string]> = [
+  ['ドラパルトex', 'Drapart'],
+  ['ロケット団のドンカラス', 'Team Rocket'],
+  ['ロケット団のミュウツーex', 'Team Rocket'],
+  ['ロケット団のワナイダー', 'Team Rocket'],
+  ['ロケット団のポリゴン2', 'Team Rocket'],
+  ['メガルカリオex', 'M.Lucario'],
+  ['タケルライコex', 'Takeruraiko'],
+  ['テラパゴスex', 'Terapagos'],
+  ['オーガポン みどりのめんex', 'Ogerpon'],
+  ['オーガポン いどのめんex', 'Ogerpon'],
+  ['オーガポン', 'Ogerpon'],
+  ['イワパレス', 'Rock Lock'],
+  ['ニャースex', 'Nyarth ex'],
+  ['ヨルノズク', 'Noctowl'],
+  ['メガアブソルex', 'M.Absol'],
+];
+
+const ENERGY_TYPE_MAP: Array<[string, string]> = [
+  ['基本草エネルギー', 'GRASS'],
+  ['基本炎エネルギー', 'FIRE'],
+  ['基本水エネルギー', 'WATER'],
+  ['基本雷エネルギー', 'LIGHTNING'],
+  ['基本闘エネルギー', 'FIGHTING'],
+  ['基本超エネルギー', 'PSYCHIC'],
+  ['基本悪エネルギー', 'DARK'],
+  ['基本鋼エネルギー', 'METAL'],
+  ['ロケット団エネルギー', 'DARK'],
+  ['イグニッションエネルギー', 'FIRE'],
+  ['ロック闘エネルギー', 'FIGHTING'],
+  ['ミストエネルギー', 'WATER'],
+];
+
+const WEAKNESS_OF: Record<string, string> = {
+  GRASS: 'FIRE', FIRE: 'WATER', WATER: 'LIGHTNING',
+  LIGHTNING: 'FIGHTING', FIGHTING: 'PSYCHIC', PSYCHIC: 'DARK',
+  DARK: 'FIGHTING', METAL: 'FIRE', COLORLESS: 'FIGHTING',
+};
+
+const TYPE_ICON: Record<string, string> = {
+  GRASS: '🌿', FIRE: '🔥', WATER: '💧', LIGHTNING: '⚡',
+  FIGHTING: '👊', PSYCHIC: '🔮', DARK: '🌑', METAL: '⚙️', COLORLESS: '⭕',
+};
+
+const TYPE_COLOR: Record<string, string> = {
+  GRASS: 'bg-green-400', FIRE: 'bg-red-400', WATER: 'bg-blue-400',
+  LIGHTNING: 'bg-yellow-400', FIGHTING: 'bg-orange-400', PSYCHIC: 'bg-purple-400',
+  DARK: 'bg-gray-600', METAL: 'bg-slate-400', COLORLESS: 'bg-gray-300',
 };
 
 const PLACEMENT_BADGE: Record<number, string> = {
@@ -88,6 +150,11 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ tou
           </div>
         )}
 
+        {/* Weakness summary */}
+        {tournament.results?.some((r: TournamentResult) => r.deck && getDeckCards(r.deck).length > 0) && (
+          <WeaknessSummary results={tournament.results} />
+        )}
+
         {/* Deck stats summary */}
         {tournament.results?.some((r: TournamentResult) => r.deck && getDeckCards(r.deck).length > 0) && (
           <DeckSummaryStats results={tournament.results} />
@@ -103,7 +170,11 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ tou
             <p className="text-gray-400 text-center py-8">No results recorded.</p>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {tournament.results?.map((result: TournamentResult) => (
+            {tournament.results?.map((result: TournamentResult) => {
+              const inferredArch = (result.deckArchetype && result.deckArchetype !== 'UNKNOWN')
+                ? result.deckArchetype
+                : (result.deck ? inferArchetype(result.deck) : undefined);
+              return (
               <div key={result.id} className="bg-white rounded-lg shadow-sm overflow-hidden border border-gray-100">
                 <div className="flex items-center gap-3 p-3">
                   <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${PLACEMENT_BADGE[result.placement] ?? 'bg-gray-100 text-gray-600'}`}>
@@ -113,9 +184,9 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ tou
                     <p className="font-medium text-gray-900 truncate">{result.playerName}</p>
                     {result.deckName && <p className="text-xs text-gray-500 truncate">{result.deckName}</p>}
                   </div>
-                  {result.deckArchetype && (
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${ARCHETYPE_COLORS[result.deckArchetype] ?? 'bg-gray-100 text-gray-600'}`}>
-                      {result.deckArchetype}
+                  {inferredArch && (
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${ARCHETYPE_COLORS[inferredArch] ?? 'bg-gray-100 text-gray-600'}`}>
+                      {inferredArch}
                     </span>
                   )}
                   {result.deck?.deckCode && (
@@ -129,7 +200,7 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ tou
                 </div>
                 {result.deck && <DeckPanel deck={result.deck} />}
               </div>
-            ))}
+            );})}
           </div>
         </div>
       </div>
@@ -148,6 +219,35 @@ function getDeckCards(deck: DeckResult): DeckCardData[] {
     quantity: c.quantity,
     imageUrl: c.card.imageUrl ?? '',
   }));
+}
+
+function inferArchetype(deck: DeckResult): string {
+  const deckCards = deck.cards ?? [];
+  const pokemonNames = deckCards
+    .filter(c => c.card.supertype === 'POKEMON')
+    .map(c => c.card.name);
+  // Also check deckData card names (used when deckData is populated)
+  const allNames = getDeckCards(deck).map(c => c.cardName);
+  const names = [...new Set([...pokemonNames, ...allNames])];
+  for (const [fragment, arch] of ARCHETYPE_INFER_MAP) {
+    if (names.some(n => n.includes(fragment))) return arch;
+  }
+  return 'Other';
+}
+
+function getDeckType(deck: DeckResult): string {
+  const cards = getDeckCards(deck);
+  const energyCounts: Record<string, number> = {};
+  for (const card of cards) {
+    for (const [fragment, type] of ENERGY_TYPE_MAP) {
+      if (card.cardName.includes(fragment)) {
+        energyCounts[type] = (energyCounts[type] ?? 0) + card.quantity;
+        break;
+      }
+    }
+  }
+  const sorted = Object.entries(energyCounts).sort((a, b) => b[1] - a[1]);
+  return sorted[0]?.[0] ?? 'COLORLESS';
 }
 
   function DeckDetailView({ deck, onClose }: { deck: DeckResult; onClose: () => void }) {
@@ -355,17 +455,17 @@ function DeckSummaryStats({ results }: { results: TournamentResult[] }) {
     <div className="bg-white rounded-lg shadow-sm p-4">
       <h2 className="text-lg font-semibold text-gray-800 mb-3">Deck Insights <span className="text-sm font-normal text-gray-400">({totalDecks} decks)</span></h2>
       <p className="text-sm text-gray-600 mb-3">Most popular cards across all decks:</p>
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-4">
         {top.map(([id, c]) => (
-          <div key={id} className="flex items-center gap-2 bg-gray-50 rounded px-3 py-2">
+          <div key={id} className="flex flex-col items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-2 min-w-[80px]">
             {c.imageUrl && (
-              <div className="relative w-8 h-11 rounded overflow-hidden bg-gray-200 shrink-0">
-                <Image src={c.imageUrl} alt={c.name} fill sizes="32px" className="object-cover" unoptimized />
+              <div className="relative w-16 h-[90px] rounded-lg overflow-hidden bg-gray-200 shadow-sm shrink-0">
+                <Image src={c.imageUrl} alt={c.name} fill sizes="64px" className="object-cover" unoptimized />
               </div>
             )}
-            <div>
-              <p className="text-xs font-medium text-gray-800">{c.name}</p>
-              <p className="text-xs text-gray-500">In {c.count}/{totalDecks} decks</p>
+            <div className="text-center">
+              <p className="text-xs font-medium text-gray-800 leading-tight max-w-[80px] line-clamp-2">{c.name}</p>
+              <p className="text-xs text-gray-500 mt-0.5">In {c.count}/{totalDecks}</p>
             </div>
           </div>
         ))}
@@ -375,32 +475,159 @@ function DeckSummaryStats({ results }: { results: TournamentResult[] }) {
 }
 
 function ArchetypeChart({ results }: { results: TournamentResult[] }) {
-  const counts: Record<string, number> = {};
-  for (const r of results) { const k = r.deckArchetype ?? 'UNKNOWN'; counts[k] = (counts[k] ?? 0) + 1; }
-  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-  const total = results.length;
   const BAR_COLORS: Record<string, string> = {
     AGGRO: 'bg-red-400', CONTROL: 'bg-blue-400', COMBO: 'bg-purple-400',
     MIDRANGE: 'bg-yellow-400', TOOLBOX: 'bg-green-400', OTHER: 'bg-gray-400', UNKNOWN: 'bg-slate-300',
+    'Drapart': 'bg-violet-400', 'Ogerpon': 'bg-green-500', 'Team Rocket': 'bg-red-500',
+    'M.Lucario': 'bg-yellow-500', 'Takeruraiko': 'bg-blue-500', 'Nyarth ex': 'bg-orange-400',
+    'Rock Lock': 'bg-stone-400', 'Terapagos': 'bg-teal-400', 'Noctowl': 'bg-indigo-400',
+    'M.Absol': 'bg-pink-400', 'Unknown': 'bg-slate-300', 'Other': 'bg-gray-400',
   };
+
+  // Group results by inferred archetype
+  const groupedDecks: Record<string, TournamentResult[]> = {};
+  for (const r of results) {
+    const raw = r.deckArchetype;
+    const k = (!raw || raw === 'UNKNOWN')
+      ? (r.deck ? inferArchetype(r.deck) : 'Unknown')
+      : raw;
+    if (!groupedDecks[k]) groupedDecks[k] = [];
+    groupedDecks[k].push(r);
+  }
+
+  const sorted = Object.entries(groupedDecks).sort((a, b) => b[1].length - a[1].length);
+  const total = results.length;
+
+  // For each archetype, find top 4 Pokemon card images by frequency
+  function getRepCards(arcResults: TournamentResult[]): { name: string; imageUrl: string }[] {
+    const freq: Record<string, { name: string; imageUrl: string; count: number }> = {};
+    for (const r of arcResults) {
+      if (!r.deck) continue;
+      const pokemonCards = (r.deck.cards ?? []).filter(c => c.card.supertype === 'POKEMON');
+      for (const c of pokemonCards) {
+        const id = c.card.webCardId;
+        if (!freq[id]) freq[id] = { name: c.card.name, imageUrl: c.card.imageUrl ?? '', count: 0 };
+        freq[id].count++;
+      }
+    }
+    return Object.values(freq)
+      .filter(c => c.imageUrl)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 4);
+  }
+
   return (
-    <div className="bg-white rounded-lg shadow-sm p-4 space-y-2">
-      {sorted.map(([arch, count]) => (
-        <div key={arch} className="flex items-center gap-3">
-          <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 w-24 text-center ${ARCHETYPE_COLORS[arch] ?? 'bg-gray-100 text-gray-600'}`}>
-            {arch}
-          </span>
-          <div className="flex-1 bg-gray-100 rounded-full h-3.5 overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all ${BAR_COLORS[arch] ?? 'bg-gray-400'}`}
-              style={{ width: `${Math.max(2, (count / total) * 100)}%` }}
-            />
+    <div className="bg-white rounded-lg shadow-sm p-4 space-y-3">
+      {sorted.map(([arch, arcResults]) => {
+        const count = arcResults.length;
+        const repCards = getRepCards(arcResults);
+        return (
+          <div key={arch} className="flex items-center gap-3 min-h-[64px]">
+            {/* Card images: up to 4 stacked slightly */}
+            <div className="flex items-center shrink-0" style={{ width: 120 }}>
+              {repCards.length > 0 ? (
+                <div className="flex gap-0.5">
+                  {repCards.map((card, i) => (
+                    <div key={i} className="relative" style={{ width: 28 }}>
+                      <div className="relative w-7 h-10 rounded overflow-hidden bg-gray-100 border border-gray-200 shadow-sm">
+                        <Image
+                          src={card.imageUrl}
+                          alt={card.name}
+                          fill
+                          sizes="28px"
+                          className="object-cover"
+                          unoptimized
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="w-7 h-10 rounded bg-gray-100 border border-gray-200" />
+              )}
+            </div>
+            {/* Archetype label */}
+            <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 w-28 text-center ${ARCHETYPE_COLORS[arch] ?? 'bg-gray-100 text-gray-600'}`}>
+              {arch}
+            </span>
+            {/* Bar */}
+            <div className="flex-1 bg-gray-100 rounded-full h-3.5 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${BAR_COLORS[arch] ?? 'bg-gray-400'}`}
+                style={{ width: `${Math.max(2, (count / total) * 100)}%` }}
+              />
+            </div>
+            {/* Count */}
+            <span className="text-xs text-gray-600 shrink-0 w-20 text-right">
+              {count} ({Math.round((count / total) * 100)}%)
+            </span>
           </div>
-          <span className="text-xs text-gray-600 shrink-0 w-20 text-right">
-            {count} ({Math.round((count / total) * 100)}%)
-          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+function WeaknessSummary({ results }: { results: TournamentResult[] }) {
+  const decksWithData = results.filter(r => r.deck && getDeckCards(r.deck).length > 0);
+  if (decksWithData.length === 0) return null;
+
+  const typeCounts: Record<string, number> = {};
+  for (const r of decksWithData) {
+    const type = getDeckType(r.deck!);
+    typeCounts[type] = (typeCounts[type] ?? 0) + 1;
+  }
+
+  const weaknessCounts: Record<string, number> = {};
+  for (const [type, count] of Object.entries(typeCounts)) {
+    const weakness = WEAKNESS_OF[type];
+    if (weakness) weaknessCounts[weakness] = (weaknessCounts[weakness] ?? 0) + count;
+  }
+
+  const sortedTypes = Object.entries(typeCounts).sort((a, b) => b[1] - a[1]);
+  const sortedWeaknesses = Object.entries(weaknessCounts).sort((a, b) => b[1] - a[1]);
+  const total = decksWithData.length;
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm p-4">
+      <h2 className="text-lg font-semibold text-gray-800 mb-4">Weakness Summary</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Deck Types in Field</p>
+          <div className="space-y-2">
+            {sortedTypes.map(([type, count]) => (
+              <div key={type} className="flex items-center gap-2 text-sm">
+                <span className="w-5 text-base leading-none">{TYPE_ICON[type] ?? '?'}</span>
+                <span className="w-24 font-medium text-gray-700">{type}</span>
+                <div className="flex-1 bg-gray-100 rounded-full h-2.5 overflow-hidden">
+                  <div className={`h-full rounded-full ${TYPE_COLOR[type] ?? 'bg-gray-400'}`} style={{ width: `${(count / total) * 100}%` }} />
+                </div>
+                <span className="text-gray-500 text-xs w-14 text-right">{count}/{total}</span>
+              </div>
+            ))}
+          </div>
         </div>
-      ))}
+        <div>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Best Attack Types vs. Field</p>
+          <div className="space-y-2">
+            {sortedWeaknesses.map(([type, count]) => (
+              <div key={type} className="flex items-center gap-2 text-sm">
+                <span className="w-5 text-base leading-none">{TYPE_ICON[type] ?? '?'}</span>
+                <span className="w-24 font-medium text-gray-700">{type}</span>
+                <div className="flex-1 bg-gray-100 rounded-full h-2.5 overflow-hidden">
+                  <div className={`h-full rounded-full ${TYPE_COLOR[type] ?? 'bg-orange-400'}`} style={{ width: `${(count / total) * 100}%` }} />
+                </div>
+                <span className="text-gray-500 text-xs w-20 text-right">×{count} decks</span>
+              </div>
+            ))}
+          </div>
+          {sortedWeaknesses.length > 0 && (
+            <p className="text-xs text-gray-400 mt-3">
+              {TYPE_ICON[sortedWeaknesses[0][0]]} <span className="font-medium text-gray-600">{sortedWeaknesses[0][0]}</span> attacks are effective against {sortedWeaknesses[0][1]} of {total} decks in this tournament.
+            </p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
