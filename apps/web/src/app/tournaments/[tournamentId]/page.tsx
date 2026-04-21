@@ -67,15 +67,18 @@ const ARCHETYPE_INFER_MAP: Array<[string, string]> = [
   ['ヨルノズク', '夜黑鴞'],
   ['メガアブソルex', '超級絕對魔獸ex'],
   ['ヤドキング', '呆呆王'],
+  ['シロナのガブリアスex', '竹蘭的烈咬陸鯊ex'],  // Cynthia's Garchomp ex
+  ['マリィのオーロンゲex', '瑪俐的長毛巨魔ex'],    // Marnie's Grimmsnarl ex
+  ['フーディン', '胡地'],                           // Alakazam (main attacker)
 ];
 
 // Draw-engine / support Pokémon: JP name fragment → ZH display name (falls back to zhName from API if available)
 // Excludes overly common cards (キチキギスex, ラティアスex) that appear in nearly every deck
+// フーディン is now in ARCHETYPE_INFER_MAP as a main attacker
 const DRAW_SUPPORT_JP_MAP: Array<[string, string]> = [
   ['リーリエのピッピex', '莉莉艾的皮皮ex'], // Lillie's Clefairy ex
   ['ノコッチex', '土龍節節'],              // Dudunsparce ex — draw-until-7 engine
   ['ゲノセクトex', '蓋諾賽克特ex'],        // Genesect ex
-  ['フーディン', '胡地'],                  // Alakazam — psychic draw
 ];
 
 // ACE SPEC trainer cards: JP name fragment → ZH display name
@@ -268,6 +271,12 @@ function inferArchetype(deck: DeckResult): string {
   for (const [fragment, arch] of ARCHETYPE_INFER_MAP) {
     if (names.some(n => n.includes(fragment))) return arch;
   }
+  // Smart fallback: use highest-quantity ex Pokémon from DB cards that has a zhName
+  const sortedDbPokemon = [...deckCards]
+    .filter(c => c.card.supertype === 'POKEMON')
+    .sort((a, b) => b.quantity - a.quantity);
+  const topExWithZh = sortedDbPokemon.find(c => c.card.name.includes('ex') && c.card.zhName);
+  if (topExWithZh) return topExWithZh.card.zhName!;
   return '其他';
 }
 
@@ -589,7 +598,8 @@ function ArchetypeChart({ results }: { results: TournamentResult[] }) {
     '幽靈拖龍ex': 'bg-violet-400', '翁固拉蓬': 'bg-green-500', '火箭隊': 'bg-red-500',
     '超級路卡利歐ex': 'bg-yellow-500', '猛雷鼓ex': 'bg-blue-500', '喵喵ex': 'bg-orange-400',
     '日月石': 'bg-stone-400', '帝拉帕鬼ex': 'bg-teal-400', '夜黑鴞': 'bg-indigo-400',
-    '超級絕對魔獸ex': 'bg-pink-400', '未知': 'bg-slate-300', '其他': 'bg-gray-400',
+    '超級絕對魔獸ex': 'bg-pink-400', '竹蘭的烈咬陸鯊ex': 'bg-amber-600', '瑪俐的長毛巨魔ex': 'bg-purple-500',
+    '胡地': 'bg-cyan-500', '呆呆王': 'bg-blue-300', '未知': 'bg-slate-300', '其他': 'bg-gray-400',
   };
 
   // Group results by inferred archetype
