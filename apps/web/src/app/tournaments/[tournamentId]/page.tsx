@@ -40,8 +40,6 @@ const ARCHETYPE_COLORS: Record<string, string> = {
   '火箭隊': 'bg-red-100 text-red-700',
   '超級路卡利歐ex': 'bg-yellow-100 text-yellow-800',
   '猛雷鼓ex': 'bg-blue-100 text-blue-700',
-  '喵喵ex': 'bg-orange-100 text-orange-700',
-  '日月石': 'bg-stone-100 text-stone-700',
   '帝拉帕鬼ex': 'bg-teal-100 text-teal-700',
   '夜黑鴞': 'bg-indigo-100 text-indigo-700',
   '超級絕對魔獸ex': 'bg-pink-100 text-pink-700',
@@ -63,7 +61,6 @@ const ARCHETYPE_INFER_MAP: Array<[string, string]> = [
   ['オーガポン いどのめんex', '翁固拉蓬'],
   ['オーガポン', '翁固拉蓬'],
   ['イワパレス', '日月石'],
-  ['ニャースex', '喵喵ex'],
   ['ヨルノズク', '夜黑鴞'],
   ['メガアブソルex', '超級絕對魔獸ex'],
   ['ヤドキング', '呆呆王'],
@@ -130,7 +127,12 @@ const PLACEMENT_BADGE: Record<number, string> = {
   1: 'bg-yellow-400 text-yellow-900', 2: 'bg-gray-300 text-gray-800', 3: 'bg-orange-300 text-orange-900',
 };
 
-const PLACEMENT_LABEL: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' };
+function getPlacementLabel(p: number): string {
+  if (p === 1) return '🥇';
+  if (p === 2) return '🥈';
+  if (p === 3) return '🥉';
+  return `#${p}`;
+}
 
 export default function TournamentDetailPage({ params }: { params: Promise<{ tournamentId: string }> }) {
   const { tournamentId } = use(params);
@@ -159,22 +161,38 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ tou
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-gradient-to-r from-purple-700 to-blue-600 text-white p-6">
-        <Link href="/tournaments" className="text-purple-200 hover:text-white text-sm mb-2 block">← Tournaments</Link>
+        <Link href="/tournaments" className="text-purple-200 hover:text-white text-sm mb-2 block">← 比賽列表</Link>
         <h1 className="text-2xl font-bold">{tournament.name}</h1>
         <div className="flex flex-wrap gap-3 mt-2 text-sm text-purple-200">
-          <span>📅 {new Date(tournament.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+          <span>📅 {new Date(tournament.date).toLocaleDateString('zh-HK', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
           {tournament.location && <span>📍 {tournament.location}</span>}
-          {tournament.playerCount && <span>👥 {tournament.playerCount} players</span>}
+          {tournament.playerCount && <span>👥 {tournament.playerCount} 人</span>}
           <span className="bg-white/20 px-2 py-0.5 rounded">{tournament.region}</span>
+          {tournament.results?.length > 0 && (
+            <span className="bg-white/20 px-2 py-0.5 rounded">{tournament.results.length} 場結果·{tournament.results?.filter((r: TournamentResult) => r.deck).length ?? 0} 張卡表</span>
+          )}
         </div>
       </div>
 
       <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
         {/* Archetype summary */}
         {tournament.results?.length > 0 && (
-          <div>
-            <h2 className="text-lg font-semibold text-gray-800 mb-3">Archetype Breakdown</h2>
-            <ArchetypeChart results={tournament.results} />
+          <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
+              <span className="text-base">🎯</span>
+              <h2 className="text-base font-semibold text-gray-800">强勢分布</h2>
+              <span className="text-xs text-gray-400 ml-auto">{Object.keys((() => {
+                const g: Record<string, number> = {};
+                tournament.results.forEach((r: TournamentResult) => {
+                  const k = (r.deckArchetype && r.deckArchetype !== 'UNKNOWN') ? r.deckArchetype : (r.deck ? inferArchetype(r.deck) : '未知');
+                  g[k] = (g[k] ?? 0) + 1;
+                });
+                return g;
+              })()).length} 個强勢</span>
+            </div>
+            <div className="p-4">
+              <ArchetypeChart results={tournament.results} />
+            </div>
           </div>
         )}
 
@@ -188,61 +206,71 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ tou
           <DeckSummaryStats results={tournament.results} />
         )}
 
-        {/* Results — 2-column grid, deck always visible */}
+        {/* Results */}
         <div>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold text-gray-800">Results ({tournament.results?.length ?? 0})</h2>
-            <span className="text-xs text-gray-400">{tournament.results?.filter((r: TournamentResult) => r.deck).length ?? 0} decks available</span>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-base">🏆</span>
+            <h2 className="text-base font-semibold text-gray-800">成績排名</h2>
+            <span className="text-xs text-gray-400 ml-1">({tournament.results?.length ?? 0})</span>
           </div>
           {tournament.results?.length === 0 && (
             <p className="text-gray-400 text-center py-8">No results recorded.</p>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {tournament.results?.map((result: TournamentResult) => {
-              const inferredArch = (result.deckArchetype && result.deckArchetype !== 'UNKNOWN')
-                ? result.deckArchetype
-                : (result.deck ? inferArchetype(result.deck) : undefined);
-              const archParts = result.deck ? inferArchetypeParts(result.deck) : null;
-              return (
-              <div key={result.id} className="bg-white rounded-lg shadow-sm overflow-hidden border border-gray-100">
-                <div className="flex items-center gap-3 p-3">
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${PLACEMENT_BADGE[result.placement] ?? 'bg-gray-100 text-gray-600'}`}>
-                    {PLACEMENT_LABEL[result.placement] ?? result.placement}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900 truncate">{result.playerName}</p>
-                    {result.deckName && <p className="text-xs text-gray-500 truncate">{result.deckName}</p>}
-                  </div>
-                  {inferredArch && (
-                    <div className="flex flex-col items-end shrink-0 gap-0.5 max-w-[130px]">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ARCHETYPE_COLORS[inferredArch] ?? 'bg-gray-100 text-gray-600'}`}>
-                        {inferredArch}
-                      </span>
-                      {archParts?.support && archParts.support !== inferredArch && (
-                        <span className="text-[9px] text-gray-400 leading-tight">+ {archParts.support}</span>
-                      )}
-                      {archParts?.ace && (
-                        <span className="text-[9px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded leading-tight font-medium">
-                          ACE·{archParts.ace}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  {result.deck?.deckCode && (
-                    <Link
-                      href={`/deck-builder/event/${result.deck.deckCode}`}
-                      className="text-xs text-blue-600 hover:text-blue-800 shrink-0 px-2 py-1 bg-blue-50 rounded transition-colors"
-                    >
-                      View →
-                    </Link>
-                  )}
-                </div>
-                {result.deck && <DeckPanel deck={result.deck} />}
-              </div>
-            );})}
+            {tournament.results?.map((result: TournamentResult) => (
+              <ResultCard key={result.id} result={result} />
+            ))}
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ResultCard({ result }: { result: TournamentResult }) {
+  const [deckOpen, setDeckOpen] = useState(false);
+  const inferredArch = (result.deckArchetype && result.deckArchetype !== 'UNKNOWN')
+    ? result.deckArchetype
+    : (result.deck ? inferArchetype(result.deck) : undefined);
+  const archParts = result.deck ? inferArchetypeParts(result.deck) : null;
+  const hasDeck = !!result.deck;
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-gray-100">
+      <div className="flex items-center gap-3 p-3">
+        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${PLACEMENT_BADGE[result.placement] ?? 'bg-gray-100 text-gray-600'}`}>
+          {getPlacementLabel(result.placement)}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-medium text-gray-900 truncate">{result.playerName}</p>
+          {result.deckName && <p className="text-xs text-gray-500 truncate">{result.deckName}</p>}
+        </div>
+        {inferredArch && (
+          <div className="flex flex-col items-end shrink-0 gap-0.5 max-w-[130px]">
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ARCHETYPE_COLORS[inferredArch] ?? 'bg-gray-100 text-gray-600'}`}>
+              {inferredArch}
+            </span>
+            {archParts?.support && archParts.support !== inferredArch && (
+              <span className="text-[9px] text-gray-400 leading-tight">+ {archParts.support}</span>
+            )}
+            {archParts?.ace && (
+              <span className="text-[9px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded leading-tight font-medium">
+                ACE·{archParts.ace}
+              </span>
+            )}
+          </div>
+        )}
+        {hasDeck && (
+          <button
+            type="button"
+            onClick={() => setDeckOpen(!deckOpen)}
+            className="text-xs text-gray-500 hover:text-gray-700 shrink-0 px-2 py-1 bg-gray-50 hover:bg-gray-100 rounded border border-gray-200 transition-colors"
+          >
+            {deckOpen ? '收起 ▲' : '卡表 ▼'}
+          </button>
+        )}
+      </div>
+      {deckOpen && result.deck && <DeckPanel deck={result.deck} />}
     </div>
   );
 }
@@ -515,20 +543,30 @@ function DeckSummaryStats({ results }: { results: TournamentResult[] }) {
   const totalDecks = decksWithData.length;
   if (totalDecks === 0) return null;
 
-  // Count most popular cards across all decks
+  // Count most popular cards across all decks — key by name to avoid duplicate entries for reprints
   const cardFreq: Record<string, { name: string; count: number; imageUrl: string }> = {};
   for (const r of decksWithData) {
+    const seenInDeck = new Set<string>();
     for (const c of getDeckCards(r.deck!)) {
-      if (!cardFreq[c.cardId]) cardFreq[c.cardId] = { name: c.cardName, count: 0, imageUrl: c.imageUrl };
-      cardFreq[c.cardId].count++;
+      const key = c.cardName;
+      if (seenInDeck.has(key)) continue; // count each card once per deck
+      seenInDeck.add(key);
+      if (!cardFreq[key]) cardFreq[key] = { name: c.cardName, count: 0, imageUrl: c.imageUrl };
+      if (!cardFreq[key].imageUrl && c.imageUrl) cardFreq[key].imageUrl = c.imageUrl;
+      cardFreq[key].count++;
     }
   }
   const top = Object.entries(cardFreq).sort((a, b) => b[1].count - a[1].count).slice(0, 5);
 
   return (
-    <div className="bg-white rounded-lg shadow-sm p-4">
-      <h2 className="text-lg font-semibold text-gray-800 mb-3">Deck Insights <span className="text-sm font-normal text-gray-400">({totalDecks} decks)</span></h2>
-      <p className="text-sm text-gray-600 mb-3">Most popular cards across all decks:</p>
+    <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+      <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
+        <span className="text-base">🂴</span>
+        <h2 className="text-base font-semibold text-gray-800">熱門用牌</h2>
+        <span className="text-xs text-gray-400 ml-auto">共 {totalDecks} 張卡表</span>
+      </div>
+      <div className="p-4">
+      <p className="text-sm text-gray-500 mb-3">各張卡表共同最多人使用：</p>
       <div className="flex flex-wrap gap-4">
         {top.map(([id, c]) => (
           <div key={id} className="flex flex-col items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-2 min-w-[80px]">
@@ -539,10 +577,11 @@ function DeckSummaryStats({ results }: { results: TournamentResult[] }) {
             )}
             <div className="text-center">
               <p className="text-xs font-medium text-gray-800 leading-tight max-w-[80px] line-clamp-2">{c.name}</p>
-              <p className="text-xs text-gray-500 mt-0.5">In {c.count}/{totalDecks}</p>
+          <p className="text-xs text-gray-500 mt-0.5">{c.count}/{totalDecks} 張卡表</p>
             </div>
           </div>
         ))}
+      </div>
       </div>
     </div>
   );
@@ -596,7 +635,7 @@ function ArchetypeChart({ results }: { results: TournamentResult[] }) {
     AGGRO: 'bg-red-400', CONTROL: 'bg-blue-400', COMBO: 'bg-purple-400',
     MIDRANGE: 'bg-yellow-400', TOOLBOX: 'bg-green-400', OTHER: 'bg-gray-400', UNKNOWN: 'bg-slate-300',
     '幽靈拖龍ex': 'bg-violet-400', '翁固拉蓬': 'bg-green-500', '火箭隊': 'bg-red-500',
-    '超級路卡利歐ex': 'bg-yellow-500', '猛雷鼓ex': 'bg-blue-500', '喵喵ex': 'bg-orange-400',
+    '超級路卡利歐ex': 'bg-yellow-500', '猛雷鼓ex': 'bg-blue-500',
     '日月石': 'bg-stone-400', '帝拉帕鬼ex': 'bg-teal-400', '夜黑鴞': 'bg-indigo-400',
     '超級絕對魔獸ex': 'bg-pink-400', '竹蘭的烈咬陸鯊ex': 'bg-amber-600', '瑪俐的長毛巨魔ex': 'bg-purple-500',
     '胡地': 'bg-cyan-500', '呆呆王': 'bg-blue-300', '未知': 'bg-slate-300', '其他': 'bg-gray-400',
@@ -634,8 +673,7 @@ function ArchetypeChart({ results }: { results: TournamentResult[] }) {
       .slice(0, 4);
   }
 
-  const placementLabel = (p: number) =>
-    p === 1 ? '🥇' : p === 2 ? '🥈' : p === 3 ? '🥉' : `${p}位`;
+  const placementLabel = getPlacementLabel;
 
   return (
     <div className="bg-white rounded-lg shadow-sm p-4 space-y-4">
@@ -714,11 +752,15 @@ function WeaknessSummary({ results }: { results: TournamentResult[] }) {
   const total = decksWithData.length;
 
   return (
-    <div className="bg-white rounded-lg shadow-sm p-4">
-      <h2 className="text-lg font-semibold text-gray-800 mb-4">Weakness Summary</h2>
+    <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+      <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
+        <span className="text-base">⚡</span>
+        <h2 className="text-base font-semibold text-gray-800">弱點分析</h2>
+      </div>
+      <div className="p-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Deck Types in Field</p>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">場内强勢類型</p>
           <div className="space-y-2">
             {sortedTypes.map(([type, count]) => (
               <div key={type} className="flex items-center gap-2 text-sm">
@@ -733,7 +775,7 @@ function WeaknessSummary({ results }: { results: TournamentResult[] }) {
           </div>
         </div>
         <div>
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Best Attack Types vs. Field</p>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">有效攻擊屬性</p>
           <div className="space-y-2">
             {sortedWeaknesses.map(([type, count]) => (
               <div key={type} className="flex items-center gap-2 text-sm">
@@ -747,11 +789,12 @@ function WeaknessSummary({ results }: { results: TournamentResult[] }) {
             ))}
           </div>
           {sortedWeaknesses.length > 0 && (
-            <p className="text-xs text-gray-400 mt-3">
-              {TYPE_ICON[sortedWeaknesses[0][0]]} <span className="font-medium text-gray-600">{sortedWeaknesses[0][0]}</span> attacks are effective against {sortedWeaknesses[0][1]} of {total} decks in this tournament.
+          <p className="text-xs text-gray-400 mt-3">
+              {TYPE_ICON[sortedWeaknesses[0][0]]} <span className="font-medium text-gray-600">{sortedWeaknesses[0][0]}</span> 屬性攻擊對場內 {sortedWeaknesses[0][1]}/{total} 張牌組有效。
             </p>
           )}
         </div>
+      </div>
       </div>
     </div>
   );

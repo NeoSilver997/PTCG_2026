@@ -6,6 +6,7 @@ const apiBaseUrl = process.env.INTERNAL_API_URL || `http://localhost:${API_PORT}
 const nextConfig: NextConfig = {
   /* config options here */
   reactCompiler: true,
+  devIndicators: false,
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || '/api/v1',
   },
