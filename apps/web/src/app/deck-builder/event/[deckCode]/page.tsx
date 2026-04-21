@@ -227,8 +227,15 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
                       : img.includes('_E_') ? 'ENERGY'
                       : img.includes('_T_') ? 'TRAINER'
                       : undefined;
-      // Infer rarity for ACE SPEC trainers (card code literally contains "ACE SPEC")
-      const isAceSpec = String(c.cardCode ?? '').toUpperCase().includes('ACE SPEC');
+      // Infer rarity for ACE SPEC trainers (card code or well-known JP name)
+      const KNOWN_ACE_JP = new Set([
+        'マキシマムベルト', 'プライムキャッチャー', 'テラスタルオーブ', 'マスターボール',
+        'ライムのコスプレそうち', 'スターバース', 'はかせのロールプレイ', 'ハンディチップ',
+        'コストダウン', 'スタークロイス', 'アドレナリンシリンジ', 'アクアキューブ',
+        'スーパークロス', 'ドミネートガン', 'VIPパス',
+      ]);
+      const isAceSpec = String(c.cardCode ?? '').toUpperCase().includes('ACE SPEC')
+        || KNOWN_ACE_JP.has((c.cardName ?? '').trim());
       const subtypes: string[] = supertype === 'ENERGY'
         ? (c.cardName?.includes('エネルギー') && !c.cardName?.includes('特殊') ? ['BASIC_ENERGY'] : ['SPECIAL_ENERGY'])
         : [];
@@ -259,13 +266,21 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
     sections.get(key)!.push(entry);
   }
 
-  // Derive archetype name from main pokemon section — prefer Chinese name
-  const archetypeName = (sections.get('pokemon-main') ?? [])
+  // Derive archetype name: main attacker(s) + notable draw-engine support, prefer Chinese name
+  // Exclude generic draw cards (キチキギスex/ラティアスex) that appear in nearly every deck
+  const DRAW_ENGINE_JP = ['\u30ea\u30fc\u30ea\u30a8\u306e\u30d4\u30c3\u30d4ex', '\u30ce\u30b3\u30c3\u30c1ex', '\u30b2\u30ce\u30bb\u30af\u30c8ex', '\u30d5\u30fc\u30c7\u30a3\u30f3'];
+  const mainNames = (sections.get('pokemon-main') ?? [])
     .map((e) => e.card.zhName ?? e.card.name)
     .filter((n): n is string => !!n)
     .filter((n, i, arr) => arr.indexOf(n) === i)
-    .slice(0, 2)
-    .join(' + ');
+    .slice(0, 2);
+  const supportDrawNames = (sections.get('pokemon-support') ?? [])
+    .filter(e => DRAW_ENGINE_JP.some(f => (e.card.name ?? '').includes(f)))
+    .map((e) => e.card.zhName ?? e.card.name)
+    .filter((n): n is string => !!n)
+    .filter((n, i, arr) => arr.indexOf(n) === i)
+    .slice(0, 1);
+  const archetypeName = [...mainNames, ...supportDrawNames].join(' + ');
 
   // ACE SPEC card from ace section
   const aceEntry = (sections.get('ace') ?? [])[0];
