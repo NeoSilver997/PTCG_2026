@@ -684,6 +684,221 @@ function ProductImportPanel() {
   );
 }
 
+// ── Empty Deck Refresh Panel ───────────────────────────────────────────────
+
+function EmptyDeckRefreshPanel({ onRunJob }: { onRunJob: (payload: object) => void }) {
+  const [status, setStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
+  const [result, setResult] = useState<string | null>(null);
+  const [limit, setLimit] = useState<number | ''>('');
+
+  const { data: statsData, refetch: refetchStats, isFetching: isFetchingStats } = useQuery({
+    queryKey: ['empty-deck-stats'],
+    queryFn: () => apiClient.get('/decks/admin/empty-deck-stats'),
+    staleTime: 30_000,
+    retry: false,
+  });
+  const stats = statsData?.data ?? null;
+
+  const handleRun = () => {
+    setStatus('running');
+    setResult(null);
+    const payload: Record<string, unknown> = { jobType: 'RESYNC_DECKS', source: 'JP', emptyOnly: true };
+    if (limit !== '') payload.processLimit = Number(limit);
+    onRunJob(payload);
+    setStatus('done');
+    setResult('Job queued — watch Recent Jobs for progress');
+    refetchStats();
+  };
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm overflow-hidden border-l-4 border-sky-400">
+      <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center gap-2">
+          <span className="text-sky-500 font-bold text-lg">🃏</span>
+          <h3 className="font-semibold text-gray-800 text-sm">Empty Deck Refresh</h3>
+          {stats?.emptyCount != null && (
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+              stats.emptyCount > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+            }`}>
+              {stats.emptyCount} empty
+            </span>
+          )}
+          {stats?.totalWithData != null && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 font-medium">
+              {stats.totalWithData} total with data
+            </span>
+          )}
+        </div>
+        <button
+          onClick={() => refetchStats()}
+          disabled={isFetchingStats}
+          className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-40"
+        >
+          {isFetchingStats ? '⟳' : '↻'}
+        </button>
+      </div>
+
+      <div className="px-4 pb-4 space-y-2">
+        <p className="text-xs text-gray-400">
+          Re-links decks that have <code className="bg-gray-100 px-1 rounded">deckData</code> stored but no{' '}
+          <code className="bg-gray-100 px-1 rounded">DeckCard</code> rows. Ordered by newest first.
+          Runs <code className="bg-gray-100 px-1 rounded">resync-deck-cards.ts --empty-only</code>.
+        </p>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <input
+            type="number"
+            min={1}
+            placeholder="Limit (optional)"
+            value={limit}
+            onChange={(e) => setLimit(e.target.value === '' ? '' : Number(e.target.value))}
+            className="w-36 text-xs border border-gray-300 rounded px-2 py-1 text-gray-700 focus:outline-none focus:ring-1 focus:ring-sky-400"
+          />
+          <button
+            onClick={handleRun}
+            disabled={status === 'running' || (stats?.emptyCount != null && stats.emptyCount === 0)}
+            className={`px-3 py-1.5 text-xs font-medium rounded transition ${
+              status === 'running'
+                ? 'bg-sky-300 text-sky-800 cursor-wait'
+                : stats?.emptyCount === 0
+                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  : 'bg-sky-600 text-white hover:bg-sky-700'
+            }`}
+          >
+            {status === 'running' ? '⟳ Queuing…' : '▶ Run Now'}
+          </button>
+          {result && (
+            <span className={`text-xs font-mono ${status === 'error' ? 'text-red-500' : 'text-green-600'}`}>
+              {status === 'done' ? '✓ ' : '✗ '}{result}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Deck Meta Refresh Panel ────────────────────────────────────────────────
+
+function DeckMetaRefreshPanel({ onRunJob }: { onRunJob: (payload: object) => void }) {
+  const [status, setStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
+  const [result, setResult] = useState<string | null>(null);
+  const [limit, setLimit] = useState<number | ''>('');
+  const [refreshAll, setRefreshAll] = useState(false);
+  const [refreshPrices, setRefreshPrices] = useState(true);
+
+  const { data: statsData, refetch: refetchStats, isFetching: isFetchingStats } = useQuery({
+    queryKey: ['missing-meta-stats'],
+    queryFn: () => apiClient.get('/decks/admin/missing-meta-stats'),
+    staleTime: 30_000,
+    retry: false,
+  });
+  const stats = statsData?.data ?? null;
+
+  const handleRun = () => {
+    setStatus('running');
+    setResult(null);
+    const payload: Record<string, unknown> = {
+      jobType: 'REFRESH_DECK_META',
+      source: 'JP',
+      refreshAll,
+      refreshPrices,
+    };
+    if (limit !== '') payload.processLimit = Number(limit);
+    onRunJob(payload);
+    setStatus('done');
+    setResult('Job queued — watch Recent Jobs for progress');
+    refetchStats();
+  };
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm overflow-hidden border-l-4 border-emerald-400">
+      <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center gap-2">
+          <span className="text-emerald-500 font-bold text-lg">🏷️</span>
+          <h3 className="font-semibold text-gray-800 text-sm">Deck Archetype + Price Refresh</h3>
+          {stats?.missingNameCount != null && (
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+              stats.missingNameCount > 0 ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'
+            }`}>
+              {stats.missingNameCount} missing name
+            </span>
+          )}
+          {stats?.totalWithCards != null && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">
+              {stats.totalWithCards} total
+            </span>
+          )}
+        </div>
+        <button
+          onClick={() => refetchStats()}
+          disabled={isFetchingStats}
+          className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-40"
+        >
+          {isFetchingStats ? '⟳' : '↻'}
+        </button>
+      </div>
+
+      <div className="px-4 pb-4 space-y-2">
+        <p className="text-xs text-gray-400">
+          Server-side computation of <code className="bg-gray-100 px-1 rounded">cachedArchetypeName</code> / <code className="bg-gray-100 px-1 rounded">cachedAceName</code>{' '}
+          for all event decks that have linked cards. Mirrors the deck-builder page logic.
+          Runs <code className="bg-gray-100 px-1 rounded">refresh-deck-meta.ts</code>.
+        </p>
+
+        <div className="flex items-center gap-4 flex-wrap">
+          <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={refreshAll}
+              onChange={(e) => setRefreshAll(e.target.checked)}
+              className="rounded"
+            />
+            <span>Re-compute all</span>
+            <span className="text-gray-400">(not just missing)</span>
+          </label>
+          <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={refreshPrices}
+              onChange={(e) => setRefreshPrices(e.target.checked)}
+              className="rounded"
+            />
+            <span>Also refresh prices</span>
+          </label>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <input
+            type="number"
+            min={1}
+            placeholder="Limit (optional)"
+            value={limit}
+            onChange={(e) => setLimit(e.target.value === '' ? '' : Number(e.target.value))}
+            className="w-36 text-xs border border-gray-300 rounded px-2 py-1 text-gray-700 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+          />
+          <button
+            onClick={handleRun}
+            disabled={status === 'running'}
+            className={`px-3 py-1.5 text-xs font-medium rounded transition ${
+              status === 'running'
+                ? 'bg-emerald-300 text-emerald-800 cursor-wait'
+                : 'bg-emerald-600 text-white hover:bg-emerald-700'
+            }`}
+          >
+            {status === 'running' ? '⟳ Queuing…' : '▶ Run Now'}
+          </button>
+          {result && (
+            <span className={`text-xs font-mono ${status === 'error' ? 'text-red-500' : 'text-green-600'}`}>
+              {status === 'done' ? '✓ ' : '✗ '}{result}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Deck Price Cache Panel ─────────────────────────────────────────────────
 
 function DeckPriceCachePanel() {
@@ -1020,6 +1235,14 @@ export default function ScraperJobsPage() {
     startImportMutation.mutate({ jobType: 'POKEMON_SPECIES', source: 'JP' });
   }, [startImportMutation]);
 
+  const handleRunEmptyDeckResync = useCallback((payload: object) => {
+    startImportMutation.mutate(payload as any);
+  }, [startImportMutation]);
+
+  const handleRunDeckMetaRefresh = useCallback((payload: object) => {
+    startImportMutation.mutate(payload as any);
+  }, [startImportMutation]);
+
   const formatDuration = (start?: string, end?: string) => {
     if (!start) return '-';
     const secs = Math.floor((new Date(end ?? Date.now()).getTime() - new Date(start).getTime()) / 1000);
@@ -1230,6 +1453,12 @@ export default function ScraperJobsPage() {
 
           {/* Pokédex Species */}
           <PokedexPanel onRunJob={handleRunPokedex} />
+
+          {/* Empty Deck Refresh */}
+          <EmptyDeckRefreshPanel onRunJob={handleRunEmptyDeckResync} />
+
+          {/* Deck Archetype + Price Refresh */}
+          <DeckMetaRefreshPanel onRunJob={handleRunDeckMetaRefresh} />
 
           {/* Products */}
           <ProductImportPanel />

@@ -201,6 +201,51 @@ export function sortSection(entries: DeckCardEntry[], section: SectionKey): Deck
   });
 }
 
+/* ─── Rarity helpers ─────────────────────────────────────────────── */
+
+const RARITY_PRIORITY: Record<string, number> = {
+  SPECIAL_ILLUSTRATION_RARE: 100,
+  ILLUSTRATION_RARE: 90,
+  HYPER_RARE: 85,
+  ULTRA_RARE: 80,
+  ACE_SPEC_RARE: 75,
+  DOUBLE_RARE: 70,
+  RARE_HOLO: 60,
+  RARE: 50,
+  UNCOMMON: 20,
+  COMMON: 10,
+};
+
+/** Rarities that get a visible badge on the card tile (notable art variants). */
+const BADGE_RARITIES = new Set(['SPECIAL_ILLUSTRATION_RARE', 'ILLUSTRATION_RARE', 'ULTRA_RARE', 'HYPER_RARE', 'DOUBLE_RARE']);
+
+/**
+ * Merge deck entries that represent the same logical card (different art variants).
+ * Sums quantities and uses the highest-rarity variant's image/card for display.
+ */
+export function mergeEntriesByCard(entries: DeckCardEntry[]): DeckCardEntry[] {
+  const groups = new Map<string, DeckCardEntry[]>();
+  for (const e of entries) {
+    // Pokémon: group by primaryCardId (same Pokémon, different art)
+    // Trainer/Energy: group by display name (same card, different art variant)
+    const key = e.card.supertype === 'POKEMON'
+      ? (e.card.primaryCardId ?? e.card.canonicalWebCardId ?? e.card.zhName ?? e.card.name ?? e.card.webCardId)
+      : (e.card.zhName ?? e.card.name ?? e.card.webCardId);
+    const grp = groups.get(key);
+    if (grp) grp.push(e);
+    else groups.set(key, [e]);
+  }
+  return Array.from(groups.values()).map((grp) => {
+    if (grp.length === 1) return grp[0];
+    const totalQty = grp.reduce((s, e) => s + e.quantity, 0);
+    // Use highest-rarity variant as the display representative (SAR > AR > SR > RR > normal)
+    const best = grp.reduce((a, b) =>
+      (RARITY_PRIORITY[b.card.rarity ?? ''] ?? 0) > (RARITY_PRIORITY[a.card.rarity ?? ''] ?? 0) ? b : a
+    );
+    return { ...best, quantity: totalQty };
+  });
+}
+
 /* ─── SVG Donut Chart ─────────────────────────────────────────────── */
 
 function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
@@ -1270,6 +1315,12 @@ export function CardTile({
           {card.hp}
         </div>
       )}
+      {/* Rarity badge (SAR / AR / SR / UR / RR) */}
+      {card.rarity && BADGE_RARITIES.has(card.rarity) && RARITY_SHORT[card.rarity] && (
+        <div className="absolute top-7 right-1 bg-amber-500/90 text-black text-[8px] font-bold px-1 py-0.5 rounded shadow leading-none">
+          {RARITY_SHORT[card.rarity]}
+        </div>
+      )}
       {/* Max damage badge (Pokémon) */}
       {dmg > 0 && (
         <div className="absolute bottom-6 right-1 bg-orange-700/90 text-white text-[9px] font-bold px-1 py-0.5 rounded shadow">
@@ -1351,6 +1402,7 @@ export function DeckSection({
   onRoleChange?: (webCardId: string, role: PokemonRole) => void;
 }) {
   if (entries.length === 0) return null;
+  const merged = mergeEntriesByCard(entries);
   const qty = entries.reduce((s, e) => s + e.quantity, 0);
   return (
     <div className="mb-6">
@@ -1359,11 +1411,11 @@ export function DeckSection({
           {SECTION_LABELS[section]}
         </span>
         <span className="text-slate-400 text-xs">
-          {entries.length} 種 · {qty} 張
+          {merged.length} 種 · {qty} 張
         </span>
       </div>
       <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 xl:grid-cols-12 gap-2">
-        {sortSection(entries, section).map((e) => (
+        {sortSection(merged, section).map((e) => (
           <CardTile key={e.card.webCardId} entry={e} section={section} onClick={onCardClick} onRoleChange={onRoleChange} />
         ))}
       </div>
@@ -1398,6 +1450,7 @@ export function PairedPokemonSection({
 
   const renderSide = (section: SectionKey, entries: DeckCardEntry[], cols: string) => {
     if (!entries.length) return null;
+    const merged = mergeEntriesByCard(entries);
     const qty = entries.reduce((s, e) => s + e.quantity, 0);
     return (
       <div className="flex-1 min-w-0">
@@ -1405,10 +1458,10 @@ export function PairedPokemonSection({
           <span className={`px-2.5 py-0.5 rounded text-xs font-bold text-white ${SECTION_COLORS[section] ?? 'bg-slate-600'}`}>
             {SECTION_LABELS[section]}
           </span>
-          <span className="text-slate-400 text-xs">{entries.length} 種 · {qty} 張</span>
+          <span className="text-slate-400 text-xs">{merged.length} 種 · {qty} 張</span>
         </div>
         <div className={cols}>
-          {sortSection(entries, section).map((e) => (
+          {sortSection(merged, section).map((e) => (
             <CardTile key={e.card.webCardId} entry={e} section={section} onClick={onCardClick} onRoleChange={onRoleChange} />
           ))}
         </div>
@@ -1444,43 +1497,43 @@ export function PairedSection({
   const colsClass = 'grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 gap-2';
   return (
     <div className="mb-6 flex gap-4">
-      {entriesA.length > 0 && (
+      {entriesA.length > 0 && (() => { const mA = mergeEntriesByCard(entriesA); return (
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-3">
             <span className={`px-2.5 py-0.5 rounded text-xs font-bold text-white ${SECTION_COLORS[sectionA] ?? 'bg-slate-600'}`}>
               {SECTION_LABELS[sectionA]}
             </span>
             <span className="text-slate-400 text-xs">
-              {entriesA.length} 種 · {entriesA.reduce((s, e) => s + e.quantity, 0)} 張
+              {mA.length} 種 · {entriesA.reduce((s, e) => s + e.quantity, 0)} 張
             </span>
           </div>
           <div className={colsClass}>
-            {sortSection(entriesA, sectionA).map((e) => (
+            {sortSection(mA, sectionA).map((e) => (
               <CardTile key={e.card.webCardId} entry={e} section={sectionA} onClick={onCardClick} />
             ))}
           </div>
         </div>
-      )}
+      ); })()}
       {entriesA.length > 0 && entriesB.length > 0 && (
         <div className="w-px bg-slate-700 self-stretch" />
       )}
-      {entriesB.length > 0 && (
+      {entriesB.length > 0 && (() => { const mB = mergeEntriesByCard(entriesB); return (
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-3">
             <span className={`px-2.5 py-0.5 rounded text-xs font-bold text-white ${SECTION_COLORS[sectionB] ?? 'bg-slate-600'}`}>
               {SECTION_LABELS[sectionB]}
             </span>
             <span className="text-slate-400 text-xs">
-              {entriesB.length} 種 · {entriesB.reduce((s, e) => s + e.quantity, 0)} 張
+              {mB.length} 種 · {entriesB.reduce((s, e) => s + e.quantity, 0)} 張
             </span>
           </div>
           <div className={colsClass}>
-            {sortSection(entriesB, sectionB).map((e) => (
+            {sortSection(mB, sectionB).map((e) => (
               <CardTile key={e.card.webCardId} entry={e} section={sectionB} onClick={onCardClick} />
             ))}
           </div>
         </div>
-      )}
+      ); })()}
     </div>
   );
 }

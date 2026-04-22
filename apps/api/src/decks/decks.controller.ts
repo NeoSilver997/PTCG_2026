@@ -48,6 +48,20 @@ export class DecksController {
     return this.deckPriceCacheService.getStats();
   }
 
+  @Get('admin/empty-deck-stats')
+  @Throttle({ long: { limit: 30, ttl: 60000 } })
+  @ApiOperation({ summary: 'Count event decks with deckData but no linked DeckCards' })
+  getEmptyDeckStats() {
+    return this.decksService.getEmptyDeckStats();
+  }
+
+  @Get('admin/missing-meta-stats')
+  @Throttle({ long: { limit: 30, ttl: 60000 } })
+  @ApiOperation({ summary: 'Count event decks that have cards but no cachedArchetypeName' })
+  getMissingMetaStats() {
+    return this.decksService.getMissingMetaStats();
+  }
+
   @Get('code/:deckCode/roles')
   @Throttle({ long: { limit: 100, ttl: 60000 } })
   @ApiOperation({ summary: 'Get all Pokémon role overrides for an event deck' })

@@ -17,6 +17,7 @@ export enum JobType {
   POPULATE_EFFECTS    = 'POPULATE_EFFECTS',
   POKEMON_SPECIES     = 'POKEMON_SPECIES',
   MAP_HK_TO_JP        = 'MAP_HK_TO_JP',
+  REFRESH_DECK_META   = 'REFRESH_DECK_META',
 }
 
 const boolTransform = ({ value }: { value: unknown }) => {
@@ -192,6 +193,12 @@ export class CreateScraperJobDto {
   @Min(1)
   processLimit?: number;
 
+  @ApiPropertyOptional({ default: false, description: '--empty-only: only decks with deckData but 0 DeckCards' })
+  @IsOptional()
+  @Transform(boolTransform)
+  @IsBoolean()
+  emptyOnly?: boolean;
+
   @ApiPropertyOptional({ description: '--report-file= (resync)' })
   @IsOptional()
   @IsString()
@@ -232,5 +239,18 @@ export class CreateScraperJobDto {
   @Min(1)
   @Max(500)
   seedLimit?: number;
+
+  // ── Deck Meta Refresh (refresh-deck-meta.ts) ─────────────────────
+  @ApiPropertyOptional({ default: false, description: '--all: refresh all decks, not just those missing archetype name' })
+  @IsOptional()
+  @Transform(boolTransform)
+  @IsBoolean()
+  refreshAll?: boolean;
+
+  @ApiPropertyOptional({ default: false, description: '--refresh-prices: also update cachedBudgetMin/Max after computing names' })
+  @IsOptional()
+  @Transform(boolTransform)
+  @IsBoolean()
+  refreshPrices?: boolean;
 }
 

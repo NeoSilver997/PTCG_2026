@@ -175,6 +175,7 @@ export class ScrapersService implements OnModuleDestroy {
         command = 'npx';
         args = ['tsx', 'scrapers/resync-deck-cards.ts'];
         if (dto.dryRun)         args.push('--dry-run');
+        if (dto.emptyOnly)      args.push('--empty-only');
         if (dto.processLimit)   args.push(`--limit=${dto.processLimit}`);
         if (dto.reportFile)     args.push(`--report-file=${dto.reportFile}`);
         break;
@@ -211,6 +212,15 @@ export class ScrapersService implements OnModuleDestroy {
       case JobType.MAP_HK_TO_JP:
         command = 'npx';
         args = ['tsx', 'scrapers/map-hk-to-jp.ts', '--apply', '--yes'];
+        break;
+
+      case JobType.REFRESH_DECK_META:
+        command = 'npx';
+        args = ['tsx', 'scrapers/refresh-deck-meta.ts'];
+        if (dto.dryRun)          args.push('--dry-run');
+        if (dto.refreshAll)      args.push('--all');
+        if (dto.refreshPrices)   args.push('--refresh-prices');
+        if (dto.processLimit)    args.push(`--limit=${dto.processLimit}`);
         break;
 
       default:

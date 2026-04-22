@@ -265,6 +265,7 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
         'ライムのコスプレそうち', 'スターバース', 'はかせのロールプレイ', 'ハンディチップ',
         'コストダウン', 'スタークロイス', 'アドレナリンシリンジ', 'アクアキューブ',
         'スーパークロス', 'ドミネートガン', 'VIPパス',
+        'アンフェアスタンプ', 'ヒーローマント', 'ネオアッパーエネルギー', 'シークレットボックス',
       ]);
       const isAceSpec = String(c.cardCode ?? '').toUpperCase().includes('ACE SPEC')
         || KNOWN_ACE_JP.has((c.cardName ?? '').trim());

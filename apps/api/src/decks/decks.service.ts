@@ -613,5 +613,41 @@ export class DecksService {
     `;
     return { updated: (result as number) > 0 };
   }
+
+  /** Count event decks that have deckData stored but no linked DeckCard rows. */
+  async getEmptyDeckStats(): Promise<{ totalWithData: number; emptyCount: number }> {
+    const rows = await this.prisma.$queryRaw<[{ total_with_data: bigint; empty_count: bigint }]>`
+      SELECT
+        COUNT(*) FILTER (WHERE "deckData" IS NOT NULL) AS total_with_data,
+        COUNT(*) FILTER (
+          WHERE "deckData" IS NOT NULL
+            AND NOT EXISTS (SELECT 1 FROM deck_cards dc WHERE dc."deckId" = decks.id)
+        ) AS empty_count
+      FROM decks
+    `;
+    return {
+      totalWithData: Number(rows[0].total_with_data),
+      emptyCount:    Number(rows[0].empty_count),
+    };
+  }
+
+  /** Count event decks that have linked cards but are missing cachedArchetypeName. */
+  async getMissingMetaStats(): Promise<{ totalWithCards: number; missingNameCount: number }> {
+    const rows = await this.prisma.$queryRaw<[{ total_with_cards: bigint; missing_name: bigint }]>`
+      SELECT
+        COUNT(DISTINCT d.id) FILTER (
+          WHERE EXISTS (SELECT 1 FROM deck_cards dc WHERE dc."deckId" = d.id)
+        ) AS total_with_cards,
+        COUNT(DISTINCT d.id) FILTER (
+          WHERE EXISTS (SELECT 1 FROM deck_cards dc WHERE dc."deckId" = d.id)
+            AND d."cachedArchetypeName" IS NULL
+        ) AS missing_name
+      FROM decks d
+    `;
+    return {
+      totalWithCards: Number(rows[0].total_with_cards),
+      missingNameCount: Number(rows[0].missing_name),
+    };
+  }
 }
 

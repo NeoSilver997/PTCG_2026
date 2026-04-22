@@ -11,7 +11,7 @@
  *   npx tsx scrapers/resync-deck-cards.ts --limit=500        # process first N decks
  */
 
-import { PrismaClient } from '../packages/database/node_modules/.prisma/client';
+import { PrismaClient, Prisma } from '../packages/database/node_modules/.prisma/client';
 import * as fs from 'fs';
 
 const prisma = new PrismaClient();
@@ -132,6 +132,7 @@ async function resyncDeck(
 async function main() {
   const args = process.argv.slice(2);
   const dryRun = args.includes('--dry-run');
+  const emptyOnly = args.includes('--empty-only');
   const limitArg = args.find(a => a.startsWith('--limit='));
   const reportFileArg = args.find(a => a.startsWith('--report-file='));
   const limit = limitArg ? parseInt(limitArg.split('=')[1], 10) : Number.POSITIVE_INFINITY;
@@ -140,6 +141,7 @@ async function main() {
   console.log('='.repeat(60));
   console.log('PTCG_2026 — Deck Card Resync');
   console.log(dryRun ? 'Mode: DRY RUN (no DB changes)' : 'Mode: LIVE');
+  if (emptyOnly) console.log('Filter: empty decks only (deckData present, 0 DeckCards)');
   if (isFinite(limit)) console.log(`Limit: ${limit} decks`);
   console.log('='.repeat(60));
 
@@ -148,17 +150,23 @@ async function main() {
   // Count total deck_cards before
   const beforeCount = dryRun ? 0 : await prisma.deckCard.count();
 
-  // Fetch all decks that have stored deckData
+  // Fetch decks: if --empty-only, only those with deckData but no linked DeckCards.
+  // Order by createdAt DESC so newest events are re-linked first.
+  const emptyFilter = emptyOnly
+    ? Prisma.sql`AND NOT EXISTS (SELECT 1 FROM deck_cards dc WHERE dc."deckId" = d.id)`
+    : Prisma.empty;
+  const rowLimit = isFinite(limit) ? limit : 999999;
   const allDecks = await prisma.$queryRaw<Array<{
     id: string;
     deckCode: string | null;
     deckData: any;
   }>>`
-    SELECT id, "deckCode", "deckData"
-    FROM decks
-    WHERE "deckData" IS NOT NULL
-    ORDER BY "updatedAt" ASC
-    LIMIT ${isFinite(limit) ? limit : 999999}
+    SELECT d.id, d."deckCode", d."deckData"
+    FROM decks d
+    WHERE d."deckData" IS NOT NULL
+    ${emptyFilter}
+    ORDER BY d."createdAt" DESC
+    LIMIT ${rowLimit}
   `;
 
   const stats: ResyncStats = {
