@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useState, useEffect, Suspense } from 'react';
+import { use, useState, useEffect, useRef, Suspense } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { Copy } from 'lucide-react';
@@ -285,6 +285,18 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
   // ACE SPEC card from ace section
   const aceEntry = (sections.get('ace') ?? [])[0];
   const aceName = aceEntry ? (aceEntry.card.zhName ?? aceEntry.card.name ?? null) : null;
+
+  // Fire-and-forget: persist computed archetype + ACE name to DB (once per page load, skip if empty)
+  const cachedWritten = useRef(false);
+  useEffect(() => {
+    if (cachedWritten.current || !data?.deckCode) return;
+    const nameToSave = archetypeName || null;
+    const aceToSave = aceName || null;
+    if (!nameToSave && !aceToSave) return;
+    cachedWritten.current = true;
+    apiClient.patch(`/decks/code/${data.deckCode}/meta`, { archetypeName: nameToSave, aceName: aceToSave })
+      .catch(() => { /* non-critical */ });
+  }, [data?.deckCode, archetypeName, aceName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-4 md:p-6">

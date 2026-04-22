@@ -597,5 +597,21 @@ export class DecksService {
       WHERE "deckCode" = ${deckCode} AND "canonicalWebCardId" = ${canonicalWebCardId}
     `;
   }
+
+  /** Cache the computed archetype name and ACE SPEC name for a deck identified by deckCode. */
+  async cacheArchetypeMeta(
+    deckCode: string,
+    archetypeName: string | null,
+    aceName: string | null,
+  ): Promise<{ updated: boolean }> {
+    const result = await this.prisma.$executeRaw`
+      UPDATE decks
+      SET "cachedArchetypeName" = ${archetypeName},
+          "cachedAceName"       = ${aceName},
+          "cachedNameAt"        = NOW()
+      WHERE "deckCode" = ${deckCode}
+    `;
+    return { updated: (result as number) > 0 };
+  }
 }
 

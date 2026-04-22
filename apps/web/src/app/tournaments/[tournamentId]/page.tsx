@@ -18,7 +18,9 @@ interface DeckResult {
   id: string;
   deckCode?: string;
   deckData?: DeckCardData[];
-  cards: { quantity: number; card: { webCardId: string; name: string; zhName?: string; rarity?: string; imageUrl?: string; supertype?: string } }[];
+  cachedArchetypeName?: string;
+  cachedAceName?: string;
+  cards: { quantity: number; card: { webCardId: string; name: string; zhName?: string; rarity?: string; imageUrl?: string; supertype?: string; types?: string[] } }[];
 }
 
 interface TournamentResult {
@@ -30,58 +32,70 @@ interface TournamentResult {
   deck?: DeckResult;
 }
 
+// Type → Tailwind bg gradient classes for archetype badge background
+const TYPE_ARCHETYPE_BG: Record<string, string> = {
+  GRASS:     'bg-gradient-to-r from-green-500 to-green-400 text-white',
+  FIRE:      'bg-gradient-to-r from-red-500 to-orange-400 text-white',
+  WATER:     'bg-gradient-to-r from-blue-500 to-cyan-400 text-white',
+  LIGHTNING: 'bg-gradient-to-r from-yellow-400 to-amber-300 text-yellow-900',
+  FIGHTING:  'bg-gradient-to-r from-orange-600 to-orange-400 text-white',
+  PSYCHIC:   'bg-gradient-to-r from-purple-500 to-pink-400 text-white',
+  DARK:      'bg-gradient-to-r from-gray-700 to-gray-500 text-white',
+  METAL:     'bg-gradient-to-r from-slate-500 to-slate-400 text-white',
+  COLORLESS: 'bg-gradient-to-r from-gray-400 to-gray-300 text-gray-800',
+};
+
 const ARCHETYPE_COLORS: Record<string, string> = {
   AGGRO: 'bg-red-100 text-red-700', CONTROL: 'bg-blue-100 text-blue-700',
   COMBO: 'bg-purple-100 text-purple-700', MIDRANGE: 'bg-yellow-100 text-yellow-700',
   TOOLBOX: 'bg-green-100 text-green-700', OTHER: 'bg-gray-100 text-gray-600',
-  // Chinese archetype names
-  '幽靈拖龍ex': 'bg-violet-100 text-violet-700',
-  '翁固拉蓬': 'bg-green-100 text-green-700',
-  '火箭隊': 'bg-red-100 text-red-700',
-  '超級路卡利歐ex': 'bg-yellow-100 text-yellow-800',
-  '猛雷鼓ex': 'bg-blue-100 text-blue-700',
-  '帝拉帕鬼ex': 'bg-teal-100 text-teal-700',
-  '夜黑鴞': 'bg-indigo-100 text-indigo-700',
-  '超級絕對魔獸ex': 'bg-pink-100 text-pink-700',
   '未知': 'bg-gray-100 text-gray-500',
   '其他': 'bg-gray-100 text-gray-600',
 };
 
-// Client-side archetype inference from deck Pokemon card names
+// Client-side archetype inference: JP fragment → ZH archetype label
+// Used as fallback when DB zhName is unavailable (e.g. 2026 sets not yet linked)
 const ARCHETYPE_INFER_MAP: Array<[string, string]> = [
-  ['ドラパルトex', '幽靈拖龍ex'],
+  // Special multi-card archetypes that need explicit fragment matching
   ['ロケット団のドンカラス', '火箭隊'],
   ['ロケット団のミュウツーex', '火箭隊'],
   ['ロケット団のワナイダー', '火箭隊'],
   ['ロケット団のポリゴン2', '火箭隊'],
-  ['メガルカリオex', '超級路卡利歐ex'],
-  ['タケルライコex', '猛雷鼓ex'],
-  ['テラパゴスex', '帝拉帕鬼ex'],
   ['オーガポン みどりのめんex', '翁固拉蓬'],
   ['オーガポン いどのめんex', '翁固拉蓬'],
   ['オーガポン', '翁固拉蓬'],
   ['イワパレス', '日月石'],
   ['ヨルノズク', '夜黑鴞'],
-  ['メガアブソルex', '超級絕對魔獸ex'],
   ['ヤドキング', '呆呆王'],
-  ['シロナのガブリアスex', '竹蘭的烈咬陸鯊ex'],  // Cynthia's Garchomp ex
-  ['マリィのオーロンゲex', '瑪俐的長毛巨魔ex'],    // Marnie's Grimmsnarl ex
-  ['フーディン', '胡地'],                           // Alakazam (main attacker)
+  // Common meta archetypes (JP → ZH fallback when DB link missing)
+  ['ドラパルトex', '多龍巴魯托ex'],
+  ['タケルライコex', '猛雷鼓ex'],
+  ['テラパゴスex', '帝拉帕奇ex'],
+  ['メガルカリオex', '超級路卡利歐ex'],
+  ['マリィのオーロンゲex', '瑪莉的長毛巨魔ex'],
+  ['シロナのガブリアスex', '竹蘭的烈咬陸鯊ex'],
+  ['メガアブソルex', '超級絕對魔獸ex'],
+  ['リザードンex', '噴火龍ex'],
+  ['フーディン', '胡地'],
+  ['ゴウカザルex', '烈焰猴ex'],
+  ['ソウブレイズex', '火劍客ex'],
+  ['パオジアンex', '帕路奇亞ex'],
+  ['サーフゴーex', '賽富豪ex'],
+  ['ルギアex', '路基亞ex'],
+  ['アルセウスex', '阿爾宙斯ex'],
+  ['ミュウex', '夢幻ex'],
+  ['ピカチュウex', '皮卡丘ex'],
 ];
 
-// Draw-engine / support Pokémon: JP name fragment → ZH display name (falls back to zhName from API if available)
-// Excludes overly common cards (キチキギスex, ラティアスex) that appear in nearly every deck
-// フーディン is now in ARCHETYPE_INFER_MAP as a main attacker
-const DRAW_SUPPORT_JP_MAP: Array<[string, string]> = [
-  ['リーリエのピッピex', '莉莉艾的皮皮ex'], // Lillie's Clefairy ex
-  ['ノコッチex', '土龍節節'],              // Dudunsparce ex — draw-until-7 engine
-  ['ゲノセクトex', '蓋諾賽克特ex'],        // Genesect ex
+// These JP cards should NOT be treated as archetypes (draw engines, ubiquitous supports)
+const NOT_ARCHETYPE_FRAGMENTS = [
+  'キチキギスex', 'ラティアスex', 'ニャースex', 'リーリエのピッピex', 'ノコッチex', 'ゲノセクトex',
 ];
 
-// ACE SPEC trainer cards: JP name fragment → ZH display name
+// ACE SPEC trainer cards: JP name fragment → ZH display name (fallback only)
 const ACE_SPEC_JP_MAP: Array<[string, string]> = [
   ['マキシマムベルト', '極限腰帶'],
-  ['プライムキャッチャー', '主角捕手'],
+  ['プライムキャッチャー', '頂尖捕捉器'],
   ['テラスタルオーブ', '太晶球'],
   ['マスターボール', '大師球'],
   ['ライムのコスプレそうち', '萊姆的戲服裝置'],
@@ -89,6 +103,7 @@ const ACE_SPEC_JP_MAP: Array<[string, string]> = [
   ['はかせのロールプレイ', '博士的角色扮演'],
   ['ハンディチップ', '手持晶片'],
   ['VIPパス', 'VIP通行證'],
+  ['アンフェアスタンプ', '不公印章'],
 ];
 
 const ENERGY_TYPE_MAP: Array<[string, string]> = [
@@ -127,12 +142,7 @@ const PLACEMENT_BADGE: Record<number, string> = {
   1: 'bg-yellow-400 text-yellow-900', 2: 'bg-gray-300 text-gray-800', 3: 'bg-orange-300 text-orange-900',
 };
 
-function getPlacementLabel(p: number): string {
-  if (p === 1) return '🥇';
-  if (p === 2) return '🥈';
-  if (p === 3) return '🥉';
-  return `#${p}`;
-}
+const PLACEMENT_LABEL: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' };
 
 export default function TournamentDetailPage({ params }: { params: Promise<{ tournamentId: string }> }) {
   const { tournamentId } = use(params);
@@ -168,31 +178,15 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ tou
           {tournament.location && <span>📍 {tournament.location}</span>}
           {tournament.playerCount && <span>👥 {tournament.playerCount} 人</span>}
           <span className="bg-white/20 px-2 py-0.5 rounded">{tournament.region}</span>
-          {tournament.results?.length > 0 && (
-            <span className="bg-white/20 px-2 py-0.5 rounded">{tournament.results.length} 場結果·{tournament.results?.filter((r: TournamentResult) => r.deck).length ?? 0} 張卡表</span>
-          )}
         </div>
       </div>
 
       <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
         {/* Archetype summary */}
         {tournament.results?.length > 0 && (
-          <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
-              <span className="text-base">🎯</span>
-              <h2 className="text-base font-semibold text-gray-800">强勢分布</h2>
-              <span className="text-xs text-gray-400 ml-auto">{Object.keys((() => {
-                const g: Record<string, number> = {};
-                tournament.results.forEach((r: TournamentResult) => {
-                  const k = (r.deckArchetype && r.deckArchetype !== 'UNKNOWN') ? r.deckArchetype : (r.deck ? inferArchetype(r.deck) : '未知');
-                  g[k] = (g[k] ?? 0) + 1;
-                });
-                return g;
-              })()).length} 個强勢</span>
-            </div>
-            <div className="p-4">
-              <ArchetypeChart results={tournament.results} />
-            </div>
+          <div>
+            <h2 className="text-lg font-semibold text-gray-800 mb-3">強勢分佈</h2>
+            <ArchetypeChart results={tournament.results} />
           </div>
         )}
 
@@ -206,71 +200,66 @@ export default function TournamentDetailPage({ params }: { params: Promise<{ tou
           <DeckSummaryStats results={tournament.results} />
         )}
 
-        {/* Results */}
+        {/* Results — 2-column grid, deck always visible */}
         <div>
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-base">🏆</span>
-            <h2 className="text-base font-semibold text-gray-800">成績排名</h2>
-            <span className="text-xs text-gray-400 ml-1">({tournament.results?.length ?? 0})</span>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-semibold text-gray-800">成績排名 ({tournament.results?.length ?? 0})</h2>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400">{tournament.results?.filter((r: TournamentResult) => r.deck).length ?? 0} decks available</span>
+              <ExportMarkdownButton tournament={tournament} />
+            </div>
           </div>
           {tournament.results?.length === 0 && (
             <p className="text-gray-400 text-center py-8">No results recorded.</p>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {tournament.results?.map((result: TournamentResult) => (
-              <ResultCard key={result.id} result={result} />
-            ))}
+            {tournament.results?.map((result: TournamentResult) => {
+              const inferredArch = (result.deckArchetype && result.deckArchetype !== 'UNKNOWN')
+                ? result.deckArchetype
+                : (result.deck ? inferArchetype(result.deck) : undefined);
+              const archParts = result.deck ? inferArchetypeParts(result.deck) : null;
+              const mainType = result.deck ? getMainAttackerType(result.deck) : 'COLORLESS';
+              const archBg = TYPE_ARCHETYPE_BG[mainType] ?? 'bg-gray-200 text-gray-700';
+              return (
+              <div key={result.id} className="bg-white rounded-lg shadow-sm overflow-hidden border border-gray-100">
+                <div className="flex items-center gap-3 p-3">
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${PLACEMENT_BADGE[result.placement] ?? 'bg-gray-100 text-gray-600'}`}>
+                    {PLACEMENT_LABEL[result.placement] ?? result.placement}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-gray-900 truncate">{result.playerName}</p>
+                    {result.deckName && <p className="text-xs text-gray-500 truncate">{result.deckName}</p>}
+                  </div>
+                  {inferredArch && (
+                    <div className="flex flex-col items-end shrink-0 gap-0.5 max-w-[130px]">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${archBg}`}>
+                        {inferredArch}
+                      </span>
+                      {archParts?.support && archParts.support !== inferredArch && (
+                        <span className="text-[9px] text-gray-400 leading-tight">+ {archParts.support}</span>
+                      )}
+                      {archParts?.ace && (
+                        <span className="text-[9px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded leading-tight font-medium">
+                          ACE·{archParts.ace}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {result.deck?.deckCode && (
+                    <Link
+                      href={`/deck-builder/event/${result.deck.deckCode}`}
+                      className="text-xs text-blue-600 hover:text-blue-800 shrink-0 px-2 py-1 bg-blue-50 rounded transition-colors"
+                    >
+                      View →
+                    </Link>
+                  )}
+                </div>
+                {result.deck && <DeckPanel deck={result.deck} />}
+              </div>
+            );})}
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function ResultCard({ result }: { result: TournamentResult }) {
-  const [deckOpen, setDeckOpen] = useState(false);
-  const inferredArch = (result.deckArchetype && result.deckArchetype !== 'UNKNOWN')
-    ? result.deckArchetype
-    : (result.deck ? inferArchetype(result.deck) : undefined);
-  const archParts = result.deck ? inferArchetypeParts(result.deck) : null;
-  const hasDeck = !!result.deck;
-
-  return (
-    <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-gray-100">
-      <div className="flex items-center gap-3 p-3">
-        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${PLACEMENT_BADGE[result.placement] ?? 'bg-gray-100 text-gray-600'}`}>
-          {getPlacementLabel(result.placement)}
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="font-medium text-gray-900 truncate">{result.playerName}</p>
-          {result.deckName && <p className="text-xs text-gray-500 truncate">{result.deckName}</p>}
-        </div>
-        {inferredArch && (
-          <div className="flex flex-col items-end shrink-0 gap-0.5 max-w-[130px]">
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ARCHETYPE_COLORS[inferredArch] ?? 'bg-gray-100 text-gray-600'}`}>
-              {inferredArch}
-            </span>
-            {archParts?.support && archParts.support !== inferredArch && (
-              <span className="text-[9px] text-gray-400 leading-tight">+ {archParts.support}</span>
-            )}
-            {archParts?.ace && (
-              <span className="text-[9px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded leading-tight font-medium">
-                ACE·{archParts.ace}
-              </span>
-            )}
-          </div>
-        )}
-        {hasDeck && (
-          <button
-            type="button"
-            onClick={() => setDeckOpen(!deckOpen)}
-            className="text-xs text-gray-500 hover:text-gray-700 shrink-0 px-2 py-1 bg-gray-50 hover:bg-gray-100 rounded border border-gray-200 transition-colors"
-          >
-            {deckOpen ? '收起 ▲' : '卡表 ▼'}
-          </button>
-        )}
-      </div>
-      {deckOpen && result.deck && <DeckPanel deck={result.deck} />}
     </div>
   );
 }
@@ -289,52 +278,91 @@ function getDeckCards(deck: DeckResult): DeckCardData[] {
 }
 
 function inferArchetype(deck: DeckResult): string {
+  // Priority 0: cached name written by deck-builder page (most accurate — uses full role logic)
+  if (deck.cachedArchetypeName) return deck.cachedArchetypeName;
+
   const deckCards = deck.cards ?? [];
-  const pokemonNames = deckCards
-    .filter(c => c.card.supertype === 'POKEMON')
-    .map(c => c.card.name);
-  // Also check deckData card names (used when deckData is populated)
-  const allNames = getDeckCards(deck).map(c => c.cardName);
-  const names = [...new Set([...pokemonNames, ...allNames])];
-  for (const [fragment, arch] of ARCHETYPE_INFER_MAP) {
-    if (names.some(n => n.includes(fragment))) return arch;
-  }
-  // Smart fallback: use highest-quantity ex Pokémon from DB cards that has a zhName
-  const sortedDbPokemon = [...deckCards]
+
+  // Priority 1: DB-linked zhName on highest-quantity non-support ex Pokémon
+  // This wins when HK↔JP primaryCard linkage is available (most S/SV series)
+  const NOT_SUPPORT = ['キチキギスex', 'ラティアスex', 'ニャースex', 'リーリエのピッピex', 'ノコッチex', 'ゲノセクトex'];
+  const sortedPokemon = [...deckCards]
     .filter(c => c.card.supertype === 'POKEMON')
     .sort((a, b) => b.quantity - a.quantity);
-  const topExWithZh = sortedDbPokemon.find(c => c.card.name.includes('ex') && c.card.zhName);
+  const topExWithZh = sortedPokemon.find(c =>
+    c.card.name.includes('ex') &&
+    c.card.zhName &&
+    !NOT_SUPPORT.some(f => c.card.name.includes(f))
+  );
   if (topExWithZh) return topExWithZh.card.zhName!;
+
+  // Priority 2: ARCHETYPE_INFER_MAP — JP fragment matching (covers 2026 sets not yet DB-linked)
+  const pokemonNames = deckCards.filter(c => c.card.supertype === 'POKEMON').map(c => c.card.name);
+  const deckDataNames = getDeckCards(deck).map(c => c.cardName);
+  const allNames = [...new Set([...pokemonNames, ...deckDataNames])];
+  for (const [fragment, arch] of ARCHETYPE_INFER_MAP) {
+    if (allNames.some(n => n.includes(fragment))) return arch;
+  }
+
+  // Priority 3: highest-quantity ex Pokémon JP name (better than "其他")
+  const topEx = sortedPokemon.find(c =>
+    c.card.name.includes('ex') &&
+    !NOT_SUPPORT.some(f => c.card.name.includes(f))
+  );
+  if (topEx) return topEx.card.name; // Show JP name — at least not "其他"
+
   return '其他';
 }
 
 /** Returns the composite archetype label: 主攻 + 輔助(抽卡) + ACE
- *  Uses zhName from API (pokedex data) when available, otherwise falls back to jp→zh map. */
+ *  Uses zhName from API (linked ZH_TW card) when available, otherwise falls back to jp→zh map. */
 function inferArchetypeParts(deck: DeckResult): { main: string; support?: string; ace?: string } {
   const deckCards = deck.cards ?? [];
   const deckCardData = getDeckCards(deck);
   const main = inferArchetype(deck);
 
-  // Draw support: prefer zhName returned by API (pokedex data), fallback to map
+  // Draw support: look for POKEMON with known JP fragments that are NOT archetype cards
+  const DRAW_SUPPORT_JP_FRAGS = ['リーリエのピッピex', 'ノコッチex', 'ゲノセクトex'];
   let support: string | undefined;
-  for (const [jpFrag, zhFallback] of DRAW_SUPPORT_JP_MAP) {
+  for (const jpFrag of DRAW_SUPPORT_JP_FRAGS) {
     const dbMatch = deckCards.find(c => c.card.supertype === 'POKEMON' && c.card.name.includes(jpFrag));
-    if (dbMatch) { support = dbMatch.card.zhName ?? zhFallback; break; }
-    if (deckCardData.some(c => c.cardName.includes(jpFrag))) { support = zhFallback; break; }
+    if (dbMatch) { support = dbMatch.card.zhName ?? dbMatch.card.name; break; }
+    if (deckCardData.some(c => c.cardName.includes(jpFrag))) { support = jpFrag; break; }
   }
 
-  // ACE SPEC: first try DB cards with rarity flag, then name-based lookup
+  // ACE SPEC: first try cachedAceName, then DB rarity flag, then name-based lookup
   let ace: string | undefined;
+  if (deck.cachedAceName) {
+    ace = deck.cachedAceName;
+  } else {
   const aceDbCard = deckCards.find(c => c.card.rarity === 'ACE_SPEC_RARE' || c.card.rarity === 'ACE_SPEC');
   if (aceDbCard) {
-    ace = aceDbCard.card.zhName ?? aceDbCard.card.name;
+    ace = aceDbCard.card.zhName ?? (() => {
+      for (const [jpFrag, zhFallback] of ACE_SPEC_JP_MAP) {
+        if (aceDbCard.card.name.includes(jpFrag)) return zhFallback;
+      }
+      return aceDbCard.card.name;
+    })();
   } else {
     for (const [jpFrag, zhFallback] of ACE_SPEC_JP_MAP) {
       if (deckCardData.some(c => c.cardName.includes(jpFrag))) { ace = zhFallback; break; }
     }
   }
+  }
 
   return { main, support, ace };
+}
+
+function getMainAttackerType(deck: DeckResult): string {
+  const pokemonCards = (deck.cards ?? [])
+    .filter(c => c.card.supertype === 'POKEMON' && c.card.types && c.card.types.length > 0)
+    .sort((a, b) => b.quantity - a.quantity);
+  // Prefer ex Pokémon with highest quantity, skip known support Pokémon
+  const NOT_ARCHETYPE_FRAGS = ['キチキギスex', 'ラティアスex', 'ニャースex', 'リーリエのピッピex', 'ノコッチex', 'ゲノセクトex'];
+  const mainAttacker = pokemonCards.find(c =>
+    !NOT_ARCHETYPE_FRAGS.some(f => c.card.name.includes(f))
+  );
+  return mainAttacker?.card.types?.[0] ?? 'COLORLESS';
 }
 
 function getDeckType(deck: DeckResult): string {
@@ -498,13 +526,13 @@ function CardThumbnail({ card }: { card: DeckCardData }) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <div className="relative w-9 h-[50px] rounded border border-slate-600 bg-slate-700 overflow-hidden">
+      <div className="relative w-12 h-[67px] rounded border border-slate-600 bg-slate-700 overflow-hidden">
         {card.imageUrl && !imgError ? (
           <Image
             src={card.imageUrl}
             alt={card.cardName}
             fill
-            sizes="36px"
+            sizes="48px"
             className="object-cover"
             onError={() => setImgError(true)}
             unoptimized
@@ -543,30 +571,21 @@ function DeckSummaryStats({ results }: { results: TournamentResult[] }) {
   const totalDecks = decksWithData.length;
   if (totalDecks === 0) return null;
 
-  // Count most popular cards across all decks — key by name to avoid duplicate entries for reprints
+  // Count most popular cards across all decks — deduplicate by card name
   const cardFreq: Record<string, { name: string; count: number; imageUrl: string }> = {};
   for (const r of decksWithData) {
-    const seenInDeck = new Set<string>();
     for (const c of getDeckCards(r.deck!)) {
-      const key = c.cardName;
-      if (seenInDeck.has(key)) continue; // count each card once per deck
-      seenInDeck.add(key);
+      const key = c.cardName; // dedupe by name, not cardId
       if (!cardFreq[key]) cardFreq[key] = { name: c.cardName, count: 0, imageUrl: c.imageUrl };
-      if (!cardFreq[key].imageUrl && c.imageUrl) cardFreq[key].imageUrl = c.imageUrl;
       cardFreq[key].count++;
     }
   }
-  const top = Object.entries(cardFreq).sort((a, b) => b[1].count - a[1].count).slice(0, 5);
+  const top = Object.entries(cardFreq).sort((a, b) => b[1].count - a[1].count).slice(0, 10);
 
   return (
-    <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-      <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
-        <span className="text-base">🂴</span>
-        <h2 className="text-base font-semibold text-gray-800">熱門用牌</h2>
-        <span className="text-xs text-gray-400 ml-auto">共 {totalDecks} 張卡表</span>
-      </div>
-      <div className="p-4">
-      <p className="text-sm text-gray-500 mb-3">各張卡表共同最多人使用：</p>
+    <div className="bg-white rounded-lg shadow-sm p-4">
+      <h2 className="text-lg font-semibold text-gray-800 mb-3">熱門用牌 <span className="text-sm font-normal text-gray-400">({totalDecks} 副卡組)</span></h2>
+      <p className="text-sm text-gray-600 mb-3">最多套卡組採用的卡牌（Top 10）：</p>
       <div className="flex flex-wrap gap-4">
         {top.map(([id, c]) => (
           <div key={id} className="flex flex-col items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-2 min-w-[80px]">
@@ -577,11 +596,10 @@ function DeckSummaryStats({ results }: { results: TournamentResult[] }) {
             )}
             <div className="text-center">
               <p className="text-xs font-medium text-gray-800 leading-tight max-w-[80px] line-clamp-2">{c.name}</p>
-          <p className="text-xs text-gray-500 mt-0.5">{c.count}/{totalDecks} 張卡表</p>
+              <p className="text-xs text-gray-500 mt-0.5">In {c.count}/{totalDecks}</p>
             </div>
           </div>
         ))}
-      </div>
       </div>
     </div>
   );
@@ -635,7 +653,7 @@ function ArchetypeChart({ results }: { results: TournamentResult[] }) {
     AGGRO: 'bg-red-400', CONTROL: 'bg-blue-400', COMBO: 'bg-purple-400',
     MIDRANGE: 'bg-yellow-400', TOOLBOX: 'bg-green-400', OTHER: 'bg-gray-400', UNKNOWN: 'bg-slate-300',
     '幽靈拖龍ex': 'bg-violet-400', '翁固拉蓬': 'bg-green-500', '火箭隊': 'bg-red-500',
-    '超級路卡利歐ex': 'bg-yellow-500', '猛雷鼓ex': 'bg-blue-500',
+    '超級路卡利歐ex': 'bg-yellow-500', '猛雷鼓ex': 'bg-blue-500', '喵喵ex': 'bg-orange-400',
     '日月石': 'bg-stone-400', '帝拉帕鬼ex': 'bg-teal-400', '夜黑鴞': 'bg-indigo-400',
     '超級絕對魔獸ex': 'bg-pink-400', '竹蘭的烈咬陸鯊ex': 'bg-amber-600', '瑪俐的長毛巨魔ex': 'bg-purple-500',
     '胡地': 'bg-cyan-500', '呆呆王': 'bg-blue-300', '未知': 'bg-slate-300', '其他': 'bg-gray-400',
@@ -673,7 +691,8 @@ function ArchetypeChart({ results }: { results: TournamentResult[] }) {
       .slice(0, 4);
   }
 
-  const placementLabel = getPlacementLabel;
+  const placementLabel = (p: number) =>
+    p === 1 ? '🥇' : p === 2 ? '🥈' : p === 3 ? '🥉' : `${p}位`;
 
   return (
     <div className="bg-white rounded-lg shadow-sm p-4 space-y-4">
@@ -752,15 +771,11 @@ function WeaknessSummary({ results }: { results: TournamentResult[] }) {
   const total = decksWithData.length;
 
   return (
-    <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-      <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
-        <span className="text-base">⚡</span>
-        <h2 className="text-base font-semibold text-gray-800">弱點分析</h2>
-      </div>
-      <div className="p-4">
+    <div className="bg-white rounded-lg shadow-sm p-4">
+      <h2 className="text-lg font-semibold text-gray-800 mb-4">Weakness Summary</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">場内强勢類型</p>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Deck Types in Field</p>
           <div className="space-y-2">
             {sortedTypes.map(([type, count]) => (
               <div key={type} className="flex items-center gap-2 text-sm">
@@ -775,7 +790,7 @@ function WeaknessSummary({ results }: { results: TournamentResult[] }) {
           </div>
         </div>
         <div>
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">有效攻擊屬性</p>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Best Attack Types vs. Field</p>
           <div className="space-y-2">
             {sortedWeaknesses.map(([type, count]) => (
               <div key={type} className="flex items-center gap-2 text-sm">
@@ -789,13 +804,97 @@ function WeaknessSummary({ results }: { results: TournamentResult[] }) {
             ))}
           </div>
           {sortedWeaknesses.length > 0 && (
-          <p className="text-xs text-gray-400 mt-3">
-              {TYPE_ICON[sortedWeaknesses[0][0]]} <span className="font-medium text-gray-600">{sortedWeaknesses[0][0]}</span> 屬性攻擊對場內 {sortedWeaknesses[0][1]}/{total} 張牌組有效。
+            <p className="text-xs text-gray-400 mt-3">
+              {TYPE_ICON[sortedWeaknesses[0][0]]} <span className="font-medium text-gray-600">{sortedWeaknesses[0][0]}</span> attacks are effective against {sortedWeaknesses[0][1]} of {total} decks in this tournament.
             </p>
           )}
         </div>
       </div>
-      </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Markdown export helper
+// ---------------------------------------------------------------------------
+function buildMarkdown(tournament: any): string {
+  const date = new Date(tournament.date).toLocaleDateString('zh-HK', {
+    year: 'numeric', month: 'long', day: 'numeric',
+  });
+  const region = tournament.region ?? '';
+  const count = tournament.playerCount ? `${tournament.playerCount}人` : '';
+
+  const lines: string[] = [];
+  lines.push(`# ${tournament.name}`);
+  lines.push(`📅 ${date}${count ? ` | 👥 ${count}` : ''}${region ? ` | ${region}` : ''}`);
+  lines.push('');
+
+  // Archetype distribution
+  const results: TournamentResult[] = tournament.results ?? [];
+  if (results.length > 0) {
+    const archCounts: Record<string, number> = {};
+    for (const r of results) {
+      const arch = (r.deckArchetype && r.deckArchetype !== 'UNKNOWN')
+        ? r.deckArchetype
+        : (r.deck ? inferArchetype(r.deck) : '未知');
+      archCounts[arch] = (archCounts[arch] ?? 0) + 1;
+    }
+    const total = results.length;
+    const sorted = Object.entries(archCounts).sort((a, b) => b[1] - a[1]);
+    lines.push('## 強勢分佈');
+    lines.push('| 套牌 | 數量 | % |');
+    lines.push('|------|------|---|');
+    for (const [arch, cnt] of sorted) {
+      lines.push(`| ${arch} | ${cnt} | ${Math.round((cnt / total) * 100)}% |`);
+    }
+    lines.push('');
+  }
+
+  // Results table
+  if (results.length > 0) {
+    lines.push('## 成績排名');
+    lines.push('| 排名 | 玩家 | 套牌 | ACE SPEC |');
+    lines.push('|------|------|------|----------|');
+    const sorted = [...results].sort((a, b) => a.placement - b.placement);
+    for (const r of sorted) {
+      const place = r.placement === 1 ? '🥇' : r.placement === 2 ? '🥈' : r.placement === 3 ? '🥉' : `${r.placement}`;
+      const arch = (r.deckArchetype && r.deckArchetype !== 'UNKNOWN')
+        ? r.deckArchetype
+        : (r.deck ? inferArchetype(r.deck) : '-');
+      const parts = r.deck ? inferArchetypeParts(r.deck) : null;
+      const ace = parts?.ace ?? '-';
+      lines.push(`| ${place} | ${r.playerName} | ${arch} | ${ace} |`);
+    }
+    lines.push('');
+  }
+
+  return lines.join('\n');
+}
+
+function ExportMarkdownButton({ tournament }: { tournament: any }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleClick = async () => {
+    const md = buildMarkdown(tournament);
+    try {
+      await navigator.clipboard.writeText(md);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // fallback: open in new tab as text
+      const blob = new Blob([md], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      className="text-xs px-2.5 py-1 rounded border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors"
+    >
+      {copied ? '✅ 已複製!' : '📋 複製為Markdown'}
+    </button>
   );
 }

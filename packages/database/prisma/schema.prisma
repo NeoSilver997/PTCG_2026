@@ -313,6 +313,9 @@ model Deck {
   cachedBudgetMin    Float?             // Cached budget price (cheapest rarity per card, HKD)
   cachedBudgetMax    Float?             // Cached premium price (most expensive rarity, HKD)
   priceUpdatedAt     DateTime?          // When the price cache was last computed
+  cachedArchetypeName String?           // Computed archetype label e.g. "多龍巴魯托ex"
+  cachedAceName      String?            // ACE SPEC label e.g. "不公印章"
+  cachedNameAt       DateTime?          // When cachedArchetypeName/cachedAceName were last written
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
   cards              DeckCard[]

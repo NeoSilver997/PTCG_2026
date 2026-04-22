@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Delete,
   Body,
   Param,
@@ -52,6 +53,17 @@ export class DecksController {
   @ApiOperation({ summary: 'Get all Pokémon role overrides for an event deck' })
   getRoles(@Param('deckCode') deckCode: string) {
     return this.decksService.getRolesForDeck(deckCode);
+  }
+
+  @Patch('code/:deckCode/meta')
+  @Throttle({ long: { limit: 100, ttl: 60000 } })
+  @ApiOperation({ summary: 'Cache the computed archetype name and ACE SPEC name for a deck' })
+  cacheArchetypeMeta(
+    @Param('deckCode') deckCode: string,
+    @Body('archetypeName') archetypeName: string | null,
+    @Body('aceName') aceName: string | null,
+  ) {
+    return this.decksService.cacheArchetypeMeta(deckCode, archetypeName ?? null, aceName ?? null);
   }
 
   @Put('code/:deckCode/roles/:cardId')

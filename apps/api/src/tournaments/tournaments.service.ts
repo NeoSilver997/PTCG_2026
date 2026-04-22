@@ -124,6 +124,8 @@ export class TournamentsService {
                         imageUrl: true,
                         supertype: true,
                         subtypes: true,
+                        types: true,
+                        rarity: true,
                       },
                     },
                   },
@@ -162,6 +164,8 @@ export class TournamentsService {
                         imageUrl: true,
                         supertype: true,
                         subtypes: true,
+                        types: true,
+                        rarity: true,
                       },
                     },
                   },
@@ -192,8 +196,8 @@ export class TournamentsService {
 
     if (deckIds.length > 0) {
       const extras = await this.prisma.$queryRaw<
-        Array<{ id: string; deckCode: string | null; deckData: any }>
-      >`SELECT id, "deckCode", "deckData" FROM decks WHERE id = ANY(${deckIds}::text[])`;
+        Array<{ id: string; deckCode: string | null; deckData: any; cachedArchetypeName: string | null; cachedAceName: string | null }>
+      >`SELECT id, "deckCode", "deckData", "cachedArchetypeName", "cachedAceName" FROM decks WHERE id = ANY(${deckIds}::text[])`;
       const map = new Map(extras.map((e) => [e.id, e]));
       for (const result of tournament.results as any[]) {
         if (result.deck) {
@@ -201,6 +205,39 @@ export class TournamentsService {
           if (extra) {
             result.deck.deckCode = extra.deckCode;
             result.deck.deckData = extra.deckData;
+            result.deck.cachedArchetypeName = extra.cachedArchetypeName;
+            result.deck.cachedAceName = extra.cachedAceName;
+          }
+        }
+      }
+    }
+
+    // Batch-fetch ZH_TW linked card names via primaryCardId and attach as zhName
+    const primaryCardIds: string[] = [];
+    for (const result of tournament.results as any[]) {
+      if (!result.deck?.cards) continue;
+      for (const dc of result.deck.cards) {
+        if (dc.card?.primaryCardId) primaryCardIds.push(dc.card.primaryCardId);
+      }
+    }
+    const uniquePrimaryIds = [...new Set(primaryCardIds)];
+    if (uniquePrimaryIds.length > 0) {
+      const zhCards = await this.prisma.$queryRaw<
+        Array<{ primaryCardId: string; name: string }>
+      >`SELECT DISTINCT ON ("primaryCardId") "primaryCardId", name FROM cards
+        WHERE "primaryCardId" = ANY(${uniquePrimaryIds}::text[])
+          AND language = 'ZH_TW'
+        ORDER BY "primaryCardId", "variantType" ASC`;
+      // Keep only the first ZH_TW name per primaryCardId
+      const zhMap = new Map<string, string>();
+      for (const row of zhCards) {
+        if (!zhMap.has(row.primaryCardId)) zhMap.set(row.primaryCardId, row.name);
+      }
+      for (const result of tournament.results as any[]) {
+        if (!result.deck?.cards) continue;
+        for (const dc of result.deck.cards) {
+          if (dc.card?.primaryCardId && zhMap.has(dc.card.primaryCardId)) {
+            dc.card.zhName = zhMap.get(dc.card.primaryCardId);
           }
         }
       }
