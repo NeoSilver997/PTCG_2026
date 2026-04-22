@@ -651,6 +651,7 @@ export class TournamentsService {
           c."imageUrl",
           dc.quantity,
           c.supertype,
+          c."primaryCardId",
           ROW_NUMBER() OVER (
             PARTITION BY dc."deckId"
             ORDER BY
@@ -663,14 +664,27 @@ export class TournamentsService {
       ),
       deck_top_cards AS (
         SELECT
-          "deckId",
+          dcr."deckId",
           json_agg(
-            json_build_object('name', name, 'imageUrl', "imageUrl", 'quantity', quantity, 'supertype', supertype)
-            ORDER BY card_rn
+            json_build_object(
+              'name', dcr.name,
+              'zhName', zh.name,
+              'imageUrl', dcr."imageUrl",
+              'quantity', dcr.quantity,
+              'supertype', dcr.supertype
+            )
+            ORDER BY dcr.card_rn
           ) as top_cards
-        FROM deck_card_ranked
-        WHERE card_rn <= 12
-        GROUP BY "deckId"
+        FROM deck_card_ranked dcr
+        LEFT JOIN LATERAL (
+          SELECT name FROM cards
+          WHERE "primaryCardId" = dcr."primaryCardId"
+            AND language = 'ZH_TW'
+          ORDER BY "variantType" ASC
+          LIMIT 1
+        ) zh ON dcr."primaryCardId" IS NOT NULL
+        WHERE dcr.card_rn <= 12
+        GROUP BY dcr."deckId"
       ),
       deck_counts AS (
         SELECT

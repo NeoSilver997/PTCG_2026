@@ -9,6 +9,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 /* ---- Types ---- */
 interface TopCardMini {
   name: string;
+  zhName?: string | null;
   imageUrl: string | null;
   supertype: string;
   quantity: number;
@@ -112,7 +113,7 @@ function CardDetailModal({ card, onClose }: { card: TopCardMini; onClose: () => 
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-start justify-between mb-4">
-          <h3 className="text-white font-bold text-base leading-tight flex-1 pr-2">{card.name}</h3>
+          <h3 className="text-white font-bold text-base leading-tight flex-1 pr-2">{card.zhName ?? card.name}</h3>
           <button
             onClick={onClose}
             className="text-slate-400 hover:text-white text-xl leading-none flex-shrink-0"
@@ -124,7 +125,7 @@ function CardDetailModal({ card, onClose }: { card: TopCardMini; onClose: () => 
           <div className="flex justify-center mb-4">
             <Image
               src={card.imageUrl}
-              alt={card.name}
+              alt={card.zhName ?? card.name}
               width={220}
               height={308}
               className="rounded-xl shadow-lg"
@@ -142,7 +143,7 @@ function CardDetailModal({ card, onClose }: { card: TopCardMini; onClose: () => 
         </div>
         <div className="mt-3">
           <Link
-            href={`/cards?name=${encodeURIComponent(card.name)}&supertype=${card.supertype === 'POKEMON' ? 'POKEMON' : ''}`}
+            href={`/cards?name=${encodeURIComponent(card.zhName ?? card.name)}&supertype=${card.supertype === 'POKEMON' ? 'POKEMON' : ''}`}
             className="w-full block text-center px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg transition-colors"
             onClick={onClose}
           >
@@ -170,7 +171,7 @@ function CardThumb({ card, onCardClick }: { card: TopCardMini; onCardClick: (c: 
         {card.imageUrl ? (
           <Image
             src={card.imageUrl}
-            alt={card.name}
+            alt={card.zhName ?? card.name}
             width={36}
             height={50}
             className="rounded border border-slate-600 hover:border-white transition-colors"
@@ -178,7 +179,7 @@ function CardThumb({ card, onCardClick }: { card: TopCardMini; onCardClick: (c: 
           />
         ) : (
           <div className="w-9 h-[50px] rounded border border-slate-600 hover:border-white transition-colors bg-slate-700 flex items-center justify-center">
-            <span className="text-slate-400 text-[7px] text-center leading-tight px-0.5 break-all">{card.name}</span>
+            <span className="text-slate-400 text-[7px] text-center leading-tight px-0.5 break-all">{card.zhName ?? card.name}</span>
           </div>
         )}
         {/* Quantity badge */}
@@ -194,7 +195,7 @@ function CardThumb({ card, onCardClick }: { card: TopCardMini; onCardClick: (c: 
             {card.imageUrl ? (
               <Image
                 src={card.imageUrl}
-                alt={card.name}
+                alt={card.zhName ?? card.name}
                 width={130}
                 height={182}
                 className="rounded-lg"
@@ -202,11 +203,11 @@ function CardThumb({ card, onCardClick }: { card: TopCardMini; onCardClick: (c: 
               />
             ) : (
               <div className="w-[130px] h-[182px] rounded-lg bg-slate-700 flex items-center justify-center">
-                <span className="text-slate-300 text-xs text-center px-2 leading-snug">{card.name}</span>
+                <span className="text-slate-300 text-xs text-center px-2 leading-snug">{card.zhName ?? card.name}</span>
               </div>
             )}
             <p className="text-white text-[10px] font-semibold text-center mt-1 max-w-[130px] leading-tight">
-              {card.name}
+              {card.zhName ?? card.name}
             </p>
           </div>
           {/* Arrow */}
@@ -368,7 +369,7 @@ function ArchetypesPageInner() {
       if (region) p.append('region', region);
       if (sinceDate) p.append('sinceDate', sinceDate);
       p.append('limit', '30');
-      const res = await fetch(`http://localhost:4000/api/v1/tournaments/meta/deck-summary?${p}`);
+      const res = await fetch(`http://localhost:4200/api/v1/tournaments/meta/deck-summary?${p}`);
       if (!res.ok) throw new Error('Failed');
       return (await res.json()) as DeckMetaSummary;
     },
@@ -388,7 +389,7 @@ function ArchetypesPageInner() {
       if (sinceDate) p.append('sinceDate', sinceDate);
       p.append('skip', String(skip));
       p.append('take', String(TAKE));
-      const res = await fetch(`http://localhost:4000/api/v1/tournaments/meta/archetype-decks?${p}`);
+      const res = await fetch(`http://localhost:4200/api/v1/tournaments/meta/archetype-decks?${p}`);
       if (!res.ok) throw new Error('Failed to fetch archetype decks');
       return (await res.json()) as ArchetypeDecksResponse;
     },
@@ -490,7 +491,7 @@ function ArchetypesPageInner() {
                 {/* Error */}
                 {deckError && (
                   <div className="bg-red-900/50 border border-red-700 text-red-200 px-4 py-3 rounded mb-4">
-                    Error loading decks. Make sure the API is running on port 4000.
+                    Error loading decks. Make sure the API is running on port 4200.
                   </div>
                 )}
 

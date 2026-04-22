@@ -186,6 +186,38 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
     try { localStorage.setItem(storageKey, JSON.stringify(Object.fromEntries(fresh))); } catch { /**/ }
   };
 
+  // Fire-and-forget: persist computed archetype + ACE name to DB
+  // Must be declared here (before early returns) to obey Rules of Hooks
+  const cachedWritten = useRef(false);
+  useEffect(() => {
+    if (cachedWritten.current || !data?.deckCode) return;
+    // Recompute archetype name from data available at effect run time
+    const DRAW_ENGINE_JP_EFFECT = ['\u30ea\u30fc\u30ea\u30a8\u306e\u30d4\u30c3\u30d4ex', '\u30ce\u30b3\u30c3\u30c1ex', '\u30b2\u30ce\u30bb\u30af\u30c8ex', '\u30d5\u30fc\u30c7\u30a3\u30f3'];
+    const dbCardsEffect = data.cards ?? [];
+    const sectionsEffect = new Map<SectionKey, DeckCardEntry[]>();
+    SECTION_ORDER.forEach((k) => sectionsEffect.set(k, []));
+    for (const entry of dbCardsEffect) {
+      const primaryKey = entry.card.primaryCardId ?? entry.card.canonicalWebCardId ?? entry.card.webCardId;
+      const override = localRoles.get(primaryKey);
+      const key: SectionKey = override ?? getSectionKey(entry);
+      sectionsEffect.get(key)?.push(entry);
+    }
+    const mainNamesEffect = (sectionsEffect.get('pokemon-main') ?? [])
+      .map((e) => e.card.zhName ?? e.card.name).filter((n): n is string => !!n)
+      .filter((n, i, arr) => arr.indexOf(n) === i).slice(0, 2);
+    const supportDrawEffect = (sectionsEffect.get('pokemon-support') ?? [])
+      .filter(e => DRAW_ENGINE_JP_EFFECT.some(f => (e.card.name ?? '').includes(f)))
+      .map((e) => e.card.zhName ?? e.card.name).filter((n): n is string => !!n)
+      .filter((n, i, arr) => arr.indexOf(n) === i).slice(0, 1);
+    const nameToSave = [...mainNamesEffect, ...supportDrawEffect].join(' + ') || null;
+    const aceEntry = (sectionsEffect.get('ace') ?? [])[0];
+    const aceToSave = aceEntry ? (aceEntry.card.zhName ?? aceEntry.card.name ?? null) : null;
+    if (!nameToSave && !aceToSave) return;
+    cachedWritten.current = true;
+    apiClient.patch(`/decks/code/${data.deckCode}/meta`, { archetypeName: nameToSave, aceName: aceToSave })
+      .catch(() => { /* non-critical */ });
+  }, [data?.deckCode]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center text-slate-400 text-sm">
@@ -285,18 +317,6 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
   // ACE SPEC card from ace section
   const aceEntry = (sections.get('ace') ?? [])[0];
   const aceName = aceEntry ? (aceEntry.card.zhName ?? aceEntry.card.name ?? null) : null;
-
-  // Fire-and-forget: persist computed archetype + ACE name to DB (once per page load, skip if empty)
-  const cachedWritten = useRef(false);
-  useEffect(() => {
-    if (cachedWritten.current || !data?.deckCode) return;
-    const nameToSave = archetypeName || null;
-    const aceToSave = aceName || null;
-    if (!nameToSave && !aceToSave) return;
-    cachedWritten.current = true;
-    apiClient.patch(`/decks/code/${data.deckCode}/meta`, { archetypeName: nameToSave, aceName: aceToSave })
-      .catch(() => { /* non-critical */ });
-  }, [data?.deckCode, archetypeName, aceName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-4 md:p-6">
