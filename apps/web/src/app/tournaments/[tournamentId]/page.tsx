@@ -53,39 +53,9 @@ const ARCHETYPE_COLORS: Record<string, string> = {
   '其他': 'bg-gray-100 text-gray-600',
 };
 
-// Client-side archetype inference: JP fragment → ZH archetype label
-// Used as fallback when DB zhName is unavailable (e.g. 2026 sets not yet linked)
-const ARCHETYPE_INFER_MAP: Array<[string, string]> = [
-  // Special multi-card archetypes that need explicit fragment matching
-  ['ロケット団のドンカラス', '火箭隊'],
-  ['ロケット団のミュウツーex', '火箭隊'],
-  ['ロケット団のワナイダー', '火箭隊'],
-  ['ロケット団のポリゴン2', '火箭隊'],
-  ['オーガポン みどりのめんex', '翁固拉蓬'],
-  ['オーガポン いどのめんex', '翁固拉蓬'],
-  ['オーガポン', '翁固拉蓬'],
-  ['イワパレス', '日月石'],
-  ['ヨルノズク', '夜黑鴞'],
-  ['ヤドキング', '呆呆王'],
-  // Common meta archetypes (JP → ZH fallback when DB link missing)
-  ['ドラパルトex', '多龍巴魯托ex'],
-  ['タケルライコex', '猛雷鼓ex'],
-  ['テラパゴスex', '帝拉帕奇ex'],
-  ['メガルカリオex', '超級路卡利歐ex'],
-  ['マリィのオーロンゲex', '瑪莉的長毛巨魔ex'],
-  ['シロナのガブリアスex', '竹蘭的烈咬陸鯊ex'],
-  ['メガアブソルex', '超級絕對魔獸ex'],
-  ['リザードンex', '噴火龍ex'],
-  ['フーディン', '胡地'],
-  ['ゴウカザルex', '烈焰猴ex'],
-  ['ソウブレイズex', '火劍客ex'],
-  ['パオジアンex', '帕路奇亞ex'],
-  ['サーフゴーex', '賽富豪ex'],
-  ['ルギアex', '路基亞ex'],
-  ['アルセウスex', '阿爾宙斯ex'],
-  ['ミュウex', '夢幻ex'],
-  ['ピカチュウex', '皮卡丘ex'],
-];
+// ARCHETYPE_INFER_MAP removed — archetype names now come exclusively from:
+// 1. DB cached names (cachedArchetypeName written by deck-builder page on visit)
+// 2. DB zhName on the top-quantity Pokémon ex card (linked via primaryCardId)
 
 // These JP cards should NOT be treated as archetypes (draw engines, ubiquitous supports)
 const NOT_ARCHETYPE_FRAGMENTS = [
@@ -104,6 +74,9 @@ const ACE_SPEC_JP_MAP: Array<[string, string]> = [
   ['ハンディチップ', '手持晶片'],
   ['VIPパス', 'VIP通行證'],
   ['アンフェアスタンプ', '不公印章'],
+  ['ヒーローマント', '英雄斗篷'],
+  ['ネオアッパーエネルギー', '新衝天能量'],
+  ['シークレットボックス', '秘密箱'],
 ];
 
 const ENERGY_TYPE_MAP: Array<[string, string]> = [
@@ -130,6 +103,11 @@ const WEAKNESS_OF: Record<string, string> = {
 const TYPE_ICON: Record<string, string> = {
   GRASS: '🌿', FIRE: '🔥', WATER: '💧', LIGHTNING: '⚡',
   FIGHTING: '👊', PSYCHIC: '🔮', DARK: '🌑', METAL: '⚙️', COLORLESS: '⭕',
+};
+
+const TYPE_ZH: Record<string, string> = {
+  GRASS: '草', FIRE: '火', WATER: '水', LIGHTNING: '雷',
+  FIGHTING: '格鬥', PSYCHIC: '超能', DARK: '惡', METAL: '鋼', COLORLESS: '無色', DRAGON: '龍',
 };
 
 const TYPE_COLOR: Record<string, string> = {
@@ -296,13 +274,7 @@ function inferArchetype(deck: DeckResult): string {
   );
   if (topExWithZh) return topExWithZh.card.zhName!;
 
-  // Priority 2: ARCHETYPE_INFER_MAP — JP fragment matching (covers 2026 sets not yet DB-linked)
-  const pokemonNames = deckCards.filter(c => c.card.supertype === 'POKEMON').map(c => c.card.name);
-  const deckDataNames = getDeckCards(deck).map(c => c.cardName);
-  const allNames = [...new Set([...pokemonNames, ...deckDataNames])];
-  for (const [fragment, arch] of ARCHETYPE_INFER_MAP) {
-    if (allNames.some(n => n.includes(fragment))) return arch;
-  }
+  // Priority 2 removed — no hardcoded JP→ZH map
 
   // Priority 3: highest-quantity ex Pokémon JP name (better than "其他")
   const topEx = sortedPokemon.find(c =>
@@ -513,6 +485,13 @@ function DeckPanel({ deck }: { deck: DeckResult }) {
       ) : (
         <p className="text-xs text-slate-500 italic">No card data available.</p>
       )}
+      {viewHref && (
+        <div className="mt-2 pt-1.5 border-t border-slate-700 flex justify-end">
+          <Link href={viewHref} className="text-[11px] text-blue-400 hover:text-blue-200 transition-colors font-medium px-2.5 py-1 bg-slate-700/60 rounded">
+            查看完整牌組 →
+          </Link>
+        </div>
+      )}
     </div>
   );
 }
@@ -571,36 +550,64 @@ function DeckSummaryStats({ results }: { results: TournamentResult[] }) {
   const totalDecks = decksWithData.length;
   if (totalDecks === 0) return null;
 
-  // Count most popular cards across all decks — deduplicate by card name
-  const cardFreq: Record<string, { name: string; count: number; imageUrl: string }> = {};
+  // Build frequency maps per supertype using deck.cards (has zhName + supertype)
+  type CardStat = { name: string; count: number; imageUrl: string; totalQty: number };
+  const trainerFreq: Record<string, CardStat> = {};
+  const pokemonFreq: Record<string, CardStat> = {};
+
   for (const r of decksWithData) {
-    for (const c of getDeckCards(r.deck!)) {
-      const key = c.cardName; // dedupe by name, not cardId
-      if (!cardFreq[key]) cardFreq[key] = { name: c.cardName, count: 0, imageUrl: c.imageUrl };
-      cardFreq[key].count++;
+    const deck = r.deck!;
+    for (const c of (deck.cards ?? [])) {
+      if (c.card.supertype !== 'TRAINER' && c.card.supertype !== 'POKEMON') continue;
+      const displayName = c.card.zhName ?? c.card.name;
+      const key = displayName; // dedupe by display name
+      const imageUrl = c.card.imageUrl ?? '';
+      const freq = c.card.supertype === 'TRAINER' ? trainerFreq : pokemonFreq;
+      if (!freq[key]) freq[key] = { name: displayName, count: 0, imageUrl, totalQty: 0 };
+      freq[key].count++;
+      freq[key].totalQty += c.quantity;
     }
   }
-  const top = Object.entries(cardFreq).sort((a, b) => b[1].count - a[1].count).slice(0, 10);
 
-  return (
-    <div className="bg-white rounded-lg shadow-sm p-4">
-      <h2 className="text-lg font-semibold text-gray-800 mb-3">熱門用牌 <span className="text-sm font-normal text-gray-400">({totalDecks} 副卡組)</span></h2>
-      <p className="text-sm text-gray-600 mb-3">最多套卡組採用的卡牌（Top 10）：</p>
-      <div className="flex flex-wrap gap-4">
-        {top.map(([id, c]) => (
-          <div key={id} className="flex flex-col items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-2 min-w-[80px]">
+  const topTrainers = Object.entries(trainerFreq).sort((a, b) => b[1].count - a[1].count).slice(0, 10);
+  const topPokemon = Object.entries(pokemonFreq).sort((a, b) => b[1].count - a[1].count).slice(0, 10);
+
+  function CardGrid({ entries }: { entries: [string, CardStat][] }) {
+    return (
+      <div className="flex flex-wrap gap-3">
+        {entries.map(([id, c]) => (
+          <div key={id} className="flex flex-col items-center gap-1 bg-gray-50 rounded-lg px-2 py-2 min-w-[72px] max-w-[80px]">
             {c.imageUrl && (
-              <div className="relative w-16 h-[90px] rounded-lg overflow-hidden bg-gray-200 shadow-sm shrink-0">
-                <Image src={c.imageUrl} alt={c.name} fill sizes="64px" className="object-cover" unoptimized />
+              <div className="relative w-14 h-[80px] rounded-lg overflow-hidden bg-gray-200 shadow-sm shrink-0">
+                <Image src={c.imageUrl} alt={c.name} fill sizes="56px" className="object-cover" unoptimized />
               </div>
             )}
             <div className="text-center">
-              <p className="text-xs font-medium text-gray-800 leading-tight max-w-[80px] line-clamp-2">{c.name}</p>
-              <p className="text-xs text-gray-500 mt-0.5">In {c.count}/{totalDecks}</p>
+              <p className="text-[11px] font-medium text-gray-800 leading-tight line-clamp-2">{c.name}</p>
+              <p className="text-[10px] text-blue-600 mt-0.5 font-semibold">{c.count}/{totalDecks} 套</p>
+              <p className="text-[10px] text-gray-400">均 {(c.totalQty / c.count).toFixed(1)} 張</p>
             </div>
           </div>
         ))}
       </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm p-4 space-y-5">
+      <h2 className="text-lg font-semibold text-gray-800">熱門用牌 <span className="text-sm font-normal text-gray-400">({totalDecks} 副卡組)</span></h2>
+      {topTrainers.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">訓練家 · Top {topTrainers.length}</p>
+          <CardGrid entries={topTrainers} />
+        </div>
+      )}
+      {topPokemon.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">寶可夢 · Top {topPokemon.length}</p>
+          <CardGrid entries={topPokemon} />
+        </div>
+      )}
     </div>
   );
 }
@@ -772,15 +779,15 @@ function WeaknessSummary({ results }: { results: TournamentResult[] }) {
 
   return (
     <div className="bg-white rounded-lg shadow-sm p-4">
-      <h2 className="text-lg font-semibold text-gray-800 mb-4">Weakness Summary</h2>
+      <h2 className="text-lg font-semibold text-gray-800 mb-4">弱點分析</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Deck Types in Field</p>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">場上套牌屬性</p>
           <div className="space-y-2">
             {sortedTypes.map(([type, count]) => (
               <div key={type} className="flex items-center gap-2 text-sm">
                 <span className="w-5 text-base leading-none">{TYPE_ICON[type] ?? '?'}</span>
-                <span className="w-24 font-medium text-gray-700">{type}</span>
+                <span className="w-16 font-medium text-gray-700">{TYPE_ZH[type] ?? type}</span>
                 <div className="flex-1 bg-gray-100 rounded-full h-2.5 overflow-hidden">
                   <div className={`h-full rounded-full ${TYPE_COLOR[type] ?? 'bg-gray-400'}`} style={{ width: `${(count / total) * 100}%` }} />
                 </div>
@@ -790,22 +797,22 @@ function WeaknessSummary({ results }: { results: TournamentResult[] }) {
           </div>
         </div>
         <div>
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Best Attack Types vs. Field</p>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">最佳攻擊屬性</p>
           <div className="space-y-2">
             {sortedWeaknesses.map(([type, count]) => (
               <div key={type} className="flex items-center gap-2 text-sm">
                 <span className="w-5 text-base leading-none">{TYPE_ICON[type] ?? '?'}</span>
-                <span className="w-24 font-medium text-gray-700">{type}</span>
+                <span className="w-16 font-medium text-gray-700">{TYPE_ZH[type] ?? type}</span>
                 <div className="flex-1 bg-gray-100 rounded-full h-2.5 overflow-hidden">
                   <div className={`h-full rounded-full ${TYPE_COLOR[type] ?? 'bg-orange-400'}`} style={{ width: `${(count / total) * 100}%` }} />
                 </div>
-                <span className="text-gray-500 text-xs w-20 text-right">×{count} decks</span>
+                <span className="text-gray-500 text-xs w-20 text-right">×{count} 套</span>
               </div>
             ))}
           </div>
           {sortedWeaknesses.length > 0 && (
             <p className="text-xs text-gray-400 mt-3">
-              {TYPE_ICON[sortedWeaknesses[0][0]]} <span className="font-medium text-gray-600">{sortedWeaknesses[0][0]}</span> attacks are effective against {sortedWeaknesses[0][1]} of {total} decks in this tournament.
+              {TYPE_ICON[sortedWeaknesses[0][0]]} <span className="font-medium text-gray-600">{TYPE_ZH[sortedWeaknesses[0][0]] ?? sortedWeaknesses[0][0]}</span> 屬性攻擊對本場 {sortedWeaknesses[0][1]}/{total} 套牌有效。
             </p>
           )}
         </div>
