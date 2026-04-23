@@ -212,7 +212,7 @@ export default function PokemonPage() {
   const filtered = useMemo(() => {
     if (!speciesList) return [];
     const q = search.trim().toLowerCase();
-    let list = showForms ? speciesList : speciesList.filter((p) => !p.form);
+    const list = showForms ? speciesList : speciesList.filter((p) => !p.form);
     if (!q) return list;
     return list.filter(
       (p) =>

@@ -44,6 +44,8 @@ export interface DeckCardDetail {
   resistances?: Array<{ type: string; value: string }> | null;
   retreatCost?: number | null;
   evolutionStage?: string | null;
+  evolvesFrom?: string | null;
+  evolvesTo?: string | null;
   /** Resolved canonical webCardId for primary-card-based linking (Pokémon only). */
   canonicalWebCardId?: string | null;
   /** Primary card UUID – preferred key for role storage across language variants. */

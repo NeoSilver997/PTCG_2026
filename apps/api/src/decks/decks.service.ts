@@ -72,6 +72,8 @@ export class DecksService {
                 weaknesses: true,
                 resistances: true,
                 evolutionStage: true,
+                evolvesFrom: true,
+                evolvesTo: true,
                 primaryCardId: true,
                 language: true,
                 primaryCard: {

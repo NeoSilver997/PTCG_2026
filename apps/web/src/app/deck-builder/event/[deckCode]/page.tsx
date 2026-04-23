@@ -301,8 +301,26 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
 
   // Derive archetype name: main attacker(s) + notable draw-engine support, prefer Chinese name
   // Exclude generic draw cards (キチキギスex/ラティアスex) that appear in nearly every deck
-  const DRAW_ENGINE_JP = ['\u30ea\u30fc\u30ea\u30a8\u306e\u30d4\u30c3\u30d4ex', '\u30ce\u30b3\u30c3\u30c1ex', '\u30b2\u30ce\u30bb\u30af\u30c8ex', '\u30d5\u30fc\u30c7\u30a3\u30f3'];
-  const mainNames = (sections.get('pokemon-main') ?? [])
+  const DRAW_ENGINE_JP = ['\u30ea\u30fc\u30ea\u30a8\u306e\u30d4\u30c3\u30d4ex', '\u30ce\u30b3\u30c3\u30c1ex', '\u30b2\u30ce\u30bb\u30af\u30c8ex', '\u30d5\u30fc\u30c9\u30a3\u30f3'];
+  const mainPokemon = sections.get('pokemon-main') ?? [];
+  const mainPokemonNames = new Set(mainPokemon.map(e => e.card.name));
+  
+  // Filter out Pokémon that have evolutions present in the deck (prefer highest evolution stage)
+  const mainPokemonFiltered = mainPokemon.filter(entry => {
+    // Check if this Pokémon has any evolution in the deck
+    let currentEvolution = entry.card.evolvesTo;
+    while (currentEvolution) {
+      if (mainPokemonNames.has(currentEvolution)) {
+        return false; // Exclude this Pokémon since a higher evolution is present
+      }
+      // Find the card for this evolution to continue the chain
+      const evolutionCard = mainPokemon.find(e => e.card.name === currentEvolution)?.card;
+      currentEvolution = evolutionCard?.evolvesTo;
+    }
+    return true; // Include this Pokémon (no higher evolution in deck)
+  });
+  
+  const mainNames = mainPokemonFiltered
     .map((e) => e.card.zhName ?? e.card.name)
     .filter((n): n is string => !!n)
     .filter((n, i, arr) => arr.indexOf(n) === i)

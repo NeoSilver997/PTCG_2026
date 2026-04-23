@@ -1,5 +1,5 @@
 import { Search, SlidersHorizontal, X } from 'lucide-react';
-import { useState } from 'react';
+import React, { useState } from 'react';
 
 const DEFAULT_EXPANSION_CODES = 'm4,m3,m2a,m1l,m1s,sv11w,sv11b,sv10';
 
@@ -340,12 +340,11 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-xs font-medium text-gray-600 shrink-0">擴展包:</span>
           {QUICK_EXPANSIONS.map(({ code, label }, idx) => (
-            <>
+            <React.Fragment key={code}>
               {idx > 0 && activeExpansions.has(QUICK_EXPANSIONS[idx - 1].code) && activeExpansions.has(code) && (
-                <span key={`or-${code}`} className="text-[10px] font-bold text-purple-600 shrink-0">OR</span>
+                <span className="text-[10px] font-bold text-purple-600 shrink-0">OR</span>
               )}
               <button
-                key={code}
                 onClick={() => toggleExpansion(code)}
                 className={`px-2.5 py-1 rounded-full text-xs border transition ${
                   activeExpansions.has(code)
@@ -355,7 +354,7 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
               >
                 {label}
               </button>
-            </>
+            </React.Fragment>
           ))}
           {activeExpansions.size > 0 && (
             <button

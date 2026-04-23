@@ -88,8 +88,7 @@ interface DeckCardRow {
   supertype: string | null;
   subtypes: string[];
   rarity: string | null;
-  hp: number | null;
-  hasAbilities: boolean;
+  hp: number | null;  evolvesTo: string | null;  hasAbilities: boolean;
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -120,6 +119,7 @@ async function main() {
       c.subtypes        AS "subtypes",
       c.rarity          AS "rarity",
       c.hp              AS "hp",
+      c."evolvesTo"     AS "evolvesTo",
       (c.abilities IS NOT NULL AND c.abilities != 'null'::jsonb) AS "hasAbilities"
     FROM decks d
     JOIN deck_cards dc ON dc."deckId" = d.id
@@ -157,7 +157,7 @@ async function main() {
 
   for (const [deckId, { deckCode, cards }] of deckMap) {
     // Classify cards into sections
-    const sections = new Map<SectionKey, Array<{ name: string | null; zhName: string | null }>>([
+const sections = new Map<SectionKey, Array<{ name: string | null; zhName: string | null; quantity: number; hp: number | null; evolvesTo: string | null }>>([
       ['pokemon-main', []],
       ['pokemon-support', []],
       ['ace', []],
@@ -166,11 +166,43 @@ async function main() {
     for (const card of cards) {
       const key = getSectionKey(card);
       if (!sections.has(key)) sections.set(key, []);
-      sections.get(key)!.push({ name: card.cardName, zhName: card.zhName });
+      sections.get(key)!.push({ 
+        name: card.cardName, 
+        zhName: card.zhName, 
+        quantity: card.quantity, 
+        hp: card.hp,
+        evolvesTo: card.evolvesTo
+      });
     }
 
-    // Top-2 unique main Pokémon ZH names
-    const mainNames = (sections.get('pokemon-main') ?? [])
+    // Sort pokemon-main section to match frontend logic: quantity desc, then HP desc
+    const mainSection = sections.get('pokemon-main') ?? [];
+    mainSection.sort((a, b) => {
+      // Primary sort: quantity descending
+      const qDiff = b.quantity - a.quantity;
+      if (qDiff !== 0) return qDiff;
+      // Secondary sort: HP descending (EX Pokemon first)
+      return (b.hp ?? 0) - (a.hp ?? 0);
+    });
+
+    // Filter out Pokémon that have evolutions present in the deck (prefer highest evolution stage)
+    const mainPokemonNames = new Set(mainSection.map(e => e.name));
+    const mainSectionFiltered = mainSection.filter(entry => {
+      // Check if this Pokémon has any evolution in the deck
+      let currentEvolution = entry.evolvesTo;
+      while (currentEvolution) {
+        if (mainPokemonNames.has(currentEvolution)) {
+          return false; // Exclude this Pokémon since a higher evolution is present
+        }
+        // Find the card for this evolution to continue the chain
+        const evolutionCard = mainSection.find(e => e.name === currentEvolution);
+        currentEvolution = evolutionCard?.evolvesTo;
+      }
+      return true; // Include this Pokémon (no higher evolution in deck)
+    });
+
+    // Top-2 unique main Pokémon ZH names (now properly sorted and filtered)
+    const mainNames = mainSectionFiltered
       .map((e) => e.zhName ?? e.name)
       .filter((n): n is string => !!n)
       .filter((n, i, arr) => arr.indexOf(n) === i)
