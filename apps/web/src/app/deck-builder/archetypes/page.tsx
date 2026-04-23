@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
+import apiClient from '@/lib/api-client';
 
 /* ---- Types ---- */
 interface TopCardMini {
@@ -365,13 +366,12 @@ function ArchetypesPageInner() {
   const { data: summaryData } = useQuery({
     queryKey: ['deck-meta-summary', region, sinceDate],
     queryFn: async () => {
-      const p = new URLSearchParams();
-      if (region) p.append('region', region);
-      if (sinceDate) p.append('sinceDate', sinceDate);
-      p.append('limit', '30');
-      const res = await fetch(`http://localhost:4200/api/v1/tournaments/meta/deck-summary?${p}`);
-      if (!res.ok) throw new Error('Failed');
-      return (await res.json()) as DeckMetaSummary;
+      const params: Record<string, string> = {};
+      if (region) params.region = region;
+      if (sinceDate) params.sinceDate = sinceDate;
+      params.limit = '30';
+      const { data } = await apiClient.get<DeckMetaSummary>('/tournaments/meta/deck-summary', { params });
+      return data;
     },
   });
 
@@ -384,14 +384,13 @@ function ArchetypesPageInner() {
     queryKey: ['archetype-decks', selectedName, region, sinceDate, skip],
     queryFn: async () => {
       if (!selectedName) return null;
-      const p = new URLSearchParams({ archetypeName: selectedName });
-      if (region) p.append('region', region);
-      if (sinceDate) p.append('sinceDate', sinceDate);
-      p.append('skip', String(skip));
-      p.append('take', String(TAKE));
-      const res = await fetch(`http://localhost:4200/api/v1/tournaments/meta/archetype-decks?${p}`);
-      if (!res.ok) throw new Error('Failed to fetch archetype decks');
-      return (await res.json()) as ArchetypeDecksResponse;
+      const params: Record<string, string | number> = { archetypeName: selectedName };
+      if (region) params.region = region;
+      if (sinceDate) params.sinceDate = sinceDate;
+      params.skip = skip;
+      params.take = TAKE;
+      const { data } = await apiClient.get<ArchetypeDecksResponse>('/tournaments/meta/archetype-decks', { params });
+      return data;
     },
     enabled: !!selectedName,
   });
