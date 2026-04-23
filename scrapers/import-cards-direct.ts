@@ -445,7 +445,7 @@ async function importCardOptimized(prisma: PrismaClient, card: any) {
 }
 
 // Process cards in batches with transactions for better performance
-async function importCardsBatch(prisma: PrismaClient, cards: any[], batchSize = 50) {
+async function importCardsBatch(prisma: PrismaClient, cards: any[], batchSize = 25) {
   let success = 0;
   let failed = 0;
   let skipped = 0;
@@ -467,7 +467,7 @@ async function importCardsBatch(prisma: PrismaClient, cards: any[], batchSize = 
           console.error(`  ✗ Failed ${card.webCardId}: ${error.message}`);
         }
       }
-    });
+    }, { timeout: 30000 });
 
     if ((i + batch.length) % 500 === 0 || i + batch.length >= cards.length) {
       console.log(`  Progress: ${Math.min(i + batch.length, cards.length)}/${cards.length} cards...`);
@@ -564,7 +564,7 @@ async function main() {
   // Phase 3: Import cards in batches with transactions
   console.log('\n💾 Phase 3: Importing cards in optimized batches...');
 
-  const batchSize = 50; // Process 50 cards per transaction
+  const batchSize = 25; // Process 25 cards per transaction
   const totalBatches = Math.ceil(allCards.length / batchSize);
 
   console.log(`Processing ${allCards.length} cards in ${totalBatches} batches of ${batchSize}...\n`);
