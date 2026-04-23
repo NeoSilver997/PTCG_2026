@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { CardGrid } from '@/components/card-grid';
 import { FilterPanel } from '@/components/filter-panel';
+import { CardDetailOverlay } from '@/components/card-detail-overlay';
 import apiClient from '@/lib/api-client';
 import { useRouter, useSearchParams } from 'next/navigation';
 
@@ -80,6 +81,8 @@ function CardsPageInner() {
   });
   const [skip, setSkip] = useState(0);
   const [hideDuplicates, setHideDuplicates] = useState(false);
+  const [selectedCard, setSelectedCard] = useState<any>(null);
+  const [showOverlay, setShowOverlay] = useState(false);
 
   // Derive URL params so the effect dependency is stable scalars (re-runs on client-side navigation)
 
@@ -153,8 +156,146 @@ function CardsPageInner() {
   const currentPage = Math.floor(skip / TAKE) + 1;
 
   const handleCardClick = (card: any) => {
-    router.push(`/cards/${card.webCardId}`);
+    setSelectedCard(card);
+    setShowOverlay(true);
   };
+
+  const handleCloseOverlay = () => {
+    setShowOverlay(false);
+    setSelectedCard(null);
+  };
+
+  const handleExportMarkdown = () => {
+    if (!displayCards.length) return;
+
+    const markdown = generateCardMarkdown(displayCards, filters);
+    const blob = new Blob([markdown], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ptcg-cards-${new Date().toISOString().split('T')[0]}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+function generateCardMarkdown(cards: any[], filters: typeof DEFAULT_FILTERS): string {
+  const timestamp = new Date().toISOString();
+  let markdown = `# PTCG Card Search Results\n\n`;
+  markdown += `**Generated:** ${timestamp}\n\n`;
+
+  // Add filter summary
+  const activeFilters = Object.entries(filters).filter(([key, value]) => value && value !== '');
+  if (activeFilters.length > 0) {
+    markdown += `## Search Filters\n\n`;
+    activeFilters.forEach(([key, value]) => {
+      const label = key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1');
+      markdown += `- **${label}:** ${value}\n`;
+    });
+    markdown += `\n`;
+  }
+
+  markdown += `## Cards (${cards.length})\n\n`;
+
+  cards.forEach((card, index) => {
+    markdown += `### ${index + 1}. ${card.name}\n\n`;
+    markdown += `**Web Card ID:** ${card.webCardId}\n`;
+    if (card.primaryCard?.primaryExpansion) {
+      markdown += `**Expansion:** ${card.primaryCard.primaryExpansion.code} - ${card.primaryCard.primaryExpansion.nameEn}\n`;
+    }
+    markdown += `**Language:** ${card.language}\n`;
+    markdown += `**Supertype:** ${card.supertype}\n`;
+    if (card.subtypes?.length > 0) {
+      markdown += `**Subtypes:** ${card.subtypes.join(', ')}\n`;
+    }
+    if (card.rarity) {
+      markdown += `**Rarity:** ${card.rarity}\n`;
+    }
+    if (card.variantType) {
+      markdown += `**Variant:** ${card.variantType}\n`;
+    }
+    if (card.hp) {
+      markdown += `**HP:** ${card.hp}\n`;
+    }
+    if (card.types) {
+      const types = Array.isArray(card.types) ? card.types : [card.types];
+      markdown += `**Types:** ${types.join(', ')}\n`;
+    }
+    if (card.artist) {
+      markdown += `**Artist:** ${card.artist}\n`;
+    }
+    if (card.regulationMark) {
+      markdown += `**Regulation Mark:** ${card.regulationMark}\n`;
+    }
+
+    // Abilities
+    if (card.abilities && Array.isArray(card.abilities) && card.abilities.length > 0) {
+      markdown += `\n**Abilities:**\n`;
+      card.abilities.forEach((ability: any) => {
+        markdown += `- **${ability.name}**`;
+        if (ability.type) markdown += ` (${ability.type})`;
+        markdown += `\n`;
+        if (ability.text || ability.description) {
+          markdown += `  ${ability.text || ability.description}\n`;
+        }
+      });
+    }
+
+    // Attacks
+    if (card.attacks && Array.isArray(card.attacks) && card.attacks.length > 0) {
+      markdown += `\n**Attacks:**\n`;
+      card.attacks.forEach((attack: any) => {
+        markdown += `- **${attack.name}**`;
+        if (attack.cost && Array.isArray(attack.cost)) {
+          markdown += ` [${attack.cost.join(', ')}]`;
+        }
+        if (attack.damage) {
+          markdown += ` (${attack.damage})`;
+        }
+        markdown += `\n`;
+        if (attack.effect || attack.text) {
+          markdown += `  ${attack.effect || attack.text}\n`;
+        }
+      });
+    }
+
+    // Weaknesses and Resistances
+    const weaknesses = card.weaknesses && Array.isArray(card.weaknesses) ? card.weaknesses : [];
+    const resistances = card.resistances && Array.isArray(card.resistances) ? card.resistances : [];
+    if (weaknesses.length > 0 || resistances.length > 0 || card.retreatCost != null) {
+      markdown += `\n**Stats:**\n`;
+      if (weaknesses.length > 0) {
+        markdown += `- **Weaknesses:** ${weaknesses.map((w: any) => `${w.type} ${w.value}`).join(', ')}\n`;
+      }
+      if (resistances.length > 0) {
+        markdown += `- **Resistances:** ${resistances.map((r: any) => `${r.type} ${r.value}`).join(', ')}\n`;
+      }
+      if (card.retreatCost != null) {
+        markdown += `- **Retreat Cost:** ${card.retreatCost}\n`;
+      }
+    }
+
+    // Effect tags and tier
+    if (card.primaryCard?.effectTags?.length > 0 || card.primaryCard?.cardTier) {
+      markdown += `\n**Meta Information:**\n`;
+      if (card.primaryCard.effectTags?.length > 0) {
+        markdown += `- **Effect Tags:** ${card.primaryCard.effectTags.join(', ')}\n`;
+      }
+      if (card.primaryCard.cardTier) {
+        markdown += `- **Card Tier:** ${card.primaryCard.cardTier}\n`;
+      }
+    }
+
+    if (card.imageUrl) {
+      markdown += `\n**Image:** ${card.imageUrl}\n`;
+    }
+
+    markdown += `\n---\n\n`;
+  });
+
+  return markdown;
+}
 
   if (error) {
     return (
@@ -200,15 +341,24 @@ function CardsPageInner() {
                       )}
                     </label>
                   </div>
-                  {totalPages > 1 && (
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => setSkip(Math.max(0, skip - TAKE))} disabled={skip === 0}
-                        className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-40 text-xs">上一頁</button>
-                      <span className="text-xs">第 {currentPage} / {totalPages} 頁</span>
-                      <button onClick={() => setSkip(skip + TAKE)} disabled={skip + TAKE >= totalCards}
-                        className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-40 text-xs">下一頁</button>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleExportMarkdown}
+                      disabled={!displayCards.length}
+                      className="px-3 py-1.5 bg-green-600 text-white text-xs rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      匯出 Markdown
+                    </button>
+                    {totalPages > 1 && (
+                      <>
+                        <button onClick={() => setSkip(Math.max(0, skip - TAKE))} disabled={skip === 0}
+                          className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-40 text-xs">上一頁</button>
+                        <span className="text-xs">第 {currentPage} / {totalPages} 頁</span>
+                        <button onClick={() => setSkip(skip + TAKE)} disabled={skip + TAKE >= totalCards}
+                          className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-40 text-xs">下一頁</button>
+                      </>
+                    )}
+                  </div>
                 </div>
                 <CardGrid cards={displayCards} onCardClick={handleCardClick} />
                 {totalPages > 1 && (
@@ -230,6 +380,14 @@ function CardsPageInner() {
           </div>
         )}
       </div>
+
+      {/* Card Detail Overlay */}
+      {showOverlay && selectedCard && (
+        <CardDetailOverlay
+          card={selectedCard}
+          onClose={handleCloseOverlay}
+        />
+      )}
     </div>
   );
 }
