@@ -1974,7 +1974,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                                 )}
                                 <div className="flex-1 min-w-0">
                                   <p className="text-sm font-medium text-gray-900 truncate">
-                                    {deck.playerName}
+                                    {deck.deckName || '無牌組名稱'}
                                   </p>
                                   <p className="text-xs text-gray-500 truncate">
                                     {deck.tournamentName}

@@ -1257,6 +1257,7 @@ export class CardsService {
           date_trunc('week', t.date)::date AS week_start,
           d.id AS "deckId",
           d."deckCode",
+          d.name AS "deckName",
           tr."playerName",
           tr.placement,
           t.name AS "tournamentName",
@@ -1334,6 +1335,7 @@ export class CardsService {
         entry.decks.push({
           deckId: row.deckId,
           deckCode: row.deckCode,
+          deckName: row.deckName,
           playerName: row.playerName,
           placement: Number(row.placement),
           tournamentName: row.tournamentName,

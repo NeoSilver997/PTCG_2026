@@ -408,7 +408,7 @@ export class TournamentsService {
       `,
     );
 
-    // Get deck archetypes by key Pokemon (highest evolution + EX priority, ported from PTCG_CardDB rebuild_deck_cache logic)
+    // Get deck archetypes by cached names (uses the same logic as refresh-deck-meta.ts)
     // Also surfaces key2 image and most common ACE_SPEC card per archetype
     const archetypes = await this.prisma.$queryRawUnsafe<Array<{
       archetype_name: string;
@@ -420,91 +420,84 @@ export class TournamentsService {
       key_item_image: string | null;
     }>>(
       `
-      WITH pre_evolutions AS (
-        SELECT DISTINCT dc."deckId", c_base.name as pre_evo_name
-        FROM deck_cards dc
-        JOIN cards c_evolved ON c_evolved.id = dc."cardId"
-          AND c_evolved.supertype = 'POKEMON'
-          AND c_evolved."evolvesFrom" IS NOT NULL
-        JOIN cards c_base ON c_base.name = c_evolved."evolvesFrom" AND c_base.supertype = 'POKEMON'
-        JOIN deck_cards dc_base ON dc_base."deckId" = dc."deckId" AND dc_base."cardId" = c_base.id
-        JOIN tournament_results tr ON tr."deckId" = dc."deckId"
-        JOIN tournaments t ON t.id = tr."tournamentId"
-        WHERE 1=1 ${regionSql} ${sinceDateSql}
-      ),
-      deck_key_pokemon AS (
+      WITH deck_archetype_stats AS (
         SELECT
-          d.id as deck_id,
-          tr.placement,
-          c.name,
-          c."imageUrl",
-          dc.quantity,
-          ROW_NUMBER() OVER (
-            PARTITION BY d.id
+          COALESCE(d."cachedArchetypeName", 'Unknown') as archetype_name,
+          COUNT(DISTINCT tr."deckId")::int as deck_count,
+          ROUND(AVG(tr.placement)::numeric, 2)::float as avg_placement,
+          MIN(c1."imageUrl") as key1_image,
+          MIN(c2."imageUrl") as key2_image
+        FROM tournament_results tr
+        JOIN tournaments t ON t.id = tr."tournamentId"
+        JOIN decks d ON d.id = tr."deckId"
+        LEFT JOIN deck_cards dc1 ON dc1."deckId" = d.id
+          AND dc1."cardId" = (
+            SELECT dc_inner."cardId" FROM deck_cards dc_inner
+            JOIN cards c_inner ON c_inner.id = dc_inner."cardId"
+            WHERE dc_inner."deckId" = d.id AND c_inner.supertype = 'POKEMON'
             ORDER BY
-              (CASE WHEN c.name ILIKE '%ex' THEN 1000 ELSE 0 END +
-               CASE c."evolutionStage"
+              (CASE WHEN c_inner.name ILIKE '%ex' THEN 1000 ELSE 0 END +
+               CASE c_inner."evolutionStage"
                  WHEN 'STAGE_2' THEN 300
                  WHEN 'STAGE_1' THEN 200
                  ELSE 100
                END) DESC,
-              dc.quantity DESC,
-              c.name ASC
+              dc_inner.quantity DESC,
+              c_inner.name ASC
+            LIMIT 1
+          )
+        LEFT JOIN cards c1 ON c1.id = dc1."cardId"
+        LEFT JOIN deck_cards dc2 ON dc2."deckId" = d.id
+          AND dc2."cardId" = (
+            SELECT dc_inner."cardId" FROM deck_cards dc_inner
+            JOIN cards c_inner ON c_inner.id = dc_inner."cardId"
+            WHERE dc_inner."deckId" = d.id AND c_inner.supertype = 'POKEMON'
+            ORDER BY
+              (CASE WHEN c_inner.name ILIKE '%ex' THEN 1000 ELSE 0 END +
+               CASE c_inner."evolutionStage"
+                 WHEN 'STAGE_2' THEN 300
+                 WHEN 'STAGE_1' THEN 200
+                 ELSE 100
+               END) DESC,
+              dc_inner.quantity DESC,
+              c_inner.name ASC
+            LIMIT 1 OFFSET 1
+          )
+        LEFT JOIN cards c2 ON c2.id = dc2."cardId"
+        WHERE 1=1 ${regionSql} ${sinceDateSql}
+        GROUP BY d."cachedArchetypeName"
+        HAVING COUNT(DISTINCT tr."deckId") >= 2
+      ),
+      archetype_ace_specs AS (
+        SELECT
+          COALESCE(d."cachedArchetypeName", 'Unknown') as archetype_name,
+          c.name as item_name,
+          MIN(c."imageUrl") as item_image,
+          COUNT(DISTINCT d.id) as item_count,
+          ROW_NUMBER() OVER (
+            PARTITION BY COALESCE(d."cachedArchetypeName", 'Unknown')
+            ORDER BY COUNT(DISTINCT d.id) DESC
           ) as rn
         FROM decks d
         JOIN tournament_results tr ON tr."deckId" = d.id
         JOIN tournaments t ON t.id = tr."tournamentId"
         JOIN deck_cards dc ON dc."deckId" = d.id
         JOIN cards c ON c.id = dc."cardId"
-        WHERE c.supertype = 'POKEMON' AND dc.quantity >= 2 ${regionSql} ${sinceDateSql}
-          AND NOT EXISTS (
-            SELECT 1 FROM pre_evolutions pe WHERE pe."deckId" = d.id AND pe.pre_evo_name = c.name
-          )
-      ),
-      deck_archetype_names AS (
-        SELECT
-          deck_id,
-          placement,
-          CASE
-            WHEN COUNT(*) >= 2
-              THEN MIN(CASE WHEN rn = 1 THEN name END) || '/' || MIN(CASE WHEN rn = 2 THEN name END)
-            ELSE MIN(CASE WHEN rn = 1 THEN name END)
-          END as archetype_name,
-          MIN(CASE WHEN rn = 1 THEN "imageUrl" END) as key1_image,
-          MIN(CASE WHEN rn = 2 THEN "imageUrl" END) as key2_image
-        FROM deck_key_pokemon
-        WHERE rn <= 2
-        GROUP BY deck_id, placement
-      ),
-      archetype_ace_specs AS (
-        SELECT
-          COALESCE(dan.archetype_name, 'Unknown') as archetype_name,
-          c.name as item_name,
-          MIN(c."imageUrl") as item_image,
-          COUNT(DISTINCT dan.deck_id) as item_count,
-          ROW_NUMBER() OVER (
-            PARTITION BY COALESCE(dan.archetype_name, 'Unknown')
-            ORDER BY COUNT(DISTINCT dan.deck_id) DESC
-          ) as rn
-        FROM deck_archetype_names dan
-        JOIN deck_cards dc ON dc."deckId" = dan.deck_id
-        JOIN cards c ON c.id = dc."cardId"
-        WHERE c.rarity = 'ACE_SPEC'
-        GROUP BY COALESCE(dan.archetype_name, 'Unknown'), c.name
+        WHERE c.rarity = 'ACE_SPEC' ${regionSql} ${sinceDateSql}
+        GROUP BY COALESCE(d."cachedArchetypeName", 'Unknown'), c.name
       )
       SELECT
-        COALESCE(dan.archetype_name, 'Unknown') as archetype_name,
-        COUNT(DISTINCT dan.deck_id)::int as deck_count,
-        ROUND(AVG(dan.placement)::numeric, 2)::float as avg_placement,
-        MIN(dan.key1_image) as key1_image,
-        MIN(dan.key2_image) as key2_image,
+        das.archetype_name,
+        das.deck_count,
+        das.avg_placement,
+        das.key1_image,
+        das.key2_image,
         MAX(CASE WHEN aas.rn = 1 THEN aas.item_name END) as key_item_name,
         MAX(CASE WHEN aas.rn = 1 THEN aas.item_image END) as key_item_image
-      FROM deck_archetype_names dan
-      LEFT JOIN archetype_ace_specs aas ON aas.archetype_name = COALESCE(dan.archetype_name, 'Unknown')
-      GROUP BY dan.archetype_name
-      HAVING COUNT(DISTINCT dan.deck_id) >= 2
-      ORDER BY deck_count DESC
+      FROM deck_archetype_stats das
+      LEFT JOIN archetype_ace_specs aas ON aas.archetype_name = das.archetype_name
+      GROUP BY das.archetype_name, das.deck_count, das.avg_placement, das.key1_image, das.key2_image
+      ORDER BY das.deck_count DESC
       LIMIT 30
       `,
     );
@@ -583,19 +576,8 @@ export class TournamentsService {
       energy_count: number;
     }>>(
       `
-      WITH pre_evolutions AS (
-        SELECT DISTINCT dc."deckId", c_base.name as pre_evo_name
-        FROM deck_cards dc
-        JOIN cards c_evolved ON c_evolved.id = dc."cardId"
-          AND c_evolved.supertype = 'POKEMON'
-          AND c_evolved."evolvesFrom" IS NOT NULL
-        JOIN cards c_base ON c_base.name = c_evolved."evolvesFrom" AND c_base.supertype = 'POKEMON'
-        JOIN deck_cards dc_base ON dc_base."deckId" = dc."deckId" AND dc_base."cardId" = c_base.id
-        JOIN tournament_results tr ON tr."deckId" = dc."deckId"
-        JOIN tournaments t ON t.id = tr."tournamentId"
-        WHERE 1=1 ${regionSql} ${sinceDateSql}
-      ),
-      deck_key_pokemon AS (
+      WITH
+      filtered AS (
         SELECT
           d.id as deck_id,
           tr.placement,
@@ -603,48 +585,47 @@ export class TournamentsService {
           t.name as tournament_name,
           t.date as tournament_date,
           t."eventId" as event_id,
-          c.name,
-          c."imageUrl",
-          dc.quantity,
-          ROW_NUMBER() OVER (
-            PARTITION BY d.id
+          COALESCE(d."cachedArchetypeName", 'Unknown') as archetype_name,
+          c1."imageUrl" as key1_image,
+          c2."imageUrl" as key2_image
+        FROM decks d
+        JOIN tournament_results tr ON tr."deckId" = d.id
+        JOIN tournaments t ON t.id = tr."tournamentId"
+        LEFT JOIN deck_cards dc1 ON dc1."deckId" = d.id
+          AND dc1."cardId" = (
+            SELECT dc_inner."cardId" FROM deck_cards dc_inner
+            JOIN cards c_inner ON c_inner.id = dc_inner."cardId"
+            WHERE dc_inner."deckId" = d.id AND c_inner.supertype = 'POKEMON'
             ORDER BY
-              (CASE WHEN c.name ILIKE '%ex' THEN 1000 ELSE 0 END +
-               CASE c."evolutionStage"
+              (CASE WHEN c_inner.name ILIKE '%ex' THEN 1000 ELSE 0 END +
+               CASE c_inner."evolutionStage"
                  WHEN 'STAGE_2' THEN 300
                  WHEN 'STAGE_1' THEN 200
                  ELSE 100
                END) DESC,
-              dc.quantity DESC,
-              c.name ASC
-          ) as rn
-        FROM decks d
-        JOIN tournament_results tr ON tr."deckId" = d.id
-        JOIN tournaments t ON t.id = tr."tournamentId"
-        JOIN deck_cards dc ON dc."deckId" = d.id
-        JOIN cards c ON c.id = dc."cardId"
-        WHERE c.supertype = 'POKEMON' AND dc.quantity >= 2 ${regionSql} ${sinceDateSql}
-          AND NOT EXISTS (
-            SELECT 1 FROM pre_evolutions pe WHERE pe."deckId" = d.id AND pe.pre_evo_name = c.name
+              dc_inner.quantity DESC,
+              c_inner.name ASC
+            LIMIT 1
           )
-      ),
-      deck_archetype_names AS (
-        SELECT
-          deck_id, placement, player_name, tournament_name, tournament_date, event_id,
-          CASE
-            WHEN COUNT(*) >= 2
-              THEN MIN(CASE WHEN rn = 1 THEN name END) || '/' || MIN(CASE WHEN rn = 2 THEN name END)
-            ELSE MIN(CASE WHEN rn = 1 THEN name END)
-          END as archetype_name,
-          MIN(CASE WHEN rn = 1 THEN "imageUrl" END) as key1_image,
-          MIN(CASE WHEN rn = 2 THEN "imageUrl" END) as key2_image
-        FROM deck_key_pokemon
-        WHERE rn <= 2
-        GROUP BY deck_id, placement, player_name, tournament_name, tournament_date, event_id
-      ),
-      filtered AS (
-        SELECT * FROM deck_archetype_names
-        WHERE COALESCE(archetype_name, 'Unknown') = '${archetypeName}'
+        LEFT JOIN cards c1 ON c1.id = dc1."cardId"
+        LEFT JOIN deck_cards dc2 ON dc2."deckId" = d.id
+          AND dc2."cardId" = (
+            SELECT dc_inner."cardId" FROM deck_cards dc_inner
+            JOIN cards c_inner ON c_inner.id = dc_inner."cardId"
+            WHERE dc_inner."deckId" = d.id AND c_inner.supertype = 'POKEMON'
+            ORDER BY
+              (CASE WHEN c_inner.name ILIKE '%ex' THEN 1000 ELSE 0 END +
+               CASE c_inner."evolutionStage"
+                 WHEN 'STAGE_2' THEN 300
+                 WHEN 'STAGE_1' THEN 200
+                 ELSE 100
+               END) DESC,
+              dc_inner.quantity DESC,
+              c_inner.name ASC
+            LIMIT 1 OFFSET 1
+          )
+        LEFT JOIN cards c2 ON c2.id = dc2."cardId"
+        WHERE COALESCE(d."cachedArchetypeName", 'Unknown') = '${archetypeName}' ${regionSql} ${sinceDateSql}
       ),
       deck_card_ranked AS (
         SELECT
@@ -727,60 +708,8 @@ export class TournamentsService {
 
     const countResult = await this.prisma.$queryRawUnsafe<[{ total: number }]>(
       `
-      WITH pre_evolutions AS (
-        SELECT DISTINCT dc."deckId", c_base.name as pre_evo_name
-        FROM deck_cards dc
-        JOIN cards c_evolved ON c_evolved.id = dc."cardId"
-          AND c_evolved.supertype = 'POKEMON'
-          AND c_evolved."evolvesFrom" IS NOT NULL
-        JOIN cards c_base ON c_base.name = c_evolved."evolvesFrom" AND c_base.supertype = 'POKEMON'
-        JOIN deck_cards dc_base ON dc_base."deckId" = dc."deckId" AND dc_base."cardId" = c_base.id
-        JOIN tournament_results tr ON tr."deckId" = dc."deckId"
-        JOIN tournaments t ON t.id = tr."tournamentId"
-        WHERE 1=1 ${regionSql} ${sinceDateSql}
-      ),
-      deck_key_pokemon AS (
-        SELECT
-          d.id as deck_id,
-          tr.placement,
-          c.name,
-          c."imageUrl",
-          dc.quantity,
-          ROW_NUMBER() OVER (
-            PARTITION BY d.id
-            ORDER BY
-              (CASE WHEN c.name ILIKE '%ex' THEN 1000 ELSE 0 END +
-               CASE c."evolutionStage"
-                 WHEN 'STAGE_2' THEN 300
-                 WHEN 'STAGE_1' THEN 200
-                 ELSE 100
-               END) DESC,
-              dc.quantity DESC,
-              c.name ASC
-          ) as rn
-        FROM decks d
-        JOIN tournament_results tr ON tr."deckId" = d.id
-        JOIN tournaments t ON t.id = tr."tournamentId"
-        JOIN deck_cards dc ON dc."deckId" = d.id
-        JOIN cards c ON c.id = dc."cardId"
-        WHERE c.supertype = 'POKEMON' AND dc.quantity >= 2 ${regionSql} ${sinceDateSql}
-          AND NOT EXISTS (
-            SELECT 1 FROM pre_evolutions pe WHERE pe."deckId" = d.id AND pe.pre_evo_name = c.name
-          )
-      ),
-      deck_archetype_names AS (
-        SELECT deck_id,
-          CASE
-            WHEN COUNT(*) >= 2
-              THEN MIN(CASE WHEN rn = 1 THEN name END) || '/' || MIN(CASE WHEN rn = 2 THEN name END)
-            ELSE MIN(CASE WHEN rn = 1 THEN name END)
-          END as archetype_name
-        FROM deck_key_pokemon WHERE rn <= 2
-        GROUP BY deck_id
-      )
       SELECT COUNT(*)::int as total
-      FROM deck_archetype_names
-      WHERE COALESCE(archetype_name, 'Unknown') = '${archetypeName}'
+      FROM filtered
       `,
     );
 
