@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { Calendar, PenSquare, Search, Sword, Users } from 'lucide-react';
+import { Calendar, PenSquare, Search, Sword, Users, Trophy } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 
 interface Tournament {
@@ -61,6 +61,13 @@ export default function DeckBuilderTournamentsPage() {
               </div>
             </div>
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+              <Link
+                href="/deck-builder/tournaments/summary"
+                className="flex items-center justify-center space-x-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-sm font-medium w-full sm:w-auto"
+              >
+                <Trophy className="h-4 w-4" />
+                <span>Tournament Summary</span>
+              </Link>
               <Link
                 href="/cards"
                 className="flex items-center justify-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium w-full sm:w-auto"

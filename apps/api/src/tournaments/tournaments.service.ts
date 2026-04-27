@@ -709,7 +709,13 @@ export class TournamentsService {
     const countResult = await this.prisma.$queryRawUnsafe<[{ total: number }]>(
       `
       SELECT COUNT(*)::int as total
-      FROM filtered
+      FROM (
+        SELECT d.id as deck_id
+        FROM decks d
+        JOIN tournament_results tr ON tr."deckId" = d.id
+        JOIN tournaments t ON t.id = tr."tournamentId"
+        WHERE COALESCE(d."cachedArchetypeName", 'Unknown') = '${archetypeName}' ${regionSql} ${sinceDateSql}
+      ) filtered
       `,
     );
 

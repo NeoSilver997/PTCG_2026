@@ -644,6 +644,10 @@ const EFFECT_TAG_COLORS: Record<string, string> = {
   '手牌展開': '#06b6d4',  // cyan
   '傷害加透': '#f59e0b',  // amber
   '贸沈控制': '#84cc16',  // lime
+  // Deck-search / place — Basic Pokémon (e.g. 好友寶芬, 太晶珠)
+  '放置基礎寶可夢': '#22c55e',  // green-500
+  // Attach / deck-search — Energy (e.g. 捕蟲組合, 赤松, 火伊布ex, 燃燒充能, 能量輸送)
+  '附上搜索能量': '#f97316',    // orange-500 (distinct warm hue for energy theme)
 };
 
 const TAG_DEFAULT_COLOR = '#64748b'; // slate
