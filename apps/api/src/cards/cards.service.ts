@@ -1540,6 +1540,29 @@ export class CardsService {
     });
   }
 
+  async getEffectTags(): Promise<Array<{ tag: string; count: number; isSpecial: boolean }>> {
+    const [normalRows, specialRows] = await Promise.all([
+      this.prisma.$queryRaw<Array<{ tag: string; count: bigint }>>`
+        SELECT unnest("effectTags") AS tag, COUNT(*) AS count
+        FROM "PrimaryCard"
+        WHERE "effectTags" IS NOT NULL AND array_length("effectTags", 1) > 0
+        GROUP BY tag
+        ORDER BY count DESC
+      `,
+      this.prisma.$queryRaw<Array<{ tag: string; count: bigint }>>`
+        SELECT unnest("specialEffectTags") AS tag, COUNT(*) AS count
+        FROM "PrimaryCard"
+        WHERE "specialEffectTags" IS NOT NULL AND array_length("specialEffectTags", 1) > 0
+        GROUP BY tag
+        ORDER BY count DESC
+      `,
+    ]);
+    return [
+      ...normalRows.map(r => ({ tag: r.tag, count: Number(r.count), isSpecial: false })),
+      ...specialRows.map(r => ({ tag: r.tag, count: Number(r.count), isSpecial: true })),
+    ];
+  }
+
   async getSpeciesSummary(): Promise<any[]> {
     const [allSpecies, latestImages, cardCountsRaw, evolvesFromRaw, evolutionStageRaw] = await Promise.all([
       // 1. All species, sorted by dex number

@@ -45,6 +45,8 @@ interface CardDetail {
     specialEffectTags: string[];
     effectScore: number | null;
     cardTier: string | null;
+    maxDrawCount: number | null;
+    maxDamage: number | null;
     primaryExpansion: {
       code: string;
       nameEn: string;
@@ -1103,6 +1105,18 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                   {card.primaryCard.effectScore != null && (
                     <span className="text-sm text-gray-500">
                       分數：<span className="font-semibold text-gray-800">{card.primaryCard.effectScore.toFixed(1)}</span>
+                    </span>
+                  )}
+                  {card.primaryCard.maxDrawCount != null && (
+                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold bg-sky-100 text-sky-800" title="單次效果最多抽取的牌數">
+                      <span>最大抽牌</span>
+                      <span className="font-bold">{card.primaryCard.maxDrawCount}</span>
+                    </span>
+                  )}
+                  {card.primaryCard.maxDamage != null && (
+                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold bg-rose-100 text-rose-800" title="可變傷害效果的理論最大值">
+                      <span>最大傷害</span>
+                      <span className="font-bold">{card.primaryCard.maxDamage}</span>
                     </span>
                   )}
                 </div>

@@ -101,6 +101,13 @@ export class CardsController {
     return await this.cardsService.getEffectKeywords();
   }
 
+  @Get('effect-tags')
+  @ApiOperation({ summary: 'Get all distinct effect tags and special effect tags with counts from DB' })
+  @ApiResponse({ status: 200, description: 'Array of { tag, count, isSpecial }' })
+  async getEffectTags() {
+    return await this.cardsService.getEffectTags();
+  }
+
   @Get('admin/missing-effects')
   @ApiOperation({ summary: 'Get PrimaryCards missing effectTags or tier, with sample cards' })
   @ApiResponse({ status: 200, description: 'Missing effects stats and samples' })

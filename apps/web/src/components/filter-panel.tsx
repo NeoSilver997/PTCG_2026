@@ -1,5 +1,5 @@
 import { Search, SlidersHorizontal, X } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 const DEFAULT_EXPANSION_CODES = 'm4,m3,m2a,m1l,m1s,sv11w,sv11b,sv10';
 
@@ -36,8 +36,11 @@ const QUICK_EXPANSIONS = [
   { code: 'sv10',  label: 'SV10' },
   { code: 'sv9',   label: 'SV9' },
   { code: 'sv9a',  label: 'SV9A' },
+  { code: 'sv8a',   label: 'SV8A' },
   { code: 'sv8',   label: 'SV8' },
   { code: 'sv7',   label: 'SV7' },
+  { code: 'sv6',   label: 'SV6' },
+  { code: 'sv5m',   label: 'SV5M' },
 ];
 
 interface FilterPanelProps {
@@ -75,6 +78,14 @@ interface FilterPanelProps {
 
 export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [effectTags, setEffectTags] = useState<Array<{ tag: string; count: number; isSpecial: boolean }>>([]);
+
+  useEffect(() => {
+    fetch('/api/v1/cards/effect-tags')
+      .then(r => r.ok ? r.json() : [])
+      .then(setEffectTags)
+      .catch(() => {});
+  }, []);
   
   const updateFilter = (key: string, value: string) => {
     onFilterChange({ ...filters, [key]: value });
@@ -273,7 +284,7 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
             <option value="DARKNESS" className="text-gray-900">惡</option>
             <option value="DRAGON" className="text-gray-900">龍</option>
             <option value="FAIRY" className="text-gray-900">妖精</option>
-            <option value="FIGHTING" className="text-gray-900">格鬥</option>
+            <option value="FIGHTING" className="text-gray-900">鬥</option>
             <option value="FIRE" className="text-gray-900">火</option>
             <option value="GRASS" className="text-gray-900">草</option>
             <option value="LIGHTNING" className="text-gray-900">雷</option>
@@ -553,58 +564,36 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900"
               >
                 <option value="">全部</option>
-                <optgroup label="── 資源 ──">
-                  <option value="抽卡效果">抽卡效果</option>
-                  <option value="搜索效果">搜索效果</option>
-                  <option value="能量操作">能量操作</option>
-                  <option value="能量回收">能量回收</option>
-                  <option value="能量附著">能量附著</option>
-                  <option value="手牌丟棄">手牌丟棄</option>
-                  <option value="牌庫操作">牌庫操作</option>
-                  <option value="牌庫重洗">牌庫重洗</option>
-                </optgroup>
-                <optgroup label="── 傷害/戰鬥 ──">
-                  <option value="傷害效果">傷害效果</option>
-                  <option value="條件傷害">條件傷害</option>
-                  <option value="連鎖傷害">連鎖傷害</option>
-                  <option value="備戰傷害加成">備戰傷害加成</option>
-                  <option value="棄牌區傷害加成">棄牌區傷害加成</option>
-                  <option value="傷害指示物">傷害指示物</option>
-                  <option value="反噬傷害">反噬傷害</option>
-                </optgroup>
-                <optgroup label="── 防禦/控制 ──">
-                  <option value="傷害防禦">傷害防禦</option>
-                  <option value="傷害減免">傷害減免</option>
-                  <option value="高額傷害減免">高額傷害減免</option>
-                  <option value="全體防禦">全體防禦</option>
-                  <option value="效果免疫">效果免疫</option>
-                  <option value="無視弱點/效果">無視弱點/效果</option>
-                  <option value="HP提升">HP提升</option>
-                </optgroup>
-                <optgroup label="── 狀態/干擾 ──">
-                  <option value="狀態異常">狀態異常</option>
-                  <option value="狀態恢復">狀態恢復</option>
-                  <option value="昏厥條件">昏厥條件</option>
-                  <option value="招式封鎖">招式封鎖</option>
-                  <option value="招式鎖定">招式鎖定</option>
-                  <option value="撤退封鎖">撤退封鎖</option>
-                  <option value="撤退干擾">撤退干擾</option>
-                  <option value="道具消除">道具消除</option>
-                  <option value="物品卡封鎖">物品卡封鎖</option>
-                  <option value="附著干擾">附著干擾</option>
-                  <option value="支援者限制">支援者限制</option>
-                </optgroup>
-                <optgroup label="── 其他 ──">
-                  <option value="切換效果">切換效果</option>
-                  <option value="回復效果">回復效果</option>
-                  <option value="進化支援">進化支援</option>
-                  <option value="招式複製">招式複製</option>
-                  <option value="硬幣判定">硬幣判定</option>
-                  <option value="連續技">連續技</option>
-                  <option value="獎賞控制">獎賞控制</option>
-                  <option value="情報收集">情報收集</option>
-                  <option value="弱點改變">弱點改變</option>
-                </optgroup>
+                {effectTags.length > 0 ? (
+                  <>
+                    {effectTags.filter(t => !t.isSpecial).length > 0 && (
+                      <optgroup label="── 效果標籤 ──">
+                        {effectTags.filter(t => !t.isSpecial).map(({ tag, count }) => (
+                          <option key={tag} value={tag}>{tag} ({count})</option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {effectTags.filter(t => t.isSpecial).length > 0 && (
+                      <optgroup label="── 特殊標籤 ──">
+                        {effectTags.filter(t => t.isSpecial).map(({ tag, count }) => (
+                          <option key={tag} value={tag}>{tag} ({count})</option>
+                        ))}
+                      </optgroup>
+                    )}
+                  </>
+                ) : (
+                  <optgroup label="── 資源 ──">
+                    <option value="抽卡效果">抽卡效果</option>
+                    <option value="牌庫搜索">牌庫搜索</option>
+                    <option value="棄牌搜索">棄牌搜索</option>
+                    <option value="能量操作">能量操作</option>
+                    <option value="能量回收">能量回收</option>
+                    <option value="能量附著">能量附著</option>
+                    <option value="手牌丟棄">手牌丟棄</option>
+                    <option value="牌庫操作">牌庫操作</option>
+                    <option value="牌庫重洗">牌庫重洗</option>
+                  </optgroup>
+                )}
               </select>
             </div>
 

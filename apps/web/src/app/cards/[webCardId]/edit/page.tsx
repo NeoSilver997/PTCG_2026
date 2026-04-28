@@ -68,6 +68,12 @@ interface CardDetail {
     id: string;
     expansionId: string;
     cardNumber: string;
+    effectTags: string[];
+    specialEffectTags: string[];
+    effectScore: number | null;
+    cardTier: string | null;
+    maxDrawCount: number | null;
+    maxDamage: number | null;
     primaryExpansion: {
       code: string;
       nameEn: string;
@@ -987,6 +993,66 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
                 </div>
               </div>
             </section>
+
+            {/* Auto-computed Effect Fields (read-only) */}
+            {card && (card.primaryCard.cardTier || (card.primaryCard.effectTags?.length > 0) || card.primaryCard.maxDrawCount != null || card.primaryCard.maxDamage != null) && (
+              <section className="bg-gray-50 border border-gray-200 rounded-lg p-6">
+                <h2 className="text-xl font-semibold text-gray-700 mb-1">效果評級 <span className="text-sm font-normal text-gray-400">(自動計算，不可編輯)</span></h2>
+                <p className="text-xs text-gray-400 mb-4">請執行 <code className="bg-gray-200 px-1 rounded">npx tsx scrapers/populate-effect-tags.ts --apply</code> 來更新</p>
+                <div className="flex flex-wrap items-center gap-3 mb-4">
+                  {card.primaryCard.cardTier && (
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-bold ${
+                      card.primaryCard.cardTier === 'S+' ? 'bg-yellow-400 text-yellow-900' :
+                      card.primaryCard.cardTier === 'S'  ? 'bg-yellow-300 text-yellow-900' :
+                      card.primaryCard.cardTier === 'A+' ? 'bg-green-500 text-white' :
+                      card.primaryCard.cardTier === 'A'  ? 'bg-green-400 text-white' :
+                      card.primaryCard.cardTier === 'B+' ? 'bg-blue-500 text-white' :
+                      card.primaryCard.cardTier === 'B'  ? 'bg-blue-400 text-white' :
+                      card.primaryCard.cardTier === 'C+' ? 'bg-gray-400 text-white' :
+                      card.primaryCard.cardTier === 'C'  ? 'bg-gray-300 text-gray-700' :
+                      'bg-gray-200 text-gray-500'
+                    }`}>
+                      Tier {card.primaryCard.cardTier}
+                    </span>
+                  )}
+                  {card.primaryCard.effectScore != null && (
+                    <span className="text-sm text-gray-500">
+                      分數：<span className="font-semibold text-gray-800">{card.primaryCard.effectScore.toFixed(1)}</span>
+                    </span>
+                  )}
+                  {card.primaryCard.maxDrawCount != null && (
+                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold bg-sky-100 text-sky-800" title="單次效果最多抽取的牌數">
+                      最大抽牌 <span className="font-bold">{card.primaryCard.maxDrawCount}</span>
+                    </span>
+                  )}
+                  {card.primaryCard.maxDamage != null && (
+                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold bg-rose-100 text-rose-800" title="可變傷害理論最大值">
+                      最大傷害 <span className="font-bold">{card.primaryCard.maxDamage}</span>
+                    </span>
+                  )}
+                </div>
+                {card.primaryCard.effectTags?.length > 0 && (
+                  <div className="mb-3">
+                    <div className="text-xs font-semibold text-gray-500 mb-1">效果標籤</div>
+                    <div className="flex flex-wrap gap-2">
+                      {card.primaryCard.effectTags.map((tag: string) => (
+                        <span key={tag} className="px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-800 font-medium">{tag}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {card.primaryCard.specialEffectTags?.length > 0 && (
+                  <div>
+                    <div className="text-xs font-semibold text-gray-500 mb-1">特殊標籤</div>
+                    <div className="flex flex-wrap gap-2">
+                      {card.primaryCard.specialEffectTags.map((tag: string) => (
+                        <span key={tag} className="px-2 py-0.5 rounded-full text-xs bg-purple-100 text-purple-800 font-medium">{tag}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </section>
+            )}
 
             {/* Related Links */}
             <section className="bg-white rounded-lg p-6 shadow-sm">
