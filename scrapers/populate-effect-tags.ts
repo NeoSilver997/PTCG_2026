@@ -123,12 +123,19 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
   }
 
   // Search (ZH + JA)
+  // Deck search — must involve "選擇" (choosing a card), not just drawing from deck
   if (
-    (has('從', '選擇') && has('牌庫', '棄牌區') && !has('抽卡')) ||
-    (has('山札から') && has('探す', '選び', '手札に加える') && !has('引く')) ||
+    (has('選擇') && has('牌庫') && !has('抽出', '抽卡')) ||
+    (has('山札から') && has('探す', '選び', '手札に加える') && !has('引く'))
+  ) {
+    primary.add('牌庫搜索');
+  }
+  // Discard-pile search
+  if (
+    (has('選擇') && has('棄牌區') && !has('抽卡')) ||
     (has('トラッシュから') && has('手札に加える', '手札に'))
   ) {
-    primary.add('搜索效果');
+    primary.add('棄牌搜索');
   }
 
   // Energy operations (ZH + JA)
@@ -233,8 +240,8 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
 
   // Information (ZH + JA)
   if (
-    (has('查看', '看') && !primary.has('搜索效果')) ||
-    (has('手札を見る', '相手の手札を見る') && !primary.has('搜索效果'))
+    (has('查看', '看') && !primary.has('牌庫搜索') && !primary.has('棄牌搜索')) ||
+    (has('手札を見る', '相手の手札を見る') && !primary.has('牌庫搜索') && !primary.has('棄牌搜索'))
   ) {
     primary.add('情報收集');
   }
@@ -665,7 +672,7 @@ function classifyCard(
 // ---------------------------------------------------------------------------
 const PRIMARY_SCORES: Record<string, number> = {
   // Draw
-  '少量抽卡': 1, '抽卡效果': 3, '搜索效果': 3,
+  '少量抽卡': 1, '抽卡效果': 3, '牌庫搜索': 3, '棄牌搜索': 3,
   // Resources
   '資源獲取': 4, '資源管理': 3, '牌庫操作': 2, '牌庫重洗': 1,
   // Energy
@@ -727,7 +734,7 @@ function computeTier(effectScore: number): string {
 // These correct cases where the classifier generates false positives
 // ---------------------------------------------------------------------------
 const MANUAL_REMOVE_TAGS: Record<string, string[]> = {
-  'スペシャルレッドカード': ['抽卡效果', '搜索效果'],  // 特殊紅牌 (hk18898): Only disrupts opponent's hand
+  'スペシャルレッドカード': ['抽卡效果', '牌庫搜索', '棄牌搜索'],  // 特殊紅牌 (hk18898): Only disrupts opponent's hand
   'メガピクシーex': ['棄牌區傷害加成'],         // 超級皮可西ex: Discard-pile mention is not damage scaling
   '変化の書': ['棄牌區傷害加成'],               // 變化之書: Same
 };
