@@ -34,6 +34,68 @@ interface Ability {
 }
 
 // ---------------------------------------------------------------------------
+// Numeric extractors — derive actual counts/values from effect text
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the number of cards drawn in a single draw effect, or 0 if unknown.
+ * ZH: 抽出N張, 抽N張  |  JA: 山札からN枚引く, N枚引く
+ */
+function extractDrawCount(effect: string): number {
+  const zhMatch = effect.match(/抽出?(\d+)張/);
+  if (zhMatch) return parseInt(zhMatch[1], 10);
+
+  const ja1 = effect.match(/山札から(\d+)枚/);
+  if (ja1) return parseInt(ja1[1], 10);
+
+  const ja2 = effect.match(/(\d+)枚引く/);
+  if (ja2) return parseInt(ja2[1], 10);
+
+  return 0;
+}
+
+/**
+ * Returns the theoretical max damage a variable-damage effect can deal.
+ * Assumes realistic upper bounds per scaling type:
+ *   Prize-based (×N): max 5 prizes  |  Damage counters (×N): max 12
+ *   Bench count (×N): max 5 bench   |  Discard pile (×N): max 20 cards
+ * Returns 0 if no variable damage detected.
+ */
+function extractMaxDamage(effect: string, baseDamage = 0): number {
+  let maxVariable = 0;
+
+  // Prize-based: 獎賞卡的張數×N / サイドの枚数×N  (max 5 prizes)
+  const prizeZH = effect.match(/獎賞卡的張數[×x](\d+)/);
+  if (prizeZH) maxVariable = Math.max(maxVariable, 5 * parseInt(prizeZH[1], 10));
+
+  const prizeJA = effect.match(/サイドの枚数[×x](\d+)/);
+  if (prizeJA) maxVariable = Math.max(maxVariable, 5 * parseInt(prizeJA[1], 10));
+
+  // Damage counter-based: 傷害指示物的數量×N / のせているダメカンの数×N  (max 12)
+  const counterZH = effect.match(/傷害指示物的數量[×x](\d+)/);
+  if (counterZH) maxVariable = Math.max(maxVariable, 12 * parseInt(counterZH[1], 10));
+
+  const counterJA = effect.match(/のせているダメカンの数[×x](\d+)/);
+  if (counterJA) maxVariable = Math.max(maxVariable, 12 * parseInt(counterJA[1], 10));
+
+  // Bench count: 備戰寶可夢的數量×N / ベンチポケモンの数×N  (max 5)
+  const benchZH = effect.match(/備戰寶可夢的數量[×x](\d+)/);
+  if (benchZH) maxVariable = Math.max(maxVariable, 5 * parseInt(benchZH[1], 10));
+
+  const benchJA = effect.match(/ベンチポケモンの数[×x](\d+)/);
+  if (benchJA) maxVariable = Math.max(maxVariable, 5 * parseInt(benchJA[1], 10));
+
+  // Discard pile: 棄牌區.*張數×N / トラッシュ.*枚×N  (max 20 cards)
+  const trashZH = effect.match(/棄牌區[^。]*張數[×x](\d+)/);
+  if (trashZH) maxVariable = Math.max(maxVariable, 20 * parseInt(trashZH[1], 10));
+
+  const trashJA = effect.match(/トラッシュ[^。]*枚[×x](\d+)/);
+  if (trashJA) maxVariable = Math.max(maxVariable, 20 * parseInt(trashJA[1], 10));
+
+  return maxVariable > 0 ? baseDamage + maxVariable : 0;
+}
+
+// ---------------------------------------------------------------------------
 // Effect Classifier (ported from ptcg_processor.py classify_single_effect)
 // ---------------------------------------------------------------------------
 function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
@@ -49,20 +111,13 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     (has('山札から') && has('引く', 'カードを引')) ||
     (has('手札に加える', '手札に入れる') && has('山札', '引く'));
   if (_isDrawEffect) {
-    if (
-      has('抽3張', '抽4張', '抽5張', '抽6張',
-          '抽出3張', '抽出4張', '抽出5張', '抽出6張') ||
-      has('山札から3枚引く', '山札から4枚引く', '山札から5枚引く', '山札から6枚引く',
-          '山札から3枚', '山札から4枚', '山札から5枚', '山札から6枚')
-    ) {
+    const drawCount = extractDrawCount(effect);
+    if (drawCount >= 3) {
       special.add('大量抽卡');
-    } else if (
-      // Draw exactly 1: ZH「抽出1張」「抽1張」 / JA「1枚引く」「カードを1枚引く」
-      has('抽出1張', '抽1張') ||
-      has('山札から1枚引く', 'カードを1枚引く', '1枚引く')
-    ) {
+    } else if (drawCount === 1) {
       primary.add('少量抽卡');
     } else {
+      // drawCount === 2 or 0 (unknown/variable)
       primary.add('抽卡效果');
     }
   }
@@ -564,22 +619,35 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
   return [primary, special];
 }
 
-function classifyCard(attacks: Attack[], abilities: Ability[], cardText?: string | null): [string[], string[]] {
+function classifyCard(
+  attacks: Attack[],
+  abilities: Ability[],
+  cardText?: string | null,
+): [string[], string[], number, number] {
   const primary = new Set<string>();
   const special = new Set<string>();
+  let maxDrawCount = 0;
+  let maxDamage = 0;
 
-  const processText = (text: string) => {
+  const processText = (text: string, baseDamage = 0) => {
     if (!text?.trim()) return;
     const [p, s] = classifySingleEffect(text.trim());
     p.forEach(t => primary.add(t));
     s.forEach(t => special.add(t));
+
+    const dc = extractDrawCount(text);
+    if (dc > maxDrawCount) maxDrawCount = dc;
+
+    const md = extractMaxDamage(text, baseDamage);
+    if (md > maxDamage) maxDamage = md;
   };
 
   for (const ab of abilities ?? []) {
     processText(ab.description ?? ab.text ?? '');
   }
   for (const atk of attacks ?? []) {
-    processText(atk.effect ?? atk.text ?? '');
+    const base = parseInt((atk.damage ?? '').replace(/\D.*/, '') || '0', 10);
+    processText(atk.effect ?? atk.text ?? '', base);
   }
   // Also process root card text (used by ENERGY and TRAINER cards)
   if (cardText) processText(cardText);
@@ -587,6 +655,8 @@ function classifyCard(attacks: Attack[], abilities: Ability[], cardText?: string
   return [
     [...primary].sort(),
     [...special].sort(),
+    maxDrawCount,
+    maxDamage,
   ];
 }
 
@@ -705,6 +775,8 @@ async function main() {
       specialEffectTags: string[];
       effectScore: number;
       cardTier: string;
+      maxDrawCount: number | null;
+      maxDamage: number | null;
     }> = [];
 
     for (const pc of primaryCards) {
@@ -723,7 +795,7 @@ async function main() {
       const abilities = (card.abilities ?? []) as Ability[];
       const cardText = (card as { text?: string | null }).text ?? null;
 
-      let [primaryTags, specialTags] = classifyCard(attacks, abilities, cardText);
+      let [primaryTags, specialTags, maxDrawCount, maxDamage] = classifyCard(attacks, abilities, cardText);
 
       // Apply manual overrides
       const tagsToRemove = MANUAL_REMOVE_TAGS[pc.name];
@@ -737,7 +809,15 @@ async function main() {
       for (const t of primaryTags) tagFreq[t] = (tagFreq[t] ?? 0) + 1;
       for (const t of specialTags) tagFreq[t] = (tagFreq[t] ?? 0) + 1;
 
-      updates.push({ id: pc.id, effectTags: primaryTags, specialEffectTags: specialTags, effectScore, cardTier });
+      updates.push({
+        id: pc.id,
+        effectTags: primaryTags,
+        specialEffectTags: specialTags,
+        effectScore,
+        cardTier,
+        maxDrawCount: maxDrawCount || null,
+        maxDamage: maxDamage || null,
+      });
       processed++;
     }
 
@@ -752,6 +832,8 @@ async function main() {
               specialEffectTags: u.specialEffectTags,
               effectScore: u.effectScore,
               cardTier: u.cardTier,
+              maxDrawCount: u.maxDrawCount,
+              maxDamage: u.maxDamage,
             },
           })
         )

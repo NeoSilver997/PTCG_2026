@@ -113,6 +113,8 @@ model PrimaryCard {
   specialEffectTags  String[]         // Special effect tags, e.g. ["大量抽卡"]
   effectScore        Float?           // Pre-computed effect score (0–12)
   cardTier           String?          // S+/S/A+/A/B+/B/C+/C/D
+  maxDrawCount       Int?             // Max cards drawn in a single effect (e.g. 3 for draw-3)
+  maxDamage          Int?             // Max possible damage from variable damage effects (e.g. 300 for prizes×60)
   cards              Card[]
   primaryExpansion   PrimaryExpansion? @relation(fields: [primaryExpansionId], references: [id])
   pokemonSpecies     PokemonSpecies?  @relation(fields: [pokemonSpeciesId], references: [id])
