@@ -125,8 +125,8 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
   // Search (ZH + JA)
   // Deck search — must involve "選擇" (choosing a card), not just drawing from deck
   if (
-    (has('選擇') && has('牌庫') && !has('抽出', '抽卡')) ||
-    (has('山札から') && has('探す', '選び', '手札に加える') && !has('引く'))
+    (has('選擇') && has('牌庫') && !has('抽出', '抽卡') && !has('對手')) ||
+    (has('山札から') && has('探す', '選び', '手札に加える') && !has('引く') && !has('對手'))
   ) {
     primary.add('牌庫搜索');
   }
@@ -136,6 +136,19 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     (has('トラッシュから') && has('手札に加える', '手札に'))
   ) {
     primary.add('棄牌搜索');
+  }
+
+  // Place Basic Pokémon onto Bench from deck (放置基礎寶可夢) — ZH + JA
+  // ZH card text uses 【基礎】寶可夢 (e.g. 好友寶芬, 巢穴球, 戰鬥鑼); some older text uses 基本寶可夢.
+  // JA uses 基本ポケモン. Does NOT match generic searchers like 精靈球 (any Pokémon).
+  if (
+    (has('【基礎】寶可夢', '基本寶可夢') && (has('備戰區') || has('放置', '放到'))) ||
+    (has('基本ポケモン') && (
+      has('ベンチに出す', 'ベンチに置く', 'バトル場に出す', 'ベンチに出せる', 'ベンチに') ||
+      has('手札に加える')
+    ) && has('山札から', '選び', '選んで'))
+  ) {
+    primary.add('放置基礎寶可夢');
   }
 
   // Energy operations (ZH + JA)
@@ -328,6 +341,17 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     primary.add('能量附著');
   }
 
+  // Search deck/discard for Energy and attach it (附上搜索能量) — ZH + JA
+  // More specific than 能量附著 (hand-attach): requires a deck/discard search step
+  if (
+    (has('牌庫') && has('能量') && has('附加', '附上', '附於')) ||
+    (has('棄牌區') && has('能量卡') && has('附加', '附上', '附於')) ||
+    (has('山札から') && has('エネルギー') && has('つける', 'ポケモンにつける')) ||
+    (has('トラッシュから') && has('エネルギーカード') && has('つける', 'ポケモンにつける'))
+  ) {
+    primary.add('附上搜索能量');
+  }
+
   if (
     has('灼傷', '將對手的戰鬥寶可夢') &&
     has('灼傷', '中毒', '燃燒') &&
@@ -499,7 +523,12 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     has('放回各自的牌庫並重洗', '全部放回牌庫並重洗') ||
     has('すべてのポケモンを山札に戻し', 'すべてを山札に戻し')
   ) {
-    primary.add('牌庫重洗');
+    if (has('對手')){
+      primary.add('對手干擾');
+    }else{
+      primary.add('牌庫重洗');
+    }
+    
   }
 
   // Specific Pokemon defense (ZH + JA)
@@ -677,6 +706,7 @@ const PRIMARY_SCORES: Record<string, number> = {
   '資源獲取': 4, '資源管理': 3, '牌庫操作': 2, '牌庫重洗': 1,
   // Energy
   '能量操作': 3, '能量附著': 2, '能量回收': 3, '能量條件': 2,
+  '附上搜索能量': 3, '放置基礎寶可夢': 3,
   // Damage
   '傷害輸出': 4, '傷害效果': 3, '條件傷害': 3, '連鎖傷害': 4,
   '傷害指示物': 2, '備戰傷害加成': 3, '棄牌區傷害加成': 3, '反噬傷害': 2,

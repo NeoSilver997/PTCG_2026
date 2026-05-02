@@ -213,17 +213,25 @@ The archetype name is computed client-side from the classified sections and writ
 
 ```
 1. Get pokemon-main section cards
-2. Filter out lower evolutions if a higher stage is present:
-   - Walk evolvesTo chain; if any evolution is in mainPokemon, exclude lower stage
+2. Filter out lower evolutions if a higher stage is present in the deck:
+   - For each card, split its evolvesTo field (comma-separated) and check if any of
+     those names are also in pokemon-main AND have a higher evolutionStage value.
+   - If yes, exclude this card (a higher evolution is already in the deck).
+   - Note: evolvesFrom is always NULL in DB; evolvesTo on lower-stage cards points
+     forward to evolution targets (e.g. 小火龍.evolvesTo = "火恐龍,噴火龍ex,...").
+   - STAGE_ORDER: BASIC=0, STAGE_1=1, STAGE_2=2
 3. Collect up to 2 unique Chinese names (zhName ?? name)
-4. From pokemon-support, find draw-engine Pokémon matching:
-   - リーリエのピッピex
-   - ノコッチex
-   - ゲノセクトex
-   - フーディン
+4. From pokemon-support, find engine Pokémon whose PrimaryCard has any of these effectTags:
+   - 放置基礎寶可夢  (bench-setup cards, e.g. ノコッチex)
+   - 附上搜索能量    (energy-search cards, e.g. 赤松/Akamine)
+   (replaces the old hardcoded JP-name list)
    Add up to 1 unique Chinese name
 5. archetypeName = [...mainNames, ...supportDrawNames].join(' + ')
 ```
+
+**Effect tag source:** `primary_cards.effectTags` — populated by `populate-effect-tags.ts`  
+(text-pattern classifier) and also back-filled by `tag-basic-pokemon-energy-cards.ts`  
+(curated name list). Both write to the same `effectTags` array on `PrimaryCard`.
 
 **ACE SPEC name:** first card in the `ace` section → `zhName ?? name`
 
@@ -292,7 +300,7 @@ SELECT
   c."webCardId", c.name, c."imageUrl", c.supertype, c.subtypes, c.types,
   c.rarity, c.hp, c.attacks, c.abilities, c.weaknesses, c.resistances,
   c."evolutionStage", c."evolvesFrom", c."evolvesTo", c."primaryCardId", c.language,
-  -- primary_cards join
+  -- primary_cards join (effectTags drives archetype derivation)
   pc."effectTags", pc."specialEffectTags",
   -- tournament_results join
   tr.*, t.date, t.name, t.location, t.type, t."playerCount", t.region, t."eventId"
@@ -305,6 +313,10 @@ LEFT JOIN tournaments t ON t.id = tr."tournamentId"
 WHERE d.id = $1
 ORDER BY c.supertype ASC
 ```
+
+> **Archetype derivation** uses `pc."effectTags"` to detect engine Pokémon in
+> `pokemon-support` — any card whose `effectTags` contains `放置基礎寶可夢` or
+> `附上搜索能量` qualifies. This replaces the old hardcoded JP-name list.
 
 ### 4. Resolve canonical webCardId (JA_JP preferred)
 

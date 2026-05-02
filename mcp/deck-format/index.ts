@@ -110,11 +110,12 @@ function getSectionKey(card: CardInfo): SectionKey {
 }
 
 // ─── Archetype derivation ──────────────────────────────────────────────────
-const DRAW_ENGINE_JP = ['リーリエのピッピex', 'ノコッチex', 'ゲノセクトex', 'フーディン'];
+// Engine Pokémon are identified by effectTags rather than hardcoded JP names.
+const DRAW_ENGINE_TAGS = ['放置基礎寶可夢', '附上搜索能量'];
 
 function deriveArchetypeName(
   mainCards: Array<{ name?: string | null; zhName?: string | null; evolvesTo?: string | null }>,
-  supportCards: Array<{ name?: string | null; zhName?: string | null }>,
+  supportCards: Array<{ name?: string | null; zhName?: string | null; effectTags?: string[] }>,
 ): string {
   const mainNames = new Set(mainCards.map((e) => e.name));
   const filtered = mainCards.filter((e) => {
@@ -132,7 +133,7 @@ function deriveArchetypeName(
       .filter((n, i, arr) => arr.indexOf(n) === i)
       .slice(0, 2),
     ...supportCards
-      .filter((e) => DRAW_ENGINE_JP.some((f) => (e.name ?? '').includes(f)))
+      .filter((e) => DRAW_ENGINE_TAGS.some(tag => (e.effectTags ?? []).includes(tag)))
       .map((e) => e.zhName ?? e.name)
       .filter((n): n is string => !!n)
       .filter((n, i, arr) => arr.indexOf(n) === i)
@@ -453,6 +454,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           types: true, rarity: true, hp: true, abilities: true,
           evolutionStage: true, evolvesFrom: true, evolvesTo: true,
           primaryCardId: true, language: true,
+          primaryCard: { select: { effectTags: true } },
         },
       },
     },
@@ -504,7 +506,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const key = dc.card.primaryCardId ?? dc.card.webCardId;
     const savedRole = roleOverrides[key];
     const section = savedRole ? (DB_TO_SECTION[savedRole] ?? getSectionKey({ ...dc.card, quantity: dc.quantity })) : getSectionKey({ ...dc.card, quantity: dc.quantity });
-    sections.get(section)!.push({ webCardId: dc.card.webCardId, name: dc.card.name, quantity: dc.quantity });
+    sections.get(section)!.push({
+      webCardId: dc.card.webCardId,
+      name: dc.card.name,
+      quantity: dc.quantity,
+      effectTags: dc.card.primaryCard?.effectTags ?? [],
+    });
   }
 
   // ── get_deck_sections ──────────────────────────────────────────────────
@@ -522,7 +529,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       zhName: c.zhName ?? null,
       evolvesTo: cards.find((dc: any) => dc.card.webCardId === c.webCardId)?.card.evolvesTo ?? null,
     }));
-    const supportCards = sections.get('pokemon-support')!.map((c) => ({ name: c.name, zhName: c.zhName ?? null }));
+    const supportCards = sections.get('pokemon-support')!.map((c) => ({
+      name: c.name,
+      zhName: c.zhName ?? null,
+      effectTags: c.effectTags ?? [],
+    }));
     const archetype = deriveArchetypeName(mainCards, supportCards);
     const aceCard = sections.get('ace')![0];
     return {

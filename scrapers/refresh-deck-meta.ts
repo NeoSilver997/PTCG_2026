@@ -23,21 +23,30 @@ const dryRun        = args.includes('--dry-run');
 const refreshAll    = args.includes('--all');
 const refreshPrices = args.includes('--refresh-prices');
 const limitArg      = args.find((a) => a.startsWith('--limit='));
-const limit         = limitArg ? parseInt(limitArg.split('=')[1], 10) : 999999;
+const limit         = limitArg ? parseInt(limitArg.split('=')[1], 10) : Infinity;
 
-// ── Draw-engine Pokémon (mirrors DRAW_ENGINE_JP_EFFECT on the client) ─────────
-const DRAW_ENGINE_JP = [
-  'リーリエのピッピex',
-  'ノコッチex',
-  'ゲノセクトex',
-  'フーディン',
-];
+// ── Draw-engine detection via effect tags (mirrors deck-format-logic.md) ────────
+// Cards tagged with either of these are treated as notable support that belongs
+// in the archetype name (e.g. 「ノコッチex + 戰鬥鑼」= 放置基礎寶可夢).
+const DRAW_ENGINE_TAGS = ['放置基礎寶可夢', '附上搜索能量'];
+
+// Evolution stage ordering — used to filter lower stages when higher evo is in the deck
+const STAGE_ORDER: Record<string, number> = { BASIC: 0, STAGE_1: 1, STAGE_2: 2 };
+
+// DB role enum → section key (mirrors DeckPokemonRole in deck-view.tsx)
+const DB_ROLE_TO_SECTION: Partial<Record<string, SectionKey>> = {
+  POKEMON_MAIN:      'pokemon-main',
+  POKEMON_SECONDARY: 'pokemon-secondary',
+  POKEMON_SUPPORT:   'pokemon-support',
+  POKEMON_EVOLUTION: 'pokemon-evolution',
+};
 
 // ── Section-key types & helpers (mirrors deck-view.tsx getSectionKey) ─────────
 type SectionKey =
   | 'pokemon-main'
   | 'pokemon-secondary'
   | 'pokemon-support'
+  | 'pokemon-evolution'
   | 'ace'
   | 'supporter'
   | 'item'
@@ -53,14 +62,24 @@ interface CardRow {
   hp: number | null;
   hasAbilities: boolean;
   quantity: number;
+  evolutionStage?: string | null;
+  dexNumber?: string | null;
 }
 
 function isMainPokemon(card: CardRow): boolean {
-  return card.quantity >= 3 || (card.hp ?? 0) >= 200;
+  // STAGE_2 → always main (represents a committed 3-card evolution line)
+  if (card.evolutionStage === 'STAGE_2') return true;
+  if ((card.hp ?? 0) >= 200) return true;
+  // Low-HP pokemon with abilities are draw/support engines, not main attackers.
+  // e.g. ドロンチ (Stage1 draw ability, hp:90), スボミー (Budew bench setup, hp:30)
+  if (card.hasAbilities) return false;
+  return card.quantity >= 3;
 }
 
 function getSectionKey(card: CardRow): SectionKey {
   const { supertype, subtypes = [], rarity } = card;
+  // ACE_SPEC check first — applies to both TRAINER and ENERGY cards (e.g. ネオアッパーエネルギー)
+  if (rarity === 'ACE_SPEC_RARE' || rarity === 'ACE_SPEC') return 'ace';
   if (supertype === 'POKEMON') {
     if (isMainPokemon(card)) return 'pokemon-main';
     if (card.hasAbilities) return 'pokemon-support';
@@ -70,7 +89,6 @@ function getSectionKey(card: CardRow): SectionKey {
     return subtypes.includes('BASIC_ENERGY') ? 'basic-energy' : 'special-energy';
   }
   // TRAINER
-  if (rarity === 'ACE_SPEC_RARE' || rarity === 'ACE_SPEC') return 'ace';
   if (subtypes.includes('SUPPORTER')) return 'supporter';
   if (subtypes.includes('ITEM')) return 'item';
   if (subtypes.includes('TOOL')) return 'tool';
@@ -88,7 +106,16 @@ interface DeckCardRow {
   supertype: string | null;
   subtypes: string[];
   rarity: string | null;
-  hp: number | null;  evolvesTo: string | null;  hasAbilities: boolean;
+  hp: number | null;
+  evolvesTo: string | null;
+  evolutionStage: string | null;
+  hasAbilities: boolean;
+  /** effectTags from primary_cards — used to detect draw-engine / bench-setup Pokémon */
+  effectTags: string[];
+  /** National Pokédex number from pokemon_species (4-digit string, e.g. "0887") */
+  dexNumber: string | null;
+  /** Saved role from deck_card_roles (via JA_JP canonical webCardId) — overrides heuristic */
+  savedRole: string | null;
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -106,7 +133,7 @@ async function main() {
   const missingFilter = refreshAll
     ? Prisma.empty
     : Prisma.sql`AND d."cachedArchetypeName" IS NULL`;
-  const rowLimit = isFinite(limit) ? limit : 999999;
+  const rowLimit = isFinite(limit) ? limit * 100 : 5000000;
 
   const rows = await prisma.$queryRaw<DeckCardRow[]>`
     SELECT
@@ -120,13 +147,33 @@ async function main() {
       c.rarity          AS "rarity",
       c.hp              AS "hp",
       c."evolvesTo"     AS "evolvesTo",
-      (c.abilities IS NOT NULL AND c.abilities != 'null'::jsonb) AS "hasAbilities"
+      c."evolutionStage" AS "evolutionStage",
+      (c.abilities IS NOT NULL AND c.abilities != 'null'::jsonb) AS "hasAbilities",
+      COALESCE(pc."effectTags", '{}')  AS "effectTags",
+      ps."dexNumber"                   AS "dexNumber",
+      dcr.role::text                   AS "savedRole"
     FROM decks d
     JOIN deck_cards dc ON dc."deckId" = d.id
     JOIN cards c       ON c.id = dc."cardId"
-    LEFT JOIN cards zh
-      ON zh."primaryCardId" = c."primaryCardId"
-      AND zh.language = 'ZH_TW'
+    LEFT JOIN (
+      SELECT DISTINCT ON ("primaryCardId") "primaryCardId", name
+      FROM cards
+      WHERE language = 'ZH_TW'
+      ORDER BY "primaryCardId", "createdAt" ASC
+    ) zh ON zh."primaryCardId" = c."primaryCardId"
+    LEFT JOIN primary_cards pc ON pc.id = c."primaryCardId"
+    LEFT JOIN pokemon_species ps ON ps.id = pc."pokemonSpeciesId"
+    -- Resolve canonical (JA_JP) webCardId per primaryCard for role lookup
+    LEFT JOIN (
+      SELECT DISTINCT ON ("primaryCardId") "primaryCardId", "webCardId"
+      FROM cards
+      WHERE language = 'JA_JP'
+      ORDER BY "primaryCardId", "createdAt" ASC
+    ) ja ON ja."primaryCardId" = c."primaryCardId"
+    -- Apply saved role overrides from deck_card_roles
+    LEFT JOIN deck_card_roles dcr
+      ON dcr."deckCode" = d."deckCode"
+      AND dcr."canonicalWebCardId" = ja."webCardId"
     WHERE EXISTS (SELECT 1 FROM deck_cards dc2 WHERE dc2."deckId" = d.id)
     ${missingFilter}
     ORDER BY d."createdAt" DESC
@@ -156,49 +203,73 @@ async function main() {
   const updatedDeckIds: string[] = [];
 
   for (const [deckId, { deckCode, cards }] of deckMap) {
+    // Build dexNumber → max evolutionStage map for ALL pokémon in this deck.
+    // Used by the evolution-family filter below to reliably exclude lower-stage
+    // stepping-stone pokémon even when evolvesTo data is in a different language or missing.
+    const deckDexStages = new Map<string, number>();
+    for (const card of cards) {
+      if (card.supertype !== 'POKEMON' || !card.dexNumber) continue;
+      const stage = STAGE_ORDER[card.evolutionStage ?? 'BASIC'] ?? 0;
+      const current = deckDexStages.get(card.dexNumber) ?? -1;
+      if (stage > current) deckDexStages.set(card.dexNumber, stage);
+    }
+
     // Classify cards into sections
-const sections = new Map<SectionKey, Array<{ name: string | null; zhName: string | null; quantity: number; hp: number | null; evolvesTo: string | null }>>([
+const sections = new Map<SectionKey, Array<{ name: string | null; zhName: string | null; quantity: number; hp: number | null; evolvesTo: string | null; evolutionStage: string | null; effectTags: string[]; dexNumber: string | null }>>([
       ['pokemon-main', []],
       ['pokemon-support', []],
       ['ace', []],
     ]);
 
     for (const card of cards) {
-      const key = getSectionKey(card);
+      // Saved role overrides heuristic (mirrors client-side priority order)
+      const key = card.savedRole
+        ? (DB_ROLE_TO_SECTION[card.savedRole] ?? getSectionKey(card))
+        : getSectionKey(card);
       if (!sections.has(key)) sections.set(key, []);
       sections.get(key)!.push({ 
         name: card.cardName, 
         zhName: card.zhName, 
         quantity: card.quantity, 
         hp: card.hp,
-        evolvesTo: card.evolvesTo
+        evolvesTo: card.evolvesTo,
+        evolutionStage: card.evolutionStage ?? null,
+        effectTags: card.effectTags ?? [],
+        dexNumber: card.dexNumber ?? null,
       });
     }
 
-    // Sort pokemon-main section to match frontend logic: quantity desc, then HP desc
+    // Sort pokemon-main section:
+    // 1. Evolution stage descending (STAGE_2 before STAGE_1 before BASIC)
+    //    — STAGE_2 cards represent committed 3-card lines and should lead archetype naming
+    // 2. Quantity descending
+    // 3. HP descending
     const mainSection = sections.get('pokemon-main') ?? [];
     mainSection.sort((a, b) => {
-      // Primary sort: quantity descending
+      const stageDiff = (STAGE_ORDER[b.evolutionStage ?? 'BASIC'] ?? 0)
+                      - (STAGE_ORDER[a.evolutionStage ?? 'BASIC'] ?? 0);
+      if (stageDiff !== 0) return stageDiff;
       const qDiff = b.quantity - a.quantity;
       if (qDiff !== 0) return qDiff;
-      // Secondary sort: HP descending (EX Pokemon first)
       return (b.hp ?? 0) - (a.hp ?? 0);
     });
 
-    // Filter out Pokémon that have evolutions present in the deck (prefer highest evolution stage)
-    const mainPokemonNames = new Set(mainSection.map(e => e.name));
+    // Filter out lower-stage evolution stepping stones using National Pokédex number proximity.
+    // For each entry in mainSection, check if ANY card in the deck (deckDexStages)
+    // with a consecutive dexNumber (+1, +2, +3) has a higher evolutionStage.
+    // This handles cross-language evolvesTo mismatches and missing evolvesTo data.
+    // e.g. ドラメシヤ(0885) gets filtered when ドロンチ(0886, STAGE_1) is in the deck,
+    //      even if evolvesTo is in Japanese but card names are in Traditional Chinese.
     const mainSectionFiltered = mainSection.filter(entry => {
-      // Check if this Pokémon has any evolution in the deck
-      let currentEvolution = entry.evolvesTo;
-      while (currentEvolution) {
-        if (mainPokemonNames.has(currentEvolution)) {
-          return false; // Exclude this Pokémon since a higher evolution is present
-        }
-        // Find the card for this evolution to continue the chain
-        const evolutionCard = mainSection.find(e => e.name === currentEvolution);
-        currentEvolution = evolutionCard?.evolvesTo;
+      if (!entry.dexNumber) return true; // No dex info → keep (can use savedRole to override)
+      const myStage = STAGE_ORDER[entry.evolutionStage ?? 'BASIC'] ?? 0;
+      const myDex = parseInt(entry.dexNumber, 10);
+      for (let delta = 1; delta <= 3; delta++) {
+        const neighborDex = String(myDex + delta).padStart(4, '0');
+        const neighborStage = deckDexStages.get(neighborDex);
+        if (neighborStage !== undefined && neighborStage > myStage) return false;
       }
-      return true; // Include this Pokémon (no higher evolution in deck)
+      return true;
     });
 
     // Top-2 unique main Pokémon ZH names (now properly sorted and filtered)
@@ -208,9 +279,9 @@ const sections = new Map<SectionKey, Array<{ name: string | null; zhName: string
       .filter((n, i, arr) => arr.indexOf(n) === i)
       .slice(0, 2);
 
-    // Draw-engine support Pokémon (e.g. Lilly's Cleffa ex)
+    // Draw-engine support Pokémon — detected by effect tags, not hardcoded names
     const drawEngineNames = (sections.get('pokemon-support') ?? [])
-      .filter((e) => DRAW_ENGINE_JP.some((f) => (e.name ?? '').includes(f)))
+      .filter((e) => DRAW_ENGINE_TAGS.some(tag => (e.effectTags ?? []).includes(tag)))
       .map((e) => e.zhName ?? e.name)
       .filter((n): n is string => !!n)
       .filter((n, i, arr) => arr.indexOf(n) === i)
