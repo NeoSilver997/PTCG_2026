@@ -25,24 +25,25 @@ const isDryRun = process.argv.includes('--dry-run');
  */
 const BASIC_POKEMON_SEARCHER_NAMES: string[] = [
   // ── Items ────────────────────────────────────────────────
-  '好友寶芬',       // Buddy-Buddy Poffin — places 2 Basic from deck
-  '太晶珠',         // Tera Orb — searches for Tera (Basic) Pokémon
-  '戰鬥鑼',         // Battle VIP Pass — places 2 Basic onto Bench (first turn)
-  '貴重手推車',     // Luxury Cart — searches for Basic + Energy
-  '精靈球',         // Poké Ball
-  '超級球',         // Ultra Ball
-  '高級球',         // Premium Ball
-  '巢穴球',         // Nest Ball
-  '急救急救包',     // Fast Ball / Emergency Ball variants
-  '頸圈球',         // Collar Ball
-  '快速球',         // Quick Ball
-  '研究所雷達',     // Research Radar
-  '蘑菇化石',       // Fossil searchers
-  '古代化石',
+  '好友寶芬',       // Buddy-Buddy Poffin — places 2 Basic from deck onto Bench
+  '太晶珠',         // Tera Orb — searches for a Tera Basic Pokémon from deck
+  '戰鬥鑼',         // 從自己的牌庫選擇1張【鬥】屬性的【基礎】寶可夢卡或者「基本【鬥】能量」卡，在給對手看過後加入手牌。並且重洗牌庫。
+  '貴重手推車',     // 從自己的牌庫選擇任意數量的【基礎】寶可夢卡，放置於備戰區。並且重洗牌庫。
+  '巢穴球',         // Nest Ball — places a Basic directly onto Bench
+  '寶可平板',       // Pokémon Reversal — places a Basic from deck onto Bench
   // ── Supporters ───────────────────────────────────────────
   '小剛的發掘',     // Brock's Excavation — places Basic Pokémon from deck
+  '火箭隊的蘭斯',   // Rocket's Lance — places Basic Pokémon from deck
+  '青木的手法',     // Aoki's Tricks — places Basic Pokémon from deck
   // ── Pokémon abilities (name = Pokémon card name) ─────────
-  '火狐狸',         // Fennekin — 呼朋引伴 ability: place a Basic from deck onto Bench
+  // NOTE: for archetype naming these must have hasAbilities=true in DB;
+  //       abilities=false entries still receive the tag as metadata but
+  //       won't appear in cachedArchetypeName (classified to pokemon-secondary, not pokemon-support).
+  '火狐狸',         // Fennekin — 呼朋引伴: place a Basic from deck onto Bench  (abilities=false in DB — data gap)
+  '呱頭蛙',         // Froakie — bench-call ability                             (abilities=false in DB — data gap)
+  '小箭雀',         // Fletchling — bench-call ability                          (abilities=false in DB — data gap)
+  '幾何雪花',       // Cryogonal — bench-setup ability                          (abilities=false in DB — data gap)
+  '奇魯莉安',       // Kirlia — 呼喚信號: place 2 Basics onto Bench             (abilities=true ✓ → affects archetype names)
 ];
 
 /**
@@ -67,6 +68,30 @@ const ENERGY_ATTACH_SEARCH_NAMES: string[] = [
   '燃燒充能',       // Burning Charge (Pokémon attack/ability)
   '火焰輸送',       // Inferno Power (Pokémon ability)
   '草能量充能',     // Leaf Charge
+  // NOTE: 阿響的冒險 (Arven) searches for 1 Item + 1 Tool — does NOT place Pokémon or attach Energy
+];
+
+/**
+ * Cards that search the deck / discard for a specific *typed* basic energy
+ * (「基本【X】能量」 pattern). These are reliably auto-detected by keyword in
+ * populate-effect-tags.ts, but listed here as a fallback / documentation.
+ */
+const TYPED_ENERGY_SEARCHER_NAMES: string[] = [
+  // ── Items ────────────────────────────────────────────────
+  '電氣發生器',     // Electric Generator — deck top 5 → up to 2 「基本【雷】能量」, attach to bench 【雷】
+  '戰鬥鑼',         // Battle Drum — deck → 1 【鬥】Basic Pokémon OR 「基本【鬥】能量」 to hand
+  '捕蟲組合',       // Bug Catching Set — deck top 7 → 【草】Pokémon + 「基本【草】能量」 to hand
+  // ── Supporters ───────────────────────────────────────────
+  '吹火人',         // 吹火人 — deck → up to 7 「基本【火】能量」 to hand
+  '阿響的冒險',     // Arven (ZH variant) — deck → Arven's Pokémon + 「基本【火】能量」 (≤3) to hand
+  '塔拉剛',         // 塔拉剛 — discard → 【鬥】Pokémon + 「基本【鬥】能量」 (≤4) to hand
+  // ── Pokémon abilities ────────────────────────────────────
+  '吉普索',         // 吉普索 — discard → up to 2 「基本【鋼】能量」, attach to 【鋼】Pokémon
+  '梅洛可',         // 梅洛可 — discard → 1 「基本【火】能量」, attach, then draw to 6
+  // ── Pokémon abilities ────────────────────────────────────
+  '阿杏的秘招',     // Caitlin's Trick — deck → up to 2 「基本【惡】能量」 attach to 【惡】Pokémon
+                    // NOTE: stored text has space artifact 「基 本【惡】能量」 — keyword won't catch without fix
+  '奇跡修正檔',     // Miracle Patch — discard → 「基本【超】能量」 attach to bench 【超】Pokémon
 ];
 
 // ── Helper ──────────────────────────────────────────────────────────────────
@@ -132,6 +157,7 @@ async function main() {
 
   await addTagToCards(BASIC_POKEMON_SEARCHER_NAMES, '放置基礎寶可夢');
   await addTagToCards(ENERGY_ATTACH_SEARCH_NAMES,   '附上搜索能量');
+  await addTagToCards(TYPED_ENERGY_SEARCHER_NAMES,  '搜索指定能量');
 
   console.log(`\n${'='.repeat(50)}`);
   console.log('Done.');

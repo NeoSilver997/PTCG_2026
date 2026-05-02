@@ -138,15 +138,25 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     primary.add('棄牌搜索');
   }
 
-  // Place Basic Pokémon onto Bench from deck (放置基礎寶可夢) — ZH + JA
-  // ZH card text uses 【基礎】寶可夢 (e.g. 好友寶芬, 巢穴球, 戰鬥鑼); some older text uses 基本寶可夢.
-  // JA uses 基本ポケモン. Does NOT match generic searchers like 精靈球 (any Pokémon).
+  // Place Basic Pokémon onto Bench or search to hand from deck (放置基礎寶可夢) — ZH + JA
+  // ZH patterns observed in DB:
+  //   好友寶芬/巢穴球/貴重手推車: 【基礎】寶可夢 + 放置於備戰區
+  //   戰鬥鑼: 【基礎】寶可夢 + 加入手牌 + 牌庫  (searches to hand, not bench directly)
+  //   太晶珠:  「太晶」寶可夢 + 加入手牌 + 牌庫  (Tera keyword, not 【基礎】)
+  //   寶可平板: 擁有規則的寶可夢 + 除外 + 加入手牌 + 牌庫  (non-rule-box = effectively Basic)
+  // JA: 基本ポケモン (Nest Ball, Poffin) + テラスタルのポケモン (Tera Orb)
   if (
+    // ZH: bench placement — e.g. 好友寶芬, 巢穴球, 貴重手推車
     (has('【基礎】寶可夢', '基本寶可夢') && (has('備戰區') || has('放置', '放到'))) ||
-    (has('基本ポケモン') && (
+    // ZH: search Basic/Tera Pokémon to hand from deck — e.g. 戰鬥鑼, 太晶珠
+    (has('【基礎】寶可夢', '基本寶可夢', '「太晶」寶可夢') && has('加入手牌') && has('牌庫')) ||
+    // ZH: search any non-rule-box Pokémon from deck — e.g. 寶可平板
+    (has('擁有規則的寶可夢') && has('除外') && has('加入手牌') && has('牌庫')) ||
+    // JA: bench/hand from deck — 基本ポケモン or テラスタルのポケモン
+    ((has('基本ポケモン') || has('テラスタルのポケモン')) && (
       has('ベンチに出す', 'ベンチに置く', 'バトル場に出す', 'ベンチに出せる', 'ベンチに') ||
       has('手札に加える')
-    ) && has('山札から', '選び', '選んで'))
+    ) && has('山札から', '山札を', '選び', '選んで'))
   ) {
     primary.add('放置基礎寶可夢');
   }
@@ -341,19 +351,49 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     primary.add('能量附著');
   }
 
-  // Search deck/discard for Energy and attach it (附上搜索能量) — ZH + JA
-  // More specific than 能量附著 (hand-attach): requires a deck/discard search step
+  // Search deck/discard for Energy and attach or take to hand (附上搜索能量) — ZH + JA
+  // Covers: direct-attach from deck/discard (Flareon ex, Akamine, VIP Pass),
+  //         search Basic Energy to hand from deck (Bug Catching Set, Akamine hand portion)
+  // ZH patterns observed in DB:
+  //   火伊布ex/赤松: 牌庫 + 基本能量卡 + 附於
+  //   捕蟲組合:      牌庫 + 基本【草】能量卡 + 加入手牌  (to hand, qualifies as energy search)
   if (
-    (has('牌庫') && has('能量') && has('附加', '附上', '附於')) ||
-    (has('棄牌區') && has('能量卡') && has('附加', '附上', '附於')) ||
-    (has('山札から') && has('エネルギー') && has('つける', 'ポケモンにつける')) ||
-    (has('トラッシュから') && has('エネルギーカード') && has('つける', 'ポケモンにつける'))
+    // ZH: deck/discard → attach energy
+    (has('牌庫') && has('能量') && has('附加', '附上', '附於', '附到')) ||
+    (has('棄牌區') && has('能量卡') && has('附加', '附上', '附於', '附到')) ||
+    // ZH: search Basic Energy from deck to hand (Bug Catching Set pattern)
+    (has('牌庫') && has('基本') && has('能量卡', '能量') && has('加入手牌')) ||
+    // JA: deck/discard → attach energy
+    (has('山札から') && has('エネルギー') && has('つける', 'ポケモンにつける', 'をつける')) ||
+    (has('トラッシュから') && has('エネルギーカード') && has('つける', 'ポケモンにつける', 'をつける'))
   ) {
     primary.add('附上搜索能量');
   }
 
+  // Search for specific typed basic energy (搜索指定能量) — ZH + JA
+  // Matches cards that name a type-keyword energy: 「基本【X】能量」 (ZH) or type + 基本エネルギー (JA).
+  // Distinct from 附上搜索能量 (which covers generic energy from deck/discard):
+  //   these cards target a *specific type*, e.g. 「基本【鬥】能量」, 「基本【草】能量」.
+  // Examples: 戰鬥鑼, 捕蟲組合, 電氣發生器, 吹火人, 阿響的冒險 (ZH variant),
+  //           塔拉剛, 吉普索, 梅洛可, 豐收漁網.
+  // Excluded: hand-discard-as-cost (月光丘陵 「基本【超】能量」丟棄) — guarded by !has('手牌將').
   if (
-    has('灼傷', '將對手的戰鬥寶可夢') &&
+    // ZH: 「基本【X】能量」 in a deck/discard operation context
+    // NOTE: some scraped texts have a space: 「基 本【X】能量」 — match both forms
+    ((has('「基本【') || has('「基 本【')) && has('能量') &&
+      (has('牌庫') || has('棄牌區')) &&
+      !has('手牌將', '手牌丟棄')) ||
+    // JA: typed Basic energy — type keyword before 基本エネルギー in deck/discard context
+    ((has('タイプの') || has('闘') || has('草') || has('炎') || has('水') ||
+      has('雷') || has('超') || has('鋼') || has('悪') || has('竜')) &&
+      has('基本エネルギー') &&
+      (has('山札', 'トラッシュ')) &&
+      !has('手札から'))
+  ) {
+    primary.add('搜索指定能量');
+  }
+
+  if (
     has('灼傷', '中毒', '燃燒') &&
     has('若')
   ) {
@@ -706,7 +746,7 @@ const PRIMARY_SCORES: Record<string, number> = {
   '資源獲取': 4, '資源管理': 3, '牌庫操作': 2, '牌庫重洗': 1,
   // Energy
   '能量操作': 3, '能量附著': 2, '能量回收': 3, '能量條件': 2,
-  '附上搜索能量': 3, '放置基礎寶可夢': 3,
+  '附上搜索能量': 3, '放置基礎寶可夢': 3, '搜索指定能量': 2,
   // Damage
   '傷害輸出': 4, '傷害效果': 3, '條件傷害': 3, '連鎖傷害': 4,
   '傷害指示物': 2, '備戰傷害加成': 3, '棄牌區傷害加成': 3, '反噬傷害': 2,
