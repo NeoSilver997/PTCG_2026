@@ -70,10 +70,14 @@ function isMainPokemon(card: CardRow): boolean {
   // STAGE_2 → always main (represents a committed 3-card evolution line)
   if (card.evolutionStage === 'STAGE_2') return true;
   if ((card.hp ?? 0) >= 200) return true;
-  // Low-HP pokemon with abilities are draw/support engines, not main attackers.
-  // e.g. ドロンチ (Stage1 draw ability, hp:90), スボミー (Budew bench setup, hp:30)
-  if (card.hasAbilities) return false;
-  return card.quantity >= 3;
+  // qty >= 3 → main regardless of ability (bench supports are rarely run at ×3)
+  // e.g. イイネイヌ ×3 (Ting-Lu ability-attacker), マシマシラ ×3 (Grafaiai)
+  if (card.quantity >= 3) return true;
+  // Evolved (STAGE_1+) at qty >= 2 → committed attacker line, e.g. イワパレス ×2 (Crustle)
+  if (card.quantity >= 2 && (card.evolutionStage ?? 'BASIC') !== 'BASIC') return true;
+  // Remaining: BASIC with ability at 1–2 copies → bench support / draw engine
+  // e.g. スボミー (hp:30), コダック (hp:70), ルナトーン (hp:110 ×2)
+  return false;
 }
 
 function getSectionKey(card: CardRow): SectionKey {
@@ -273,11 +277,26 @@ const sections = new Map<SectionKey, Array<{ name: string | null; zhName: string
     });
 
     // Top-2 unique main Pokémon ZH names (now properly sorted and filtered)
-    const mainNames = mainSectionFiltered
+    const primaryNames = mainSectionFiltered
       .map((e) => e.zhName ?? e.name)
       .filter((n): n is string => !!n)
       .filter((n, i, arr) => arr.indexOf(n) === i)
       .slice(0, 2);
+
+    // Fallback for spread / toolbox decks where no pokemon passes isMainPokemon
+    // (e.g. all attackers at ×1 copies): pick top-2 by HP desc → quantity desc
+    // from all non-evolution-stepping-stone pokemon.
+    const mainNames = primaryNames.length > 0
+      ? primaryNames
+      : [
+          ...(sections.get('pokemon-secondary') ?? []),
+          ...(sections.get('pokemon-support') ?? []),
+        ]
+          .sort((a, b) => (b.hp ?? 0) - (a.hp ?? 0) || b.quantity - a.quantity)
+          .map((e) => e.zhName ?? e.name)
+          .filter((n): n is string => !!n)
+          .filter((n, i, arr) => arr.indexOf(n) === i)
+          .slice(0, 2);
 
     // Draw-engine support Pokémon — detected by effect tags, not hardcoded names
     const drawEngineNames = (sections.get('pokemon-support') ?? [])
