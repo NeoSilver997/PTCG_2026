@@ -1,7 +1,9 @@
 import { Search, SlidersHorizontal, X } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 
-const DEFAULT_EXPANSION_CODES = 'm4,m3,m2a,m1l,m1s,sv11w,sv11b,sv10';
+const DEFAULT_EXPANSION_CODES = '';
+const DEFAULT_REGULATION_MARKS = 'H,I,J';
+const QUICK_REGULATION_MARKS = ['J', 'I', 'H', 'G', 'F', 'E'];
 
 const LANG_LABEL: Record<string, string> = {
   JA_JP: '🇯🇵 日文',
@@ -91,30 +93,22 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
     onFilterChange({ ...filters, [key]: value });
   };
   
-  const clearFilters = () => {
-    onFilterChange({
-      name: '',
-      supertype: '',
-      types: '',
-      rarity: '',
-      language: '',
-      sortBy: 'webCardId',
-      sortOrder: 'desc',
-      webCardId: '',
-      subtypes: '',
-      variantType: '',
-      minHp: '',
-      maxHp: '',
-      artist: '',
-      regulationMark: '',
-      expansionCode: DEFAULT_EXPANSION_CODES,
-      hasAbilities: '',
-      hasAttackText: '',
-      effectTag: '',
-      cardTier: '',
-      abilityText: '',
-      weakness: '',
-    });
+  const BLANK_FILTERS = {
+    name: '', supertype: '', types: '', rarity: '', language: '',
+    sortBy: 'webCardId', sortOrder: 'desc', webCardId: '', subtypes: '',
+    variantType: '', minHp: '', maxHp: '', artist: '', regulationMark: '',
+    expansionCode: DEFAULT_EXPANSION_CODES, hasAbilities: '', hasAttackText: '',
+    effectTag: '', cardTier: '', abilityText: '', weakness: '',
+  };
+
+  // Reset to defaults: restore the H,I,J regulation mark, clear everything else
+  const resetToDefaults = () => {
+    onFilterChange({ ...BLANK_FILTERS, regulationMark: DEFAULT_REGULATION_MARKS });
+  };
+
+  // Clear all: truly blank — no regulation mark, no expansion filter
+  const clearAllFilters = () => {
+    onFilterChange({ ...BLANK_FILTERS });
   };
 
   const activeExpansions = new Set(
@@ -126,12 +120,31 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
     if (next.has(codeL)) next.delete(codeL); else next.add(codeL);
     updateFilter('expansionCode', Array.from(next).join(','));
   };
-  
-  const hasActiveFilters = filters.name || filters.supertype || filters.types || 
+
+  const activeMarks = new Set(
+    (filters.regulationMark || '').split(',').map(m => m.trim().toUpperCase()).filter(Boolean)
+  );
+  const toggleMark = (mark: string) => {
+    const next = new Set(activeMarks);
+    if (next.has(mark)) next.delete(mark); else next.add(mark);
+    updateFilter('regulationMark', Array.from(next).join(','));
+  };
+
+  // At defaults = only H,I,J regulationMark active, everything else empty
+  const isAtDefaults =
+    filters.regulationMark === DEFAULT_REGULATION_MARKS &&
+    !filters.name && !filters.supertype && !filters.types && !filters.rarity &&
+    !filters.language && !filters.webCardId && !filters.subtypes && !filters.variantType &&
+    !filters.minHp && !filters.maxHp && !filters.artist && !filters.expansionCode &&
+    !filters.hasAbilities && !filters.hasAttackText && !filters.effectTag &&
+    !filters.cardTier && !filters.abilityText && !filters.weakness;
+
+  // Any non-empty filter (including the default H,I,J) is "active"
+  const hasAnyActiveFilters = !!(filters.name || filters.supertype || filters.types ||
     filters.rarity || filters.language || filters.webCardId || filters.subtypes ||
     filters.variantType || filters.minHp || filters.maxHp || filters.artist ||
     filters.regulationMark || filters.expansionCode || filters.hasAbilities || filters.hasAttackText ||
-    filters.effectTag || filters.cardTier || filters.abilityText || filters.weakness;
+    filters.effectTag || filters.cardTier || filters.abilityText || filters.weakness);
   
   return (
     <div className="bg-white rounded-lg shadow-md p-4 mb-6">
@@ -145,20 +158,30 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
               {stats.total.toLocaleString()} 張
             </span>
           )}
-          {hasActiveFilters && (
+          {hasAnyActiveFilters && (
             <span className="bg-amber-100 text-amber-800 text-xs font-medium px-2 py-0.5 rounded">
               篩選中
             </span>
           )}
         </div>
         <div className="flex gap-2">
-          {hasActiveFilters && (
+          {!isAtDefaults && hasAnyActiveFilters && (
             <button
-              onClick={clearFilters}
-              className="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-1"
+              onClick={resetToDefaults}
+              className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+              title="重置回預設 (規格 H,I,J)"
+            >
+              重置
+            </button>
+          )}
+          {hasAnyActiveFilters && (
+            <button
+              onClick={clearAllFilters}
+              className="text-sm text-gray-500 hover:text-gray-900 flex items-center gap-1"
+              title="清除所有篩選條件"
             >
               <X className="w-4 h-4" />
-              清除
+              清除全部
             </button>
           )}
           <button
@@ -346,6 +369,35 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
         </div>
       </div>
 
+      {/* Regulation Mark Quick-Select (Always Visible) */}
+      <div className="mt-3 pt-3 border-t border-gray-100">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-xs font-medium text-gray-600 shrink-0">規格:</span>
+          {QUICK_REGULATION_MARKS.map((mark) => (
+            <button
+              key={mark}
+              onClick={() => toggleMark(mark)}
+              className={`px-2.5 py-1 rounded-full text-xs border font-medium transition ${
+                activeMarks.has(mark)
+                  ? 'bg-indigo-600 text-white border-indigo-600 shadow'
+                  : 'bg-gray-50 text-gray-800 border-gray-300 hover:border-indigo-400'
+              }`}
+            >
+              {mark}
+            </button>
+          ))}
+          {activeMarks.size > 0 && (
+            <button
+              onClick={() => updateFilter('regulationMark', '')}
+              className="px-2 py-1 rounded text-xs text-gray-400 hover:text-red-500 transition"
+              title="清除規格篩選"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Expansion Quick-Select (Always Visible) */}
       <div className="mt-3 pt-3 border-t border-gray-100">
         <div className="flex items-center gap-1.5 flex-wrap">
@@ -508,19 +560,6 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
               />
             </div>
 
-            {/* Regulation Mark */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                規格標記
-              </label>
-              <input
-                type="text"
-                placeholder="例: F, G, H"
-                value={filters.regulationMark || ''}
-                onChange={(e) => updateFilter('regulationMark', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900 bg-white placeholder:text-gray-400"
-              />
-            </div>
             {/* Has Abilities */}
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">
