@@ -98,6 +98,9 @@ interface DbCard {
   ruleBox: string | null;
   subtypes: string[];
   attacks: any;  // JSON — used to compute attack fingerprint
+  hp: number | null;
+  types: string[];
+  supertype: string | null;
 }
 
 interface DbPrimaryCard {
@@ -142,7 +145,7 @@ async function loadHKOnlyPrimaryCards(): Promise<DbPrimaryCard[]> {
       id: true, primaryCardId: true, webCardId: true, language: true,
       variantType: true, rarity: true, regulationMark: true,
       artist: true, evolvesFrom: true, ruleBox: true, subtypes: true,
-      attacks: true,
+      attacks: true, hp: true, types: true, supertype: true,
     },
   });
 
@@ -202,7 +205,7 @@ async function loadJPPrimaryCardsByExpansion(expansionIds: string[]): Promise<Ma
       id: true, primaryCardId: true, webCardId: true, language: true,
       variantType: true, rarity: true, regulationMark: true,
       artist: true, evolvesFrom: true, ruleBox: true, subtypes: true,
-      attacks: true,
+      attacks: true, hp: true, types: true, supertype: true,
     },
   });
 
@@ -418,14 +421,41 @@ async function main() {
     }
   }
 
-  // Sample of what will be linked
+  // All matches with full detail — filter out any already pointing to the correct JP PrimaryCard
   if (updates.length > 0) {
-    console.log('\n─── Sample matches (first 10) ───');
-    for (const u of updates.slice(0, 10)) {
+    const newMatches = updates.filter(u =>
+      u.hkCards.some(c => c.primaryCardId !== u.jpPrimaryCard.id)
+    );
+    const alreadyLinked = updates.length - newMatches.length;
+    console.log(`\n─── All matches not yet linked (${newMatches.length}${alreadyLinked > 0 ? `, ${alreadyLinked} already linked skipped` : ''}) ───`);
+    for (const u of newMatches) {
+      const hkCard = u.hkCards[0];
+      const jpCard = u.jpCard;
       const hkWebIds = u.hkCards.map(c => c.webCardId).join(', ');
-      console.log(`  ZH:"${u.hkPrimaryCardName}" → JP:"${u.jpPrimaryCard.name}" [${u.jpPrimaryCard.expansionCode}/${u.jpPrimaryCard.cardNumber}]  (cards: ${hkWebIds})`);
+      const jpWebId = jpCard?.webCardId ?? '(no card)';
+
+      // Build attack summary from JP card (cost → damage)
+      const attacks: any[] = Array.isArray(jpCard?.attacks) ? jpCard!.attacks : [];
+      const attackSummary = attacks.length > 0
+        ? attacks.map((a: any) => {
+            const cost = Array.isArray(a.cost) ? a.cost.join('+') : (a.cost ?? '?');
+            const dmg = a.damage ?? '–';
+            const name = a.name ?? '';
+            return `${name}(${cost}→${dmg})`;
+          }).join(' | ')
+        : '–';
+
+      const hp = jpCard?.hp ?? hkCard?.hp ?? null;
+      const types = (jpCard?.types ?? hkCard?.types ?? []).join('/') || '–';
+      const rarity = jpCard?.rarity ?? hkCard?.rarity ?? '–';
+
+      console.log(
+        `  [${u.jpPrimaryCard.expansionCode}/${u.jpPrimaryCard.cardNumber}]` +
+        `  HP:${hp ?? '–'}  Type:${types}  Rarity:${rarity}` +
+        `\n    ZH: ${hkWebIds} "${u.hkPrimaryCardName}"` +
+        `\n    JP: ${jpWebId} "${u.jpPrimaryCard.name}"  attacks: ${attackSummary}`
+      );
     }
-    if (updates.length > 10) console.log(`  ... and ${updates.length - 10} more`);
   }
 
   if (!APPLY) {
