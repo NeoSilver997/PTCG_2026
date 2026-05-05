@@ -40,7 +40,7 @@ Every doc must begin with this header block:
 **Source file:** `<relative/path/to/file>`
 **Last modified:** `YYYY-MM-DD HH:mm`
 **MD5:** `<md5-hash-of-source-file>`
-**Summarised by model:** `Claude Sonnet 4.6`
+**Summarised by model:** `<model-name-at-time-of-writing>`
 ```
 
 ### MD5 Verification Workflow
