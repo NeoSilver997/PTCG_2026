@@ -3,13 +3,13 @@
 ## Project Overview
 **PTCG CardDB** is a multi-language Pokemon Trading Card Game database with tournament tracking, deck building, and market pricing. This is a TypeScript monorepo using **pnpm workspaces** and **Turborepo**.
 
-**Core Architecture:** Multi-language card system where cards exist as language variants (ja-JP, zh-HK, en-US) linked to canonical `PrimaryCard` identities. Each card has a unique `webCardId` format (e.g., `hk00014744`, `jp49355`). Regional expansion codes (JP "SV8" vs HK "SV08" vs EN "sv9") map to a canonical `PrimaryExpansion`.
+**Core Architecture:** Multi-language card system where cards exist as language variants (ja-JP, zh-TW, en-US) linked to canonical `PrimaryCard` identities. Each card has a unique `webCardId` format (e.g., `hk00014744`, `jp49355`). Regional expansion codes (JP "SV8" vs HK "SV08" vs EN "sv9") map to a canonical `PrimaryExpansion`.
 
 ## Workspace Structure
 
 ```
 apps/
-  api/              # NestJS REST API (Port 4000)
+  api/              # NestJS REST API (Port 4200)
   web/              # Next.js frontend (Port 3001)
 packages/
   database/         # Prisma schema + client (@ptcg/database)
@@ -99,7 +99,7 @@ Cards follow a **two-tier architecture**:
 **Example Flow:**
 - PrimaryCard: expansion="SV9", cardNumber="001"
 - Card variants:
-  - webCardId="hk00014744", language=ZH_HK, variantType=NORMAL
+  - webCardId="hk00014744", language=ZH_TW, variantType=NORMAL
   - webCardId="jp49355", language=JA_JP, variantType=HOLO
 
 ### Expansion Code Mapping
@@ -107,6 +107,159 @@ Regional codes map to canonical expansions via `RegionalExpansion`:
 - Japan: "SV8" → PrimaryExpansion "SV9"
 - Hong Kong: "SV08" → PrimaryExpansion "SV9"
 - English: "sv9" → PrimaryExpansion "SV9"
+
+## PTCG Card Rules & Game Mechanics Reference
+
+### Language Codes & Region Mapping (Critical)
+The `language` field uses `LanguageCode` enum, NOT region names. **`ZH_HK` does not exist.**
+
+| Region | LanguageCode | Notes |
+|--------|-------------|-------|
+| `JP`   | `JA_JP`     | Japanese – scraped from pokemon-card.com |
+| `HK`   | `ZH_TW`     | Traditional Chinese – HK/TW cards |
+| `EN`   | `EN_US`     | English (Asia) |
+
+**Common mistake:** Using `ZH_HK` — the correct enum is `ZH_TW`.
+
+### Supertypes
+Every card has exactly one supertype:
+- **POKEMON** – Has HP, types, attacks/abilities. Evolution stage applies here.
+- **TRAINER** – No HP. Subtypes: `ITEM`, `SUPPORTER`, `STADIUM`, `TOOL`.
+- **ENERGY** – Provides energy for attack costs. Subtypes: `BASIC_ENERGY`, `SPECIAL_ENERGY`.
+
+### Pokemon Types (11 types in Scarlet/Violet era)
+`COLORLESS` `DARKNESS` `DRAGON` `FAIRY` `FIGHTING` `FIRE` `GRASS` `LIGHTNING` `METAL` `PSYCHIC` `WATER`
+
+> `FAIRY` is a legacy type (removed in Sword/Shield); some older cards still carry it.  
+> `STELLAR` exists in the video game but is **not** in the current `PokemonType` enum.
+
+### Subtypes (Trainer & Energy only — Pokemon cards use `evolutionStage` instead)
+| Subtype | Supertype | Rules |
+|---------|-----------|-------|
+| `ITEM` | TRAINER | Can play multiple per turn |
+| `SUPPORTER` | TRAINER | Only one per turn; discard after use |
+| `STADIUM` | TRAINER | Replaces the previous Stadium in play |
+| `TOOL` | TRAINER | Attaches to a Pokemon; removed when Pokemon is KO'd |
+| `BASIC_ENERGY` | ENERGY | Unlimited copies in deck |
+| `SPECIAL_ENERGY` | ENERGY | Max 4 copies; provides special benefits |
+| `TERA` | TRAINER | Scarlet/Violet Tera mechanic support cards |
+
+### Evolution Stages (Pokemon only)
+| Stage | Meaning | Play rule |
+|-------|---------|-----------|
+| `BASIC` | No prior stage | Play directly to bench |
+| `STAGE_1` | Evolves from Basic | Evolve from a Basic already in play |
+| `STAGE_2` | Evolves from Stage 1 | Evolve from a Stage 1 already in play |
+
+### RuleBox (Special Pokemon mechanics — opponent draws extra prizes on KO)
+| RuleBox | Era | Prize cards on KO | Standard 2026? | Notes |
+|---------|-----|-------------------|----------------|-------|
+| `EX` | Scarlet/Violet | 2 | ✅ Current | Modern `ex` lowercase |
+| `V` | Sword/Shield | 2 | ❌ Rotated | - |
+| `VMAX` | Sword/Shield | 3 | ❌ Rotated | Evolves from V |
+| `VSTAR` | Sword/Shield | 2 | ❌ Rotated | Evolves from V; one VSTAR Power per game |
+| `GX` | Sun/Moon | 2 | ❌ Rotated | One GX attack per game |
+| `MEGA` | X/Y | 2 | ❌ Rotated | Evolves from EX; ends your turn |
+| `RADIANT` | Sword/Shield | 1 | ❌ Rotated | Shiny Pokemon; max 1 per deck |
+
+> **Current Standard (H/I/J marks):** Only `EX` rule-box Pokemon are legal. ACE SPEC cards (`ACE` variant) are the only high-power single mechanic in the current format.
+
+### Rarity Tiers (Low → High)
+```
+COMMON → UNCOMMON → RARE → DOUBLE_RARE → ULTRA_RARE
+→ AMAZING_RARE / ILLUSTRATION_RARE → SPECIAL_ILLUSTRATION_RARE → HYPER_RARE
+```
+Special rarities: `ACE_SPEC` (1 per deck rule), `SHINY_RARE`, `PROMO` (event/product exclusive)
+
+### Variant Types (Print variants — mostly JP-origin codes)
+| VariantType | Full name | Description |
+|-------------|-----------|-------------|
+| `NORMAL` | Normal | Standard non-foil print |
+| `REVERSE_HOLO` | Reverse Holo | Foil background, non-holo art |
+| `HOLO` | Holo Rare | Foil artwork |
+| `FULL_ART` | Full Art | Full-bleed art print |
+| `SECRET_RARE` | Secret Rare | Card number exceeds set total |
+| `AR` | Art Rare | Full-art Trainer/Energy (JP term) |
+| `SAR` | Special Art Rare | Full-art Pokemon with illustrated background |
+| `SSR` | Super Special Rare | - |
+| `SR` | Super Rare | JP gold card / Full Art equivalent |
+| `UR` | Ultra Rare | JP gold etched card |
+| `MUR` | Master Ultra Rare | Highest tier gold card |
+| `MA` | Mirror/Master Art | Alternate art variant |
+| `CHR` | Character Rare | Character-focused art with Pokemon |
+| `BWR` | Black & White Rare | Illustrated black & white style |
+| `ACE` | ACE SPEC | High-power card; **max 1 ACE SPEC per deck** |
+| `PROMO` | Promo | Promotional exclusive print |
+| `C` / `R` / `U` | Common/Rare/Uncommon | Alternate set-code variants |
+
+### JSON Field Formats
+
+**`attacks` field:**
+```json
+[
+  {
+    "name": "Blaze Ball",
+    "cost": ["FIRE", "FIRE", "COLORLESS"],
+    "damage": "130",
+    "effect": "Discard 2 Energy from this Pokémon."
+  }
+]
+```
+
+**`abilities` field:**
+```json
+[
+  {
+    "name": "Blaze",
+    "description": "Once per turn, when this Pokémon is your Active Pokémon, you may use this Ability."
+  }
+]
+```
+
+**`weaknesses` / `resistances` fields:**
+```json
+[{ "type": "FIRE", "value": "×2" }]      // weakness
+[{ "type": "METAL", "value": "-30" }]    // resistance
+```
+
+### Regulation Marks (Standard Format Legality)
+Cards printed since Sword/Shield carry a letter regulation mark (`A`–`J`).  
+- **Currently Standard-legal (2026):** `H`, `I`, `J`  
+- **Rotated out (illegal):** `A`–`G`  
+- **No mark:** PROMO or pre-regulation era card  
+Stored in the `regulationMark` field on `Card`. Use this for Standard format deck validation.
+
+### Deck Building Rules
+| Rule | Constraint |
+|------|-----------|
+| Deck size | Exactly **60** cards |
+| Card copies | Max **4** copies of any single card (by name) |
+| Basic Energy | **Unlimited** copies |
+| ACE SPEC | Max **1** ACE SPEC card per deck |
+| RADIANT Pokemon | Max **1** RADIANT Pokemon per deck (rotated, legacy only) |
+| Standard format | Only cards with regulation marks `H`, `I`, `J` (2026) |
+| VSTAR Power | Only **1** VSTAR Power ability can be used per game (rotated, legacy only) |
+
+### Card Number Formats
+Stored in `cardNumber` on `PrimaryCard` (number portion only, e.g. `"001"`):
+- Regular: `"001/064"` → stored as `"001"`
+- Trainer Gallery: `"TG01/TG30"` → stored as `"TG01"`
+- Promo: `"SWSH001"` / `"SVP001"` → stored as-is
+
+### Complete Enum Quick Reference
+```
+Supertype:      POKEMON | TRAINER | ENERGY
+PokemonType:    COLORLESS DARKNESS DRAGON FAIRY FIGHTING FIRE GRASS LIGHTNING METAL PSYCHIC WATER
+Subtype:        ITEM SUPPORTER STADIUM TOOL BASIC_ENERGY SPECIAL_ENERGY TERA
+EvolutionStage: BASIC | STAGE_1 | STAGE_2
+RuleBox:        EX GX V VMAX VSTAR RADIANT MEGA
+Rarity:         COMMON UNCOMMON RARE DOUBLE_RARE ULTRA_RARE ILLUSTRATION_RARE
+                SPECIAL_ILLUSTRATION_RARE HYPER_RARE PROMO AMAZING_RARE SHINY_RARE ACE_SPEC
+VariantType:    NORMAL REVERSE_HOLO HOLO FULL_ART SECRET_RARE PROMO
+                AR SAR SSR SR UR MUR MA CHR U BWR ACE R C
+LanguageCode:   JA_JP | ZH_TW | EN_US
+Region:         JP | HK | EN
+```
 
 ## NestJS API Conventions
 
@@ -280,8 +433,8 @@ Failed: 0
 **Workflow:**
 1. Reads JSON from `data/cards/{region}/`
 2. Batches cards (default: 100 per request)
-3. POSTs to `http://localhost:4000/api/v1/cards/import/batch`
-4. Requires API server running on port 4000
+3. POSTs to `http://localhost:4200/api/v1/cards/import/batch`
+4. Requires API server running on port 4200
 
 **Usage:**
 ```powershell
@@ -376,7 +529,7 @@ Redis TTL recommendations:
 The project includes preconfigured debug setups in [.vscode/launch.json](.vscode/launch.json):
 
 **Available Configurations:**
-1. **API Server** - Debug NestJS API on port 4000
+1. **API Server** - Debug NestJS API on port 4200
    - Uses `pnpm --filter @ptcg/api dev`
    - Runs with ts-node and tsconfig-paths
    - Auto-attaches debugger to Node process
@@ -449,16 +602,16 @@ it('should filter by types', async () => {
 **Check API Server Status:**
 ```bash
 # Test if API is running
-curl http://localhost:4000/api/v1/cards?take=1
+curl http://localhost:4200/api/v1/cards?take=1
 
 # Check specific filter
-curl "http://localhost:4000/api/v1/cards?types=GRASS&take=3"
+curl "http://localhost:4200/api/v1/cards?types=GRASS&take=3"
 ```
 
 **Common API Issues:**
-1. **Port 4000 in use** - Kill existing process:
+1. **Port 4200 in use** - Kill existing process:
    ```powershell
-   Get-NetTCPConnection -LocalPort 4000 | Select-Object -ExpandProperty OwningProcess | Stop-Process -Force
+   Get-NetTCPConnection -LocalPort 4200 | Select-Object -ExpandProperty OwningProcess | Stop-Process -Force
    ```
 
 2. **Prisma client not generated** - Always regenerate after schema changes:
@@ -540,3 +693,178 @@ Before committing changes:
 - Solution: Check if filtering on JSONB field - use raw SQL with `= 'null'::jsonb` not `IS NULL`
 - Verify boolean query parameters use `@Transform` decorator, not `@Type(() => Boolean)`
 - Add logging to see actual SQL WHERE clause being generated
+
+## Deck View Logic (apps/web)
+
+### File: `apps/web/src/app/deck-builder/event/[deckCode]/page.tsx`
+
+The event deck view page handles tournament deck display with card role assignment.
+
+### Section Keys & Display Order
+```typescript
+type SectionKey =
+  | 'pokemon-main'       // 主攻 – primary attackers
+  | 'pokemon-secondary'  // 副攻 – secondary/tech attackers
+  | 'pokemon-support'    // 輔助 – draw/search engines
+  | 'pokemon-evolution'  // 進化 – evolution stage cards
+  | 'ace'               // ACE SPEC
+  | 'supporter'         // Supporter trainers
+  | 'stadium'           // Stadium trainers
+  | 'item'              // Item trainers
+  | 'tool'              // Tool trainers
+  | 'basic-energy'      // Basic Energy
+  | 'special-energy';   // Special Energy
+```
+
+### Card Role System
+Each Pokemon is assigned a `PokemonRole` which overrides auto-classification. Roles are stored in `DeckCardRole` (DB), localStorage (cache), and cross-deck global lookup.
+
+**Priority chain:**
+1. **Deck-specific DB role** (`/decks/code/{code}/roles`) — highest priority
+2. **Cross-deck global role** (`/decks/roles/lookup?cards=...`) — fills unset cards
+3. **Auto-derived** from `getSectionKey(entry)` — fallback from card data
+
+**Role key:** Always use `primaryCardId ?? canonicalWebCardId ?? webCardId` (NOT `webCardId` alone).
+
+**DB enum → UI role mapping:**
+```typescript
+const DB_TO_ROLE = {
+  POKEMON_MAIN: 'pokemon-main',
+  POKEMON_SECONDARY: 'pokemon-secondary',
+  POKEMON_SUPPORT: 'pokemon-support',
+  POKEMON_EVOLUTION: 'pokemon-evolution',
+};
+```
+
+### DB Cards vs deckData Merge Pattern
+The deck may have:
+- **DB cards** (`data.cards`) – full card objects from `DeckCard` join, include HP/attacks/subtypes
+- **deckData** (`data.deckData`) – raw import entries with only `cardId/cardName/quantity/imageUrl`
+
+Merge rule: Use DB cards first; add `deckData` entries only if not already matched by normalized webCardId OR card name. Normalize IDs by stripping leading prefix letters and zeros: `"jp48778"` → `"48778"`, `"hk00014744"` → `"14744"`.
+
+**Supertype inference from imageUrl** (deckData fallback only):
+- `_P_` in URL → `POKEMON`
+- `_E_` in URL → `ENERGY`
+- `_T_` in URL → `TRAINER`
+
+### Archetype Name Derivation
+Computed client-side and persisted via `PATCH /decks/code/{code}/meta`:
+1. Take `pokemon-main` section, filter out lower evolution stages (keep highest in chain)
+2. Prefer `zhName` over `name` for display
+3. Append up to 1 draw-engine support Pokemon if it matches known draw-engine JP names (e.g. リーリエのピッピex, ノコッチex, ゲノセクトex, フーディン)
+4. Add ACE SPEC name (`aceName`) separately
+
+### Known Draw-Engine Pokemon (filter from archetype name)
+```typescript
+const DRAW_ENGINE_JP = ['リーリエのピッピex', 'ノコッチex', 'ゲノセクトex', 'フーディン'];
+```
+These appear in almost every deck — exclude from main archetype name but include as support note.
+
+### Known ACE SPEC Cards (JP names for inference)
+Used when `deckData` has no rarity — infer `ACE_SPEC_RARE` if card name matches:
+`マキシマムベルト`, `プライムキャッチャー`, `テラスタルオーブ`, `マスターボール`, `アンフェアスタンプ`, `ヒーローマント`, `ネオアッパーエネルギー`, and others. See page source for full list.
+
+### API Endpoints Used by Deck View
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/decks/code/{deckCode}` | Fetch deck with cards + pricing |
+| GET | `/decks/code/{deckCode}/roles` | Fetch deck-specific Pokemon roles |
+| PUT | `/decks/code/{deckCode}/roles/{cardId}` | Upsert a single card's role |
+| GET | `/decks/roles/lookup?cards=id1,id2,...` | Cross-deck role lookup by primaryCardId |
+| PATCH | `/decks/code/{deckCode}/meta` | Persist computed archetype + ACE name |
+
+### Deck Price View
+Route: `/deck-builder/event/{deckCode}/prices`  
+Linked from `DeckSummary` via `priceBreakdownHref` prop.
+
+---
+
+## Scraper Reference
+
+### Scraper Locations
+| Scraper | File | Region | Source |
+|---------|------|--------|--------|
+| Japanese | `scrapers/src/japanese_card_scraper.py` | JP | pokemon-card.com |
+| Hong Kong | `scrapers/src/hk_card_scraper.py` | HK | ptcg.com.hk |
+| English (Asia) | `scrapers/src/english_card_scraper.py` | EN | Various |
+
+### Japanese Rarity Code → DB Enum
+| JP Code | DB Enum |
+|---------|---------|
+| `C` | `COMMON` |
+| `U` | `UNCOMMON` |
+| `R` | `RARE` |
+| `RR` | `DOUBLE_RARE` |
+| `RRR` | `ULTRA_RARE` |
+| `AR` | `ILLUSTRATION_RARE` |
+| `SAR` | `SPECIAL_ILLUSTRATION_RARE` |
+| `SR` | `SHINY_RARE` |
+| `UR` | `HYPER_RARE` |
+| `ACE` | `ACE_SPEC` |
+| `PROMO` | `PROMO` |
+
+### Japanese Supertype Detection (HTML indicators)
+```python
+# pokemon-card.com page signals:
+'ポケモン'     → POKEMON
+'トレーナーズ' → TRAINER
+'エネルギー'   → ENERGY
+```
+
+### Japanese Trainer Subtype Detection (section heading)
+```python
+'ポケモンのどうぐ' → TOOL
+'スタジアム'       → STADIUM
+'サポート'         → SUPPORTER
+(default)           → ITEM
+```
+
+### Japanese Energy Subtype Detection
+```python
+'基本' in page_text → BASIC_ENERGY
+(default)            → SPECIAL_ENERGY
+```
+
+### Scraper Output JSON Schema
+```json
+{
+  "webCardId": "jp49355",
+  "name": "ピカチュウ",
+  "language": "JA_JP",
+  "region": "JP",
+  "supertype": "POKEMON",
+  "evolutionStage": "BASIC",
+  "subtype": null,
+  "variantType": "NORMAL",
+  "rarity": "COMMON",
+  "expansionCode": "sv9",
+  "collectorNumber": "001/100",
+  "hp": 60,
+  "pokemonTypes": ["LIGHTNING"],
+  "attacks": [{ "name": "でんきショック", "cost": "雷", "damage": "10", "effect": "..." }],
+  "abilities": [],
+  "weakness": { "type": "FIGHTING", "value": "×2" },
+  "retreatCost": 1,
+  "regulationMark": "H",
+  "artist": "Mitsuhiro Arita",
+  "imageUrl": "https://...",
+  "sourceUrl": "https://www.pokemon-card.com/...",
+  "scrapedAt": "2026-05-05T10:30:00"
+}
+```
+
+**Note:** `pokemonTypes` (scraper) maps to `types` (DB). Both field names are handled by `import-cards-direct.ts`.
+
+### Direct Import Script (`scrapers/import-cards-direct.ts`)
+Key mapping tables used during import:
+```typescript
+// Rarity short codes (JP scraper output → DB enum)
+'C'    → COMMON,  'U' → UNCOMMON,  'R' → RARE,  'RR' → DOUBLE_RARE
+'RRR'  → ULTRA_RARE,  'AR' → ILLUSTRATION_RARE,  'SAR' → SPECIAL_ILLUSTRATION_RARE
+'SR'   → SHINY_RARE,  'UR' → HYPER_RARE,  'ACE' → ACE_SPEC
+
+// Also accepts full enum strings directly (e.g. "COMMON", "ILLUSTRATION_RARE")
+// Evolution stages: 'BASIC', 'STAGE_1', 'STAGE_2', 'MEGA', 'VMAX', 'VSTAR'
+// RuleBox detection from card name suffix: 'ex' → EX, 'GX' → GX, 'V' → V, etc.
+```
