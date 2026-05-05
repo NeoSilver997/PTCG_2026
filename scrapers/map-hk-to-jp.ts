@@ -16,6 +16,7 @@
  *   npx tsx scrapers/map-hk-to-jp.ts                    # dry-run report
  *   npx tsx scrapers/map-hk-to-jp.ts --apply            # apply (interactive confirm)
  *   npx tsx scrapers/map-hk-to-jp.ts --apply --yes      # apply without prompt
+ *   npx tsx scrapers/map-hk-to-jp.ts --apply m4         # apply only the M4 partial expansion
  *
  * Field sync (JP → HK):
  *   rarity, regulationMark, variantType  — always overwritten with JP value (JP is authoritative)
@@ -32,6 +33,13 @@ import * as readline from 'readline';
 const prisma = new PrismaClient();
 const APPLY = process.argv.includes('--apply');
 const YES   = process.argv.includes('--yes');   // skip interactive prompt
+// Optional: target a single partial expansion (e.g. --apply m4)
+const _applyIdx = process.argv.indexOf('--apply');
+const APPLY_EXPANSION: string | null = (
+  _applyIdx >= 0 &&
+  process.argv[_applyIdx + 1] &&
+  !process.argv[_applyIdx + 1].startsWith('--')
+) ? process.argv[_applyIdx + 1].toUpperCase() : null;
 
 // ─────────────────────────────────────────────
 // 1. Load source JSON files
@@ -120,6 +128,16 @@ async function main() {
     if (!jpLookupAny.has(keyBase)) jpLookupAny.set(keyBase, c);
   }
 
+  // Count unique JP collector numbers per expansion (for JP-side coverage %)
+  const jpExpCollectors = new Map<string, Set<string>>();
+  for (const c of jpCards) {
+    const exp = c.expansionCode;
+    if (!jpExpCollectors.has(exp)) jpExpCollectors.set(exp, new Set());
+    jpExpCollectors.get(exp)!.add(c.collectorNumber);
+  }
+  const jpExpTotal = new Map<string, number>();
+  for (const [exp, set] of jpExpCollectors) jpExpTotal.set(exp, set.size);
+
   // ── Query DB for HK and JP cards ──
   console.log('\nQuerying DB...');
   // Fields we will sync from JP → HK when HK value is null/empty
@@ -175,7 +193,18 @@ async function main() {
   }
   console.log(`\n100%-match expansions: ${fullMatchExpansions.size} of ${expTotal.size} total HK expansions`);
   console.log(`Excluded (known offset): ${[...OFFSET_EXPANSIONS].filter(e => expTotal.has(e)).join(', ')}`);
-  console.log(`Skipping ${expTotal.size - fullMatchExpansions.size - [...OFFSET_EXPANSIONS].filter(e => expTotal.has(e)).length} expansions with partial JP coverage.`);
+  const partialCount = expTotal.size - fullMatchExpansions.size - [...OFFSET_EXPANSIONS].filter(e => expTotal.has(e)).length;
+  console.log(`Partial-coverage expansions (will ask to confirm): ${partialCount}`);
+
+  // Partial-expansion updates: Map<expansionCode, update[]>
+  // Cards in these expansions are matched by collector-number + supertype guard,
+  // and require per-expansion confirmation before being applied.
+  type UpdateRecord = {
+    hkCardDbId: string; hkWebCardId: string;
+    jpWebCardId: string; jpCardDbId: string;
+    jpPrimaryCardId: string; syncFields: Record<string, unknown>;
+  };
+  const partialExpUpdates = new Map<string, UpdateRecord[]>();
 
   // Stats
   let matched = 0;
@@ -209,10 +238,16 @@ async function main() {
       continue;
     }
 
-    // Skip cards in expansions that don't have 100% JP coverage
-    if (!fullMatchExpansions.has(hkSrc.expansionCode)) {
-      skippedNon100++;
-      continue;
+    // ── Route card based on expansion coverage ──
+    const isPartial = !fullMatchExpansions.has(hkSrc.expansionCode);
+    if (isPartial) {
+      if (OFFSET_EXPANSIONS.has(hkSrc.expansionCode)) {
+        // Known offset expansions (SVK, SVHK): skip entirely — handled by dedicated fix scripts
+        skippedNon100++;
+        continue;
+      }
+      // Partial-coverage expansion: fall through to matching below,
+      // but results are collected in partialExpUpdates and require confirmation.
     }
 
     const variant = dbHKCard.variantType || 'NORMAL';
@@ -223,10 +258,25 @@ async function main() {
     const jpSrc = jpLookup.get(key) ?? jpLookupAny.get(keyBase) ?? null;
 
     if (!jpSrc) {
-      unmatchedHK++;
-      if (notMatchedInJP.length < 50) {
-        notMatchedInJP.push({ webId: dbHKCard.webCardId, expansion: hkSrc.expansionCode, collNum: hkSrc.collectorNumber });
+      if (isPartial) {
+        // No JP counterpart found — expected for variant-only HK cards (e.g. M4 084–120 are SR reprints)
+        skippedNon100++;
+      } else {
+        unmatchedHK++;
+        if (notMatchedInJP.length < 50) {
+          notMatchedInJP.push({ webId: dbHKCard.webCardId, expansion: hkSrc.expansionCode, collNum: hkSrc.collectorNumber });
+        }
       }
+      continue;
+    }
+
+    // For partial expansions: require supertype to match (collector-number alone is not safe enough)
+    if (
+      isPartial &&
+      hkSrc.supertype && jpSrc.supertype &&
+      hkSrc.supertype !== jpSrc.supertype
+    ) {
+      skippedNon100++;
       continue;
     }
 
@@ -297,14 +347,21 @@ async function main() {
 
     // Only queue an update if there's something to do
     if (!alreadyMapped || Object.keys(syncFields).length > 0) {
-      updates.push({
+      const record: UpdateRecord = {
         hkCardDbId: dbHKCard.id,
         hkWebCardId: dbHKCard.webCardId,
         jpWebCardId: jpSrc.webCardId,
         jpCardDbId: jpDbCard.id,
         jpPrimaryCardId,
         syncFields,
-      });
+      };
+      if (isPartial) {
+        const arr = partialExpUpdates.get(hkSrc.expansionCode) ?? [];
+        arr.push(record);
+        partialExpUpdates.set(hkSrc.expansionCode, arr);
+      } else {
+        updates.push(record);
+      }
     }
   }
 
@@ -321,11 +378,23 @@ async function main() {
   console.log(`  🔗 To be linked:              ${matched}`);
   console.log(`     (of which Pokédex ✓):      ${matchedWithPokedexOK}`);
   console.log(`\nSkipped / problems:`);
-  console.log(`  ℹ️  Skipped (non-100% expansions):  ${skippedNon100}`);
+  console.log(`  ℹ️  Skipped (offset/no-JP-match):    ${skippedNon100}`);
   console.log(`  ⚠️  HK dex data issues (matched anyway): ${matchedWithPokedexMismatch}`);
   console.log(`  ⚠️  No JP match in JSON:        ${unmatchedHK}`);
   console.log(`  ⚠️  JP match in JSON but not DB:${noJPInDB}`);
   console.log(`  ⚠️  HK card not in source JSON: ${notInJsonHK.length}`);
+
+  // Partial-expansion summary
+  if (partialExpUpdates.size > 0) {
+    console.log('\n─── Partial-coverage expansions (awaiting confirmation) ───');
+    for (const [exp, arr] of partialExpUpdates) {
+      const jpTotal = jpExpTotal.get(exp) ?? arr.length;
+      const pct = Math.round(arr.length / jpTotal * 100);
+      console.log(`  ${exp.padEnd(8)} ${arr.length} cards to link  (${arr.length}/${jpTotal} JP cards = ${pct}% matched)`);
+    }
+    console.log(`  → Run with --apply to be prompted per expansion`);
+    console.log(`  → Run with --apply <expansion> (e.g. --apply m4) to target one expansion`);
+  }
 
   // Count sync field stats
   const syncStats: Record<string, number> = {};
@@ -370,14 +439,28 @@ async function main() {
     return;
   }
 
-  if (updates.length === 0 && jpUpdates.length === 0) {
+  // When targeting a specific expansion, validate it exists in partial updates
+  if (APPLY_EXPANSION) {
+    if (!partialExpUpdates.has(APPLY_EXPANSION)) {
+      console.log(`\nNo partial-coverage updates found for expansion "${APPLY_EXPANSION}".`);
+      const available = [...partialExpUpdates.keys()].join(', ');
+      if (available) console.log(`Available partial expansions: ${available}`);
+      else console.log('No partial expansions to apply.');
+      await prisma.$disconnect();
+      return;
+    }
+    const expUpdates = partialExpUpdates.get(APPLY_EXPANSION)!;
+    console.log(`\nApplying ${APPLY_EXPANSION} only: ${expUpdates.length} HK cards to link`);
+  }
+
+  if (!APPLY_EXPANSION && updates.length === 0 && jpUpdates.length === 0 && partialExpUpdates.size === 0) {
     console.log('\nNo updates needed.');
     await prisma.$disconnect();
     return;
   }
 
-  // Confirm (skip if --yes flag)
-  if (!YES) {
+  // Confirm (skip if --yes flag or targeting specific expansion)
+  if (!YES && !APPLY_EXPANSION) {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     const totalChanges = updates.length + jpUpdates.length;
     const answer = await new Promise<string>(res => rl.question(`\nApply ${totalChanges} DB updates? (yes/no): `, res));
@@ -394,6 +477,7 @@ async function main() {
   let fieldsSynced = 0;
   const orphanedPrimaryCardIds = new Set<string>();
 
+  if (!APPLY_EXPANSION) {
   // Collect HK primaryCardIds before update (for orphan cleanup)
   for (const u of updates) {
     const hkCard = dbHK.find(c => c.id === u.hkCardDbId)!;
@@ -401,7 +485,6 @@ async function main() {
   }
 
   // Batch update in chunks of 200
-  const CHUNK = 200;
   for (let i = 0; i < updates.length; i += CHUNK) {
     const chunk = updates.slice(i, i + CHUNK);
     await prisma.$transaction(
@@ -419,9 +502,67 @@ async function main() {
   }
   console.log(`\n✅ Linked ${applied} HK cards to JP PrimaryCards`);
   console.log(`✏️  Synced JP fields on ${fieldsSynced} HK cards`);
+  } // end !APPLY_EXPANSION block
+  const CHUNK = 200;
 
-  // Apply HK → JP reverse sync (regulationMark)
-  if (jpUpdates.length > 0) {
+  // ── Partial expansions: ask per-expansion before applying ──
+  if (partialExpUpdates.size > 0) {
+    console.log('\n' + '─'.repeat(60));
+    console.log('PARTIAL-COVERAGE EXPANSIONS');
+    console.log('─'.repeat(60));
+    console.log('These expansions have incomplete JP coverage.');
+    console.log('Only cards where collector-number AND supertype match JP will be linked.');
+    console.log('Unmatched HK cards (e.g. SR/AR variant-only cards) are left untouched.\n');
+
+    for (const [exp, expUpdates] of partialExpUpdates) {
+      // When targeting a specific expansion, skip all others
+      if (APPLY_EXPANSION && exp !== APPLY_EXPANSION) continue;
+
+      const jpTotal = jpExpTotal.get(exp) ?? expUpdates.length;
+      const pct    = Math.round(expUpdates.length / jpTotal * 100);
+      console.log(`Expansion ${exp}: ${expUpdates.length} HK cards matched to JP  (${expUpdates.length}/${jpTotal} JP cards = ${pct}% matched)`);
+
+      let applyThis = YES || !!APPLY_EXPANSION; // auto-yes when targeting a specific expansion
+      if (!applyThis) {
+        const rl2 = readline.createInterface({ input: process.stdin, output: process.stdout });
+        const ans = await new Promise<string>(res =>
+          rl2.question(`  Apply ${expUpdates.length} links for ${exp}? (yes/no): `, res)
+        );
+        rl2.close();
+        applyThis = ans.trim().toLowerCase() === 'yes';
+      }
+
+      if (!applyThis) {
+        console.log(`  Skipped ${exp}.`);
+        continue;
+      }
+
+      // Collect old primaryCardIds for orphan cleanup
+      for (const u of expUpdates) {
+        const hkCard = dbHK.find(c => c.id === u.hkCardDbId)!;
+        orphanedPrimaryCardIds.add(hkCard.primaryCardId);
+      }
+
+      let expApplied = 0;
+      for (let i = 0; i < expUpdates.length; i += CHUNK) {
+        const chunk = expUpdates.slice(i, i + CHUNK);
+        await prisma.$transaction(
+          chunk.map(u => {
+            const data: Record<string, unknown> = { primaryCardId: u.jpPrimaryCardId, ...u.syncFields };
+            if (Object.keys(u.syncFields).length > 0) fieldsSynced++;
+            return prisma.card.update({ where: { id: u.hkCardDbId }, data });
+          })
+        );
+        expApplied += chunk.length;
+        applied    += chunk.length;
+        process.stdout.write(`\r  Updated ${expApplied}/${expUpdates.length} ${exp} cards...`);
+      }
+      console.log(`\n  ✅ Linked ${expApplied} ${exp} HK cards`);
+    }
+  }
+
+  // Apply HK → JP reverse sync (regulationMark) — skip when targeting a specific expansion
+  if (!APPLY_EXPANSION && jpUpdates.length > 0) {
     console.log('\nApplying HK \u2192 JP reverse sync...');
     let jpApplied = 0;
     for (let i = 0; i < jpUpdates.length; i += CHUNK) {
