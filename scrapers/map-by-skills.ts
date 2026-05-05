@@ -81,6 +81,37 @@ function computeAttackFingerprint(attacks: any): string | null {
   return JSON.stringify(normalized);
 }
 
+/**
+ * Compute a fingerprint from PrimaryCard effectTags + specialEffectTags + supertype.
+ * Tags are computed by populate-effect-tags.ts from the card's actual text and are
+ * the same functional tags regardless of language.
+ *
+ * Returns null if tags are empty or only contain the generic fallback '其他效果'
+ * (not distinctive enough to match on).
+ *
+ * Includes subtype (ITEM/SUPPORTER/STADIUM/TOOL) in the key so trainer cards of
+ * different types with similar effect text (e.g. きずぐすり vs a healer Supporter)
+ * can never collide.
+ */
+function computeEffectFingerprint(
+  effectTags: string[],
+  specialEffectTags: string[],
+  supertype: string | null,
+  subtype: string | null,
+): string | null {
+  const allTags = [
+    ...effectTags,
+    ...specialEffectTags.map(t => `S:${t}`),
+  ].sort();
+  // Reject if no tags or only the generic fallback
+  if (allTags.length === 0) return null;
+  if (allTags.length === 1 && allTags[0] === '其他效果') return null;
+  // Include subtype (ITEM/SUPPORTER/STADIUM/TOOL) so cards of different trainer
+  // types with similar effects (e.g. Potion vs a Supporter that heals) never collide.
+  const typeKey = [supertype ?? 'UNKNOWN', subtype ?? ''].filter(Boolean).join('/');
+  return `${typeKey}:${allTags.join('|')}`;
+}
+
 // ─────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────
@@ -110,6 +141,8 @@ interface DbPrimaryCard {
   primaryExpansionId: string | null;
   expansionCode: string | null;      // joined from primary_expansions
   attackFingerprint: string | null;  // computed fresh from representative card's attacks
+  effectTags: string[];              // from PrimaryCard.effectTags (language-neutral)
+  specialEffectTags: string[];       // from PrimaryCard.specialEffectTags
   cards: DbCard[];
 }
 
@@ -122,7 +155,8 @@ async function loadHKOnlyPrimaryCards(): Promise<DbPrimaryCard[]> {
   const rows = await prisma.$queryRawUnsafe<any[]>(`
     SELECT
       pc.id, pc.name, pc."cardNumber", pc."primaryExpansionId",
-      pe.code AS "expansionCode"
+      pe.code AS "expansionCode",
+      pc."effectTags", pc."specialEffectTags"
     FROM primary_cards pc
     LEFT JOIN primary_expansions pe ON pe.id = pc."primaryExpansionId"
     WHERE EXISTS (
@@ -174,6 +208,8 @@ async function loadHKOnlyPrimaryCards(): Promise<DbPrimaryCard[]> {
     primaryExpansionId: r.primaryExpansionId,
     expansionCode: r.expansionCode,
     attackFingerprint: pcFingerprint.get(r.id) ?? null,
+    effectTags: r.effectTags ?? [],
+    specialEffectTags: r.specialEffectTags ?? [],
     cards: cardsByPCId.get(r.id) ?? [],
   }));
 }
@@ -184,7 +220,8 @@ async function loadJPPrimaryCardsByExpansion(expansionIds: string[]): Promise<Ma
   const placeholders = expansionIds.map((_, i) => `$${i + 1}`).join(', ');
   const rows = await prisma.$queryRawUnsafe<any[]>(
     `SELECT pc.id, pc.name, pc."cardNumber", pc."primaryExpansionId",
-            pe.code AS "expansionCode"
+            pe.code AS "expansionCode",
+            pc."effectTags", pc."specialEffectTags"
      FROM primary_cards pc
      LEFT JOIN primary_expansions pe ON pe.id = pc."primaryExpansionId"
      WHERE pc."primaryExpansionId" IN (${placeholders})
@@ -237,6 +274,8 @@ async function loadJPPrimaryCardsByExpansion(expansionIds: string[]): Promise<Ma
       primaryExpansionId: r.primaryExpansionId,
       expansionCode: r.expansionCode,
       attackFingerprint: jpPcFingerprint.get(r.id) ?? null,
+      effectTags: r.effectTags ?? [],
+      specialEffectTags: r.specialEffectTags ?? [],
       cards: cardsByPCId.get(r.id) ?? [],
     });
     byExpansion.set(expId, list);
@@ -305,14 +344,16 @@ async function main() {
   type UpdateRecord = {
     hkPrimaryCardId: string;   // HK PrimaryCard to delete after re-pointing
     hkPrimaryCardName: string; // HK card name (for reporting)
+    hkCardNumber: string | null;
     hkCards: DbCard[];         // ZH_TW cards to re-point
     jpPrimaryCard: DbPrimaryCard;
     jpCard: DbCard | null;     // representative JP card for field sync
+    matchMethod: 'attack-fingerprint' | 'effect-fingerprint';
   };
 
   const updates: UpdateRecord[] = [];
   const ambiguous: { hkName: string; expansion: string; fp: string; jpCandidates: string[] }[] = [];
-  const unmatched: { hkName: string; expansion: string; reason: string }[] = [];
+  const unmatched: { hkId: string; hkName: string; expansion: string; reason: string }[] = [];
   const noExpansion: string[] = [];
 
   for (const hk of hkOnlyCards) {
@@ -323,13 +364,13 @@ async function main() {
 
     // Skip cards with no attacks — trainer/energy cards can't be matched this way
     if (hk.attackFingerprint === null) {
-      unmatched.push({ hkName: hk.name, expansion: hk.expansionCode ?? '?', reason: 'no attacks' });
+      unmatched.push({ hkId: hk.id, hkName: hk.name, expansion: hk.expansionCode ?? '?', reason: 'no attacks' });
       continue;
     }
 
     const fpMap = jpFpLookup.get(hk.primaryExpansionId);
     if (!fpMap) {
-      unmatched.push({ hkName: hk.name, expansion: hk.expansionCode ?? '?', reason: 'no JP cards in expansion' });
+      unmatched.push({ hkId: hk.id, hkName: hk.name, expansion: hk.expansionCode ?? '?', reason: 'no JP cards in expansion' });
       continue;
     }
 
@@ -338,7 +379,7 @@ async function main() {
     const hkSiblingCount = hkFpCount.get(hk.primaryExpansionId)?.get(hk.attackFingerprint) ?? 1;
 
     if (jpCandidates.length === 0) {
-      unmatched.push({ hkName: hk.name, expansion: hk.expansionCode ?? '?', reason: 'no JP match for attack fingerprint' });
+      unmatched.push({ hkId: hk.id, hkName: hk.name, expansion: hk.expansionCode ?? '?', reason: 'no JP match for attack fingerprint' });
     } else if (jpCandidates.length > 1) {
       // Multiple JP cards with same attack fingerprint — can't tell which is correct
       ambiguous.push({
@@ -360,19 +401,95 @@ async function main() {
       // Exactly 1 JP candidate AND exactly 1 HK with this attack fingerprint → safe 1:1 match
       const jpPC = jpCandidates[0];
       const jpCard = jpPC.cards[0] ?? null;
-      updates.push({ hkPrimaryCardId: hk.id, hkPrimaryCardName: hk.name, hkCards: hk.cards, jpPrimaryCard: jpPC, jpCard });
+      updates.push({ hkPrimaryCardId: hk.id, hkPrimaryCardName: hk.name, hkCardNumber: hk.cardNumber, hkCards: hk.cards, jpPrimaryCard: jpPC, jpCard, matchMethod: 'attack-fingerprint' });
+    }
+  }
+
+  // ── Pass 2a: Effect-tag fingerprint matching ──
+  //
+  // ...
+  const stillUnmatched: typeof unmatched = [];
+
+  // Build JP effect-fingerprint lookup: expId → Map<fp, DbPrimaryCard[]>
+  const jpEffectFpLookup = new Map<string, Map<string, DbPrimaryCard[]>>();
+  for (const [expId, jpCards] of jpByExpansion) {
+    const fpMap = new Map<string, DbPrimaryCard[]>();
+    for (const jp of jpCards) {
+      if (jp.attackFingerprint !== null) continue; // already indexed in Pass 1
+      const supertype = jp.cards[0]?.supertype ?? null;
+      const subtype = jp.cards[0]?.subtypes?.[0] ?? null;
+      const fp = computeEffectFingerprint(jp.effectTags, jp.specialEffectTags, supertype, subtype);
+      if (!fp) continue;
+      const arr = fpMap.get(fp) ?? [];
+      arr.push(jp);
+      fpMap.set(fp, arr);
+    }
+    jpEffectFpLookup.set(expId, fpMap);
+  }
+
+  // Build HK effect-fingerprint sibling count: expId → Map<fp, count>
+  const hkEffectFpCount = new Map<string, Map<string, number>>();
+  for (const hk of hkOnlyCards) {
+    if (!hk.primaryExpansionId || hk.attackFingerprint !== null) continue;
+    const supertype = hk.cards[0]?.supertype ?? null;
+    const subtype = hk.cards[0]?.subtypes?.[0] ?? null;
+    const fp = computeEffectFingerprint(hk.effectTags, hk.specialEffectTags, supertype, subtype);
+    if (!fp) continue;
+    const fpMap = hkEffectFpCount.get(hk.primaryExpansionId) ?? new Map<string, number>();
+    fpMap.set(fp, (fpMap.get(fp) ?? 0) + 1);
+    hkEffectFpCount.set(hk.primaryExpansionId, fpMap);
+  }
+
+  const effectFpAmbiguous: { hkName: string; expansion: string; fp: string; jpCandidates: string[] }[] = [];
+
+  for (const u of [...unmatched]) {
+    if (u.reason !== 'no attacks') { stillUnmatched.push(u); continue; }
+
+    const hk = hkOnlyCards.find(h => h.id === u.hkId);
+    if (!hk || !hk.primaryExpansionId) { stillUnmatched.push(u); continue; }
+
+    const supertype = hk.cards[0]?.supertype ?? null;
+    const subtype = hk.cards[0]?.subtypes?.[0] ?? null;
+    const fp = computeEffectFingerprint(hk.effectTags, hk.specialEffectTags, supertype, subtype);
+
+    if (!fp) { stillUnmatched.push({ ...u, reason: 'no distinctive effect tags' }); continue; }
+
+    const fpMap = jpEffectFpLookup.get(hk.primaryExpansionId);
+    const jpCandidates = fpMap?.get(fp) ?? [];
+    const hkSiblingCount = hkEffectFpCount.get(hk.primaryExpansionId)?.get(fp) ?? 1;
+
+    if (jpCandidates.length === 1 && hkSiblingCount === 1) {
+      updates.push({
+        hkPrimaryCardId: hk.id, hkPrimaryCardName: hk.name, hkCardNumber: hk.cardNumber,
+        hkCards: hk.cards, jpPrimaryCard: jpCandidates[0], jpCard: jpCandidates[0].cards[0] ?? null,
+        matchMethod: 'effect-fingerprint',
+      });
+    } else if (jpCandidates.length === 0) {
+      stillUnmatched.push({ ...u, reason: 'no JP effect-tag match' });
+    } else {
+      effectFpAmbiguous.push({
+        hkName: hk.name, expansion: hk.expansionCode ?? '?', fp,
+        jpCandidates: jpCandidates.map(j => j.name),
+      });
+      stillUnmatched.push({ ...u, reason: `effect-fp ambiguous (${jpCandidates.length} JP / ${hkSiblingCount} HK)` });
     }
   }
 
   // ── Report ──
+
   console.log('\n' + '='.repeat(60));
   console.log('RESULTS');
+  const pokemonMatches = updates.filter(u => u.matchMethod === 'attack-fingerprint');
+  const effectFpMatches = updates.filter(u => u.matchMethod === 'effect-fingerprint');
+
   console.log('='.repeat(60));
-  console.log(`HK-only PrimaryCards:     ${hkOnlyCards.length}`);
-  console.log(`  ✅ Safe matches (1:1):  ${updates.length}`);
-  console.log(`  ⚠️  Ambiguous (collision): ${ambiguous.length}`);
-  console.log(`  ❌ Unmatched (no JP):   ${unmatched.length}`);
-  console.log(`  ⚠️  No expansion set:    ${noExpansion.length}`);
+  console.log(`HK-only PrimaryCards:          ${hkOnlyCards.length}`);
+  console.log(`  ✅ Attack-fp matches (1:1):  ${pokemonMatches.length}  (Pokémon — attack cost+damage)`);
+  console.log(`  ✅ Effect-tag matches (1:1): ${effectFpMatches.length}  (trainer/energy — effect tags)`);
+  console.log(`  ⚠️  Pokémon ambiguous:        ${ambiguous.length}`);
+  console.log(`  ⚠️  Effect-fp ambiguous:      ${effectFpAmbiguous.length}`);
+  console.log(`  ❌ Still unmatched:          ${stillUnmatched.length}`);
+  console.log(`  ⚠️  No expansion set:         ${noExpansion.length}`);
 
   // Per-expansion breakdown
   const expBreakdown = new Map<string, { matched: number; ambig: number; unmatched: number }>();
@@ -387,7 +504,7 @@ async function main() {
     e.ambig++;
     expBreakdown.set(a.expansion, e);
   }
-  for (const u of unmatched) {
+  for (const u of stillUnmatched) {
     const e = expBreakdown.get(u.expansion) ?? { matched: 0, ambig: 0, unmatched: 0 };
     e.unmatched++;
     expBreakdown.set(u.expansion, e);
@@ -402,60 +519,77 @@ async function main() {
   }
 
   if (ambiguous.length > 0) {
-    console.log('\n─── Ambiguous (first 20) — attack fingerprint collision: multiple HK or JP cards share same attacks ───');
+    console.log('\n─── Ambiguous Pokémon (first 20) — multiple HK or JP cards share same attack fingerprint ───');
     for (const a of ambiguous.slice(0, 20)) {
       console.log(`  [${a.expansion}] "${a.hkName}" → JP candidates: ${a.jpCandidates.slice(0, 3).join(', ')}${a.jpCandidates.length > 3 ? ` (+${a.jpCandidates.length - 3} more)` : ''}`);
     }
     if (ambiguous.length > 20) console.log(`  ... and ${ambiguous.length - 20} more`);
   }
 
-  // Show unmatched breakdown by reason (only first 20)
-  const noAttackCount = unmatched.filter(u => u.reason === 'no attacks').length;
-  const noJPMatchCount = unmatched.filter(u => u.reason !== 'no attacks').length;
-  console.log(`\n  (Unmatched breakdown: ${noAttackCount} trainer/energy with no attacks, ${noJPMatchCount} Pokémon with no JP match)`);
-  const unmatchedPokemon = unmatched.filter(u => u.reason !== 'no attacks');
-  if (unmatchedPokemon.length > 0 && unmatchedPokemon.length <= 30) {
-    console.log('\n─── Unmatched Pokémon cards (have attacks but no JP equivalent found) ───');
-    for (const u of unmatchedPokemon) {
-      console.log(`  [${u.expansion}] "${u.hkName}"`);
+  // Show unmatched breakdown by reason
+  if (stillUnmatched.length > 0) {
+    const reasonCounts = new Map<string, number>();
+    for (const u of stillUnmatched) {
+      const key = u.reason.startsWith('effect-fp ambiguous') ? 'effect-fp ambiguous'
+        : u.reason.startsWith('no JP') ? 'no JP effect-tag match'
+        : u.reason;
+      reasonCounts.set(key, (reasonCounts.get(key) ?? 0) + 1);
+    }
+    const breakdown = [...reasonCounts.entries()].map(([r, n]) => `${n} ${r}`).join(', ');
+    console.log(`\n  (Unmatched: ${breakdown})`);
+  }
+  if (stillUnmatched.length > 0 && stillUnmatched.length <= 40) {
+    console.log('\n─── Still unmatched (all) ───');
+    for (const u of stillUnmatched) {
+      console.log(`  [${u.expansion}] "${u.hkName}" (${u.reason})`);
     }
   }
 
-  // All matches with full detail — filter out any already pointing to the correct JP PrimaryCard
-  if (updates.length > 0) {
-    const newMatches = updates.filter(u =>
-      u.hkCards.some(c => c.primaryCardId !== u.jpPrimaryCard.id)
+  // Display all matches split by method
+  const printMatch = (u: UpdateRecord) => {
+    const hkCard = u.hkCards[0];
+    const jpCard = u.jpCard;
+    const hkWebIds = u.hkCards.map(c => c.webCardId).join(', ');
+    const jpWebId = jpCard?.webCardId ?? '(no card)';
+    const attacks: any[] = Array.isArray(jpCard?.attacks) ? jpCard!.attacks : [];
+    const attackSummary = attacks.length > 0
+      ? attacks.map((a: any) => {
+          const cost = Array.isArray(a.cost) ? a.cost.join('+') : (a.cost ?? '?');
+          return `${a.name ?? ''}(${cost}→${a.damage ?? '–'})`;
+        }).join(' | ')
+      : '–';
+    const hp = jpCard?.hp ?? hkCard?.hp ?? null;
+    const types = (jpCard?.types ?? hkCard?.types ?? []).join('/') || '–';
+    const rarity = jpCard?.rarity ?? hkCard?.rarity ?? '–';
+    const subtype = (jpCard?.subtypes ?? hkCard?.subtypes ?? []).join('/') || '–';
+    const offsetNote = '';
+    console.log(
+      `  [${u.jpPrimaryCard.expansionCode}/${u.jpPrimaryCard.cardNumber}]` +
+      `  HP:${hp ?? '–'}  Type:${types}  ${subtype !== '–' ? `Subtype:${subtype}  ` : ''}Rarity:${rarity}${offsetNote}` +
+      `\n    ZH: ${hkWebIds} "${u.hkPrimaryCardName}"` +
+      `\n    JP: ${jpWebId} "${u.jpPrimaryCard.name}"  attacks: ${attackSummary}`
     );
-    const alreadyLinked = updates.length - newMatches.length;
-    console.log(`\n─── All matches not yet linked (${newMatches.length}${alreadyLinked > 0 ? `, ${alreadyLinked} already linked skipped` : ''}) ───`);
-    for (const u of newMatches) {
-      const hkCard = u.hkCards[0];
-      const jpCard = u.jpCard;
-      const hkWebIds = u.hkCards.map(c => c.webCardId).join(', ');
-      const jpWebId = jpCard?.webCardId ?? '(no card)';
+  };
 
-      // Build attack summary from JP card (cost → damage)
-      const attacks: any[] = Array.isArray(jpCard?.attacks) ? jpCard!.attacks : [];
-      const attackSummary = attacks.length > 0
-        ? attacks.map((a: any) => {
-            const cost = Array.isArray(a.cost) ? a.cost.join('+') : (a.cost ?? '?');
-            const dmg = a.damage ?? '–';
-            const name = a.name ?? '';
-            return `${name}(${cost}→${dmg})`;
-          }).join(' | ')
-        : '–';
+  const newPokemonMatches = pokemonMatches.filter(u => u.hkCards.some(c => c.primaryCardId !== u.jpPrimaryCard.id));
+  const newEffectFpMatches = effectFpMatches.filter(u => u.hkCards.some(c => c.primaryCardId !== u.jpPrimaryCard.id));
+  const alreadyLinkedCount = updates.length - newPokemonMatches.length - newEffectFpMatches.length;
 
-      const hp = jpCard?.hp ?? hkCard?.hp ?? null;
-      const types = (jpCard?.types ?? hkCard?.types ?? []).join('/') || '–';
-      const rarity = jpCard?.rarity ?? hkCard?.rarity ?? '–';
-
-      console.log(
-        `  [${u.jpPrimaryCard.expansionCode}/${u.jpPrimaryCard.cardNumber}]` +
-        `  HP:${hp ?? '–'}  Type:${types}  Rarity:${rarity}` +
-        `\n    ZH: ${hkWebIds} "${u.hkPrimaryCardName}"` +
-        `\n    JP: ${jpWebId} "${u.jpPrimaryCard.name}"  attacks: ${attackSummary}`
-      );
+  if (newPokemonMatches.length > 0) {
+    console.log(`\n─── Pokémon matches — attack fingerprint (${newPokemonMatches.length}${alreadyLinkedCount > 0 ? `, ${alreadyLinkedCount} already linked skipped` : ''}) ───`);
+    for (const u of newPokemonMatches) printMatch(u);
+  }
+  if (newEffectFpMatches.length > 0) {
+    console.log(`\n─── Effect-tag matches — language-neutral tags (${newEffectFpMatches.length}) ───`);
+    for (const u of newEffectFpMatches) printMatch(u);
+  }
+  if (effectFpAmbiguous.length > 0) {
+    console.log(`\n─── Effect-fp ambiguous (${effectFpAmbiguous.length}) — multiple cards share same tags in expansion ───`);
+    for (const a of effectFpAmbiguous.slice(0, 20)) {
+      console.log(`  [${a.expansion}] "${a.hkName}" → ${a.jpCandidates.slice(0, 3).join(', ')}${a.jpCandidates.length > 3 ? ` (+${a.jpCandidates.length - 3} more)` : ''}`);
+      console.log(`    tags: ${a.fp}`);
     }
+    if (effectFpAmbiguous.length > 20) console.log(`  ... and ${effectFpAmbiguous.length - 20} more`);
   }
 
   if (!APPLY) {
@@ -478,7 +612,7 @@ async function main() {
   if (!YES) {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     const answer = await new Promise<string>(res =>
-      rl.question(`\nApply ${updates.length} HK→JP links? (yes/no): `, res)
+      rl.question(`\nApply ${updates.length} HK→JP links (${pokemonMatches.length} attack-fp + ${effectFpMatches.length} effect-fp)? (yes/no): `, res)
     );
     rl.close();
     if (answer.trim().toLowerCase() !== 'yes') {

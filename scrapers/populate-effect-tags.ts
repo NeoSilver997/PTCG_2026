@@ -41,15 +41,63 @@ interface Ability {
  * Returns the number of cards drawn in a single draw effect, or 0 if unknown.
  * ZH: 抽出N張, 抽N張  |  JA: 山札からN枚引く, N枚引く
  */
+/**
+ * Returns the number of cards drawn in a single draw effect, or 0 if unknown.
+ * ZH: 抽出N張, 抽N張  |  JA: 山札からN枚引く, N枚引く
+ * Also handles "draw until hand = N" (Iono / N / タイム / パルデアの仲間たち style):
+ *   ZH: 手牌有N張 / 手牌達到N張  |  JA: 手札がN枚になるように
+ */
 function extractDrawCount(effect: string): number {
-  const zhMatch = effect.match(/抽出?(\d+)張/);
-  if (zhMatch) return parseInt(zhMatch[1], 10);
+  // Explicit "draw N" patterns (ZH + JA)
+  const zhExplicit = effect.match(/抽出?(\d+)張/);
+  if (zhExplicit) return parseInt(zhExplicit[1], 10);
 
-  const ja1 = effect.match(/山札から(\d+)枚/);
+  const ja1 = effect.match(/山札から(\d+)枚引く/);
   if (ja1) return parseInt(ja1[1], 10);
 
   const ja2 = effect.match(/(\d+)枚引く/);
   if (ja2) return parseInt(ja2[1], 10);
+
+  // "Draw until hand = N" — Iono / N / タイム / パルデアの仲間たち style
+  // ZH: 手牌有N張 / 手牌達到N張 / 手牌至少N張
+  const zhHandSize = effect.match(/手牌[有達到至]{0,4}(\d+)張/);
+  if (zhHandSize) return parseInt(zhHandSize[1], 10);
+
+  // JA: 手札がN枚になるように
+  const jaHandSize = effect.match(/手札が(\d+)枚になるように/);
+  if (jaHandSize) return parseInt(jaHandSize[1], 10);
+
+  return 0;
+}
+
+/**
+ * Extracts the primary selection quantity from a search or recovery effect.
+ * Used to encode "how many cards/Pokémon" into tag names for disambiguation.
+ * Returns the number if found (≥1), or 0 if not found.
+ *
+ * ZH: 最多N張/隻/個, 選擇N張/隻
+ * JA: 最大N枚まで, N枚まで選, N匹, N枚を選ぶ
+ */
+function extractQuantity(effect: string): number {
+  // ZH: "最多N張/隻/個" (up to N)
+  const zhUpTo = effect.match(/最多(\d+)[張隻個]/);
+  if (zhUpTo) return parseInt(zhUpTo[1], 10);
+
+  // ZH: "選擇N張/隻"
+  const zhChoose = effect.match(/選擇(\d+)[張隻個]/);
+  if (zhChoose) return parseInt(zhChoose[1], 10);
+
+  // JA: "最大N枚まで" or "N枚まで(選/加える/戻す)"
+  const jaUpTo = effect.match(/(?:最大)?(\d+)枚まで(?:選|加える|戻す|山札)/);
+  if (jaUpTo) return parseInt(jaUpTo[1], 10);
+
+  // JA: "N枚を選" or "N枚選ぶ"
+  const jaChoose = effect.match(/(\d+)枚[をに]?選/);
+  if (jaChoose) return parseInt(jaChoose[1], 10);
+
+  // JA: "N匹まで" or "N匹選"
+  const jaAnimal = effect.match(/(\d+)匹/);
+  if (jaAnimal) return parseInt(jaAnimal[1], 10);
 
   return 0;
 }
@@ -105,19 +153,20 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
   const has = (...words: string[]) => words.some(w => effect.includes(w));
 
   // --- Primary ---
-  // Draw cards (ZH + JA) — tiered: 少量抽卡 (1), 抽卡效果 (2), 大量抽卡 (3+)
+  // Draw cards (ZH + JA)
+  // Primary tag: 抽卡×N when count is known; else 抽卡効果 (unknown/variable)
+  // Special tag: 大量抽卡 when N ≥ 3 (kept for effectScore/cardTier compatibility)
   const _isDrawEffect =
     (has('抽取', '抽出', '加入手牌', '抽卡') && has('牌庫')) ||
     (has('山札から') && has('引く', 'カードを引')) ||
     (has('手札に加える', '手札に入れる') && has('山札', '引く'));
   if (_isDrawEffect) {
     const drawCount = extractDrawCount(effect);
-    if (drawCount >= 3) {
-      special.add('大量抽卡');
-    } else if (drawCount === 1) {
-      primary.add('少量抽卡');
+    if (drawCount > 0) {
+      primary.add(`抽卡×${drawCount}`);
+      if (drawCount >= 3) special.add('大量抽卡');
     } else {
-      // drawCount === 2 or 0 (unknown/variable)
+      // unknown / variable count (e.g. "draw until hand is full")
       primary.add('抽卡效果');
     }
   }
@@ -128,14 +177,16 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     (has('選擇') && has('牌庫') && !has('抽出', '抽卡') && !has('對手')) ||
     (has('山札から') && has('探す', '選び', '手札に加える') && !has('引く') && !has('對手'))
   ) {
-    primary.add('牌庫搜索');
+    const qty = extractQuantity(effect);
+    primary.add(qty > 0 ? `牌庫搜索×${qty}` : '牌庫搜索');
   }
   // Discard-pile search
   if (
     (has('選擇') && has('棄牌區') && !has('抽卡')) ||
     (has('トラッシュから') && has('手札に加える', '手札に'))
   ) {
-    primary.add('棄牌搜索');
+    const qty = extractQuantity(effect);
+    primary.add(qty > 0 ? `棄牌搜索×${qty}` : '棄牌搜索');
   }
 
   // Place Basic Pokémon onto Bench or search to hand from deck (放置基礎寶可夢) — ZH + JA
@@ -158,7 +209,8 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
       has('手札に加える')
     ) && has('山札から', '山札を', '選び', '選んで'))
   ) {
-    primary.add('放置基礎寶可夢');
+    const qty = extractQuantity(effect);
+    primary.add(qty > 0 ? `放置基礎×${qty}` : '放置基礎寶可夢');
   }
 
   // Energy operations (ZH + JA)
@@ -621,6 +673,86 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     primary.add('支援者限制');
   }
 
+  // Recover KO'd Pokémon (KO回收×N) — ZH + JA
+  // e.g. Town Market, Rescue Stretcher, Night Stretcher, つりざおMAX
+  if (
+    (has('昏厥') && has('寶可夢') && (has('加入手牌') || has('放入牌庫') || has('放回牌庫') || has('備戰區'))) ||
+    (has('きぜつした') && has('ポケモン') && (has('手札に加える') || has('山札に戻す') || has('ベンチに出す')))
+  ) {
+    const qty = extractQuantity(effect);
+    primary.add(qty > 0 ? `KO回收×${qty}` : 'KO回收');
+  }
+
+  // New hand draw — shuffle hand into deck then draw N (重新抽牌×N) — ZH + JA
+  // e.g. Iono, Lillie, Judge, N, タイム, パルデアの仲間たち
+  if (
+    (has('手牌') && (has('放回牌庫並重洗') || has('洗入牌庫') || has('放入牌庫並重洗')) && (has('抽出', '抽取', '抽卡'))) ||
+    (has('手札') && (has('山札に加えてシャッフル') || has('山札に戻してシャッフル')) && has('引く'))
+  ) {
+    const drawCount = extractDrawCount(effect);
+    primary.add(drawCount > 0 ? `重新抽牌×${drawCount}` : '重新抽牌');
+  }
+
+  // Search for evolved Pokémon from deck (搜索進化×N) — ZH + JA
+  // e.g. Ultra Ball, Level Ball, Evolution Incense
+  if (
+    (has('進化') && has('寶可夢') && has('牌庫') && (has('加入手牌') || has('備戰區')) && !has('基礎')) ||
+    (has('進化ポケモン') && has('山札') && (has('手札に加える') || has('ベンチに出す')) && !has('基本'))
+  ) {
+    const qty = extractQuantity(effect);
+    primary.add(qty > 0 ? `搜索進化×${qty}` : '搜索進化寶可夢');
+  }
+
+  // Search for any Pokémon from deck (搜索任意×N) — ZH + JA
+  // e.g. Ultra Ball (any), Quick Ball-like unlimited search; guarded to avoid overlap with 放置基礎寶可夢
+  if (
+    (has('任意') && has('寶可夢') && has('牌庫') && (has('加入手牌') || has('備戰區'))) ||
+    (has('ポケモン') && has('山札') && has('何でも', 'どんな', '1枚') && (has('手札に加える') || has('ベンチに出す')) &&
+      !has('基本', '進化', 'たね'))
+  ) {
+    const qty = extractQuantity(effect);
+    primary.add(qty > 0 ? `搜索任意×${qty}` : '搜索任意寶可夢');
+  }
+
+  // Search for Trainer / Item / Tool card from deck (搜索訓練師卡) — ZH + JA
+  // e.g. Arven (Item + Tool), Cram-o-matic, various searchers
+  if (
+    ((has('物品卡') || has('道具卡') || has('訓練師卡')) && has('牌庫') && has('加入手牌') && !has('使用', '昏厥')) ||
+    ((has('グッズカード') || has('どうぐカード') || has('トレーナーズカード')) && has('山札') && has('手札に加える') && !has('使う'))
+  ) {
+    primary.add('搜索訓練師卡');
+  }
+
+  // Search for Supporter card from deck or discard (搜索支援者) — ZH + JA
+  // e.g. Fan Rotom, Pokégear 3.0
+  if (
+    (has('支援者卡') && (has('牌庫') || has('棄牌區')) && has('加入手牌') && !has('使用')) ||
+    (has('サポートカード') && (has('山札') || has('トラッシュ')) && has('手札に加える'))
+  ) {
+    primary.add('搜索支援者');
+  }
+
+  // Peek at top N cards of deck (查看牌庫頂×N) — ZH + JA
+  // e.g. Pokédex, various scouting cards
+  if (
+    (has('牌庫頂') && (has('查看') || has('觀看') || has('翻開'))) ||
+    (has('山札の上') && (has('見る') || has('見て') || has('確認')))
+  ) {
+    const zhTop = effect.match(/牌庫頂[的]?(\d+)張/);
+    const jaTop = effect.match(/山札の上から(\d+)枚/);
+    const topN = zhTop ? parseInt(zhTop[1], 10) : jaTop ? parseInt(jaTop[1], 10) : 0;
+    primary.add(topN > 0 ? `查看牌庫頂×${topN}` : '查看牌庫頂');
+  }
+
+  // Retrieve Trainer card from discard (回收訓練師) — ZH + JA
+  // e.g. Nidoran♀, Ordinary Rod, vs. 棄牌搜索 which is broader
+  if (
+    (has('棄牌區') && (has('物品卡') || has('支援者卡') || has('道具卡')) && has('加入手牌') && !has('附', '能量')) ||
+    (has('トラッシュ') && (has('グッズ') || has('サポート') || has('どうぐ')) && has('手札に加える') && !has('エネルギー'))
+  ) {
+    primary.add('回收訓練師');
+  }
+
   // --- Japanese-only patterns (JA_JP cards without Chinese translations) ---
 
   // Hand discard (手牌丟棄) - ZH + JA
@@ -804,9 +936,11 @@ function computeTier(effectScore: number): string {
 // These correct cases where the classifier generates false positives
 // ---------------------------------------------------------------------------
 const MANUAL_REMOVE_TAGS: Record<string, string[]> = {
-  'スペシャルレッドカード': ['抽卡效果', '牌庫搜索', '棄牌搜索'],  // 特殊紅牌 (hk18898): Only disrupts opponent's hand
+  'スペシャルレッドカード': ['抽卡効果', '牌庫搜索', '棄牌搜索', '牌庫搜索×1', '棄牌搜索×1'],  // 特殊紅牌 (hk18898): Only disrupts opponent's hand
   'メガピクシーex': ['棄牌區傷害加成'],         // 超級皮可西ex: Discard-pile mention is not damage scaling
   '変化の書': ['棄牌區傷害加成'],               // 變化之書: Same
+  // ガラスのラッパ attaches energy from discard to bench — not a "discard search" card
+  'ガラスのラッパ': ['棄牌搜索', '棄牌搜索×1', '棄牌搜索×2', '棄牌搜索×3'],
 };
 
 // ---------------------------------------------------------------------------

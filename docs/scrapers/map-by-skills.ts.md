@@ -1,30 +1,31 @@
 # map-by-skills.ts — Documentation
 
 **Source file:** `scrapers/map-by-skills.ts`
-**Last modified:** `2026-05-06 01:52`
-**MD5:** `F03B35AC648F2288784EAFC36AC1B203`
+**Last modified:** `2026-05-06 02:47`
+**MD5:** `9E111DEB7E1D650845B03CD0F298ECA9`
 **Summarised by model:** `Claude Sonnet 4.6`
 
-Maps HK-only `PrimaryCard` records to their Japanese counterparts by matching on a freshly-computed **attack fingerprint** — a language-neutral hash of each card's attack cost and damage values from the live `Card.attacks` JSON field.
+Maps HK-only `PrimaryCard` records to their Japanese counterparts using two complementary strategies:
+
+1. **Attack fingerprint** — language-neutral hash of attack cost + damage (reliable for Pokémon with attacks stored)
+2. **Effect-tag fingerprint** — language-neutral `effectTags + specialEffectTags + supertype + subtype` from `PrimaryCard` (for trainers/energies where attacks are absent); tags written by `populate-effect-tags.ts`
 
 ---
 
 ## Why This Script Exists
 
 `map-hk-to-jp.ts` matches cards by **expansionCode + collectorNumber**.  
-In some expansions (e.g. **M4**, **M1S**, **M1L**) the HK collector numbers differ from the JP numbers, so those cards are skipped entirely by the collector-based script.
+In some expansions (e.g. **M4**, **M1S**, **M1L**, **SVM**) the HK collector numbers differ from the JP numbers, so those cards are skipped entirely by the collector-based script.
 
-This script uses an **attack fingerprint** as the matching key instead, making it a **complementary** tool for cases where collector-number matching fails.
-
-**Key insight:** Two Pokémon cards with the same attack costs and damage values in the same expansion are the same card printed under different collector numbers.
+This script is a **complementary** tool for cases where collector-number matching fails.
 
 ---
 
 ## Why Not Use `skillsSignature`?
 
-`PrimaryCard.skillsSignature` is a SHA-256 hash of `{abilities, attacks}` computed **at import time**. At import time many abilities fields are null, so thousands of cards end up with the same empty-signature hash (`42ba610a86d15094`). Using this stale stored value would cause massive false-positive matches between unrelated cards.
+`PrimaryCard.skillsSignature` is a SHA-256 hash computed **at import time**. At import time many abilities/attacks fields are null, so thousands of cards end up with the same empty-signature hash. This stale value causes massive false positives.
 
-Instead, this script **recomputes** the fingerprint live from `Card.attacks` using only the language-neutral fields (`cost` and `damage`). Trainer and Energy cards have no attacks and return `null` — they are skipped entirely.
+This script computes fresh fingerprints directly from `Card.attacks` JSONB and uses card-number offset as a second-pass fallback.
 
 ---
 
@@ -45,25 +46,27 @@ npx tsx scrapers/map-by-skills.ts --expansion M4
 npx tsx scrapers/map-by-skills.ts --apply --expansion M4 --yes
 ```
 
+**Recommended workflow:** Always dry-run first, verify the offset-based matches manually, then apply.
+
 ---
 
 ## How It Works — Step by Step
 
-### Step 1 — Find HK-only PrimaryCards
+### Pass 1 — Pokémon matching by attack fingerprint
+
+**Step 1 — Find HK-only PrimaryCards**
 
 A **HK-only PrimaryCard** is a `PrimaryCard` that has:
 - At least one `Card` with `language = ZH_TW`
 - **Zero** `Card` records with `language = JA_JP`
 
-These are cards the collector-based mapper left unlinked. The query runs entirely in DB (no JSON files needed).
+**Step 2 — Load JP PrimaryCards for the same expansions**
 
-### Step 2 — Load JP PrimaryCards for the Same Expansions
+For every `primaryExpansionId` in the HK-only set, fetch all JP `PrimaryCard` records.
 
-For every `primaryExpansionId` appearing in the HK-only set, fetch all JP `PrimaryCard` records (those that have at least one `JA_JP` card). Only expansions that already have JP data are queried.
+**Step 3 — Compute attack fingerprints**
 
-### Step 3 — Compute Attack Fingerprints
-
-For each `PrimaryCard` (both HK and JP), fetch the `attacks` JSON from one representative `Card` and compute a fingerprint using `computeAttackFingerprint()`:
+For each `PrimaryCard`, compute a fingerprint using `computeAttackFingerprint()`:
 
 ```typescript
 function computeAttackFingerprint(attacks: any): string | null {
@@ -76,42 +79,50 @@ function computeAttackFingerprint(attacks: any): string | null {
 }
 ```
 
-- Only `cost` and `damage` are used — **attack names and effect text are translated, so they differ between JP and ZH_TW and would cause mismatches**.
-- Cards with no attacks (trainers, energies) return `null` and are excluded from matching.
+Only `cost` and `damage` are used — attack names and effect text are translated and would differ between JP and ZH_TW.
 
-### Step 4 — Build Per-Expansion Lookup
+Cards with no attacks (trainers, energies, or Pokémon with attacks not yet scraped) return `null` — they fall through to Pass 2a.
 
-For each expansion: `Map<attackFingerprint, JP PrimaryCard[]>`
+**Step 4 — Match by fingerprint (safe 1:1 only)**
 
-### Step 5 — Match
-
-For each HK-only `PrimaryCard` with a non-null fingerprint, look up JP candidates by fingerprint within the same expansion:
-
-| Candidates found | HK siblings with same fingerprint | Action |
-|-----------------|----------------------------------|--------|
-| **Exactly 1** | **Exactly 1** | Safe match → add to update queue |
-| **Multiple** | Any | Ambiguous → skip, report |
-| **Any** | **Multiple** | Ambiguous → skip, report |
-| **Zero** | Any | Unmatched → skip, report |
-| (HK has no attacks) | — | Skip (trainer/energy) |
-
-### Step 6 — Report
-
-Prints per-expansion breakdown showing match / ambiguous / unmatched counts, unmatched breakdown by reason, and a sample of matched pairs.
-
-### Step 7 — Apply (if `--apply`)
-
-For each safe match:
-1. Re-point all `ZH_TW` cards' `primaryCardId` → JP `PrimaryCard.id`
-2. Sync fields JP → HK (see table below)
-3. Reverse-sync HK → JP for `regulationMark`
-4. Delete orphaned HK-only `PrimaryCard` (if no cards remain pointing to it)
-
-Updates are batched in chunks of 200 inside `prisma.$transaction`.
+| Candidates | HK siblings with same fp | Action |
+|------------|--------------------------|--------|
+| Exactly 1 | Exactly 1 | Safe match ✅ |
+| Multiple | Any | Ambiguous ⚠️ |
+| Any | Multiple | Ambiguous ⚠️ |
+| Zero | Any | Unmatched ❌ |
+| null fingerprint | — | Held for Pass 2a |
 
 ---
 
-## Field Sync Rules
+### Pass 2a — Effect-tag fingerprint matching
+
+Handles cards with `attackFingerprint = null` (trainers, energies, Pokémon with no attacks stored).
+
+The **effect fingerprint** is computed from `PrimaryCard.effectTags` + `PrimaryCard.specialEffectTags` + the card's `supertype` + `subtype` (both derived from the first `Card` record):
+
+```typescript
+function computeEffectFingerprint(
+  effectTags: string[], specialEffectTags: string[],
+  supertype: string | null, subtype: string | null,
+): string | null {
+  const allTags = [...effectTags, ...specialEffectTags.map(t => `S:${t}`)].sort();
+  if (allTags.length === 0) return null;
+  if (allTags.length === 1 && allTags[0] === '其他效果') return null; // too generic
+  const typeKey = [supertype ?? 'UNKNOWN', subtype ?? ''].filter(Boolean).join('/');
+  return `${typeKey}:${allTags.join('|')}`;
+}
+```
+
+Since `effectTags` are fixed functional labels (not translated text), the same card's HK and JP `PrimaryCard` will produce identical fingerprints. Including `supertype` **and `subtype`** in the key guarantees that cards of different trainer types (e.g. ITEM vs SUPPORTER) with overlapping effect tags can never collide — きずぐすり (ITEM/回復效果) and コック (SUPPORTER/抽卡效果) always produce distinct fingerprints.
+
+**Safety:** 1:1 match only — if multiple HK or multiple JP cards in the same expansion share the same fingerprint, the match is ambiguous and falls through to Pass 2b.
+
+Cards with no meaningful effect tags (null fingerprint or only `'其他效果'`) are pushed to `stillUnmatched`.
+
+---
+
+## Field Sync Rules (on apply)
 
 | Field | Direction | Rule |
 |-------|-----------|------|
@@ -122,19 +133,20 @@ Updates are batched in chunks of 200 inside `prisma.$transaction`.
 | `evolvesFrom` | JP → HK | Fill only when HK is null |
 | `ruleBox` | JP → HK | Fill only when HK is null |
 | `subtypes` | JP → HK | Fill only when HK array is empty |
-| `regulationMark` | HK → JP | Fill only when JP is null and HK has a value |
+| `regulationMark` | HK → JP | Fill only when JP is null |
 
 ---
 
-## Matching Safety: Ambiguous Cases
+## Output Format
 
-When multiple JP cards share the same attack fingerprint in an expansion the script **skips** them — it never guesses.
+Each match is displayed as:
+```
+[EXP/JP#]  HP:xxx  Type:TYPE  [Subtype:SUBTYPE]  Rarity:RARITY  [HK#xxx→JP#xxx]
+  ZH: hkXXXXX "Chinese name"
+  JP: jpXXXXX "Japanese name"  attacks: AttackName(cost→damage) | ...
+```
 
-Common causes of ambiguous matches:
-- **Same-cost evolution lines**: e.g. two Pokémon with `[COLORLESS]` / `10` damage
-- **Multiple prints of the same base card** in the same expansion with identical attacks
-
-Trainer and Energy cards are excluded entirely (null fingerprint) so they can never cause false positives.
+For offset matches, `HK#xxx→JP#xxx` shows the collector number mapping.
 
 ---
 
@@ -142,8 +154,9 @@ Trainer and Energy cards are excluded entirely (null fingerprint) so they can ne
 
 | Issue | Cause | Workaround |
 |-------|-------|-----------|
-| Trainer / Energy cards are never matched | No attacks stored — fingerprint is null | Use `map-hk-to-jp.ts` or manual fix |
-| 856 Pokémon still unmatched after running | No JP cards for those expansions yet | Import JP cards for those expansions first |
+| Trainers/energies with only generic tags (`其他效果`) remain unmatched | Not enough keywords matched by `populate-effect-tags.ts` | Add more keyword patterns to `populate-effect-tags.ts`, re-run it to refresh DB tags, then re-run this script |
+| Ambiguous: multiple trainers share same effect fingerprint in an expansion | Different cards with identical functional tags (e.g. two different draw-3 supporters) | Add more specific tags to distinguish them |
+| Pokémon without attacks stored treated as trainer-like | `attacks` field null in DB at scrape time | Re-scrape those cards to populate attacks, then rerun |
 | AC2D / SC2* / SV* expansions show 0 matches | No JP cards imported for those expansions | Import JP data first |
 
 
