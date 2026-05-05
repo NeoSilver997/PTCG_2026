@@ -16,7 +16,46 @@ packages/
   shared-types/     # TypeScript types (@ptcg/shared-types)
 scrapers/           # Python scrapers for card/tournament data
 data/               # Persistent data storage (cards, images, events)
+docs/               # Markdown documentation for core logic files
+  scrapers/         # Docs mirroring scrapers/ structure (e.g. map-hk-to-jp.ts.md)
 ```
+
+## Documentation Convention
+
+**When core logic in a scraper or script is updated, update the corresponding markdown doc in `docs/`.**
+
+The docs folder mirrors the source tree:
+- `scrapers/map-hk-to-jp.ts` → `docs/scrapers/map-hk-to-jp.ts.md`
+- Any new core scraper/script → create `docs/<folder>/<filename>.md`
+
+Each doc should cover: purpose, usage, step-by-step logic, key design decisions, and related scripts.
+
+### Doc Header Format (required on every doc file)
+
+Every doc must begin with this header block:
+
+```md
+# <filename> — Documentation
+
+**Source file:** `<relative/path/to/file>`
+**Last modified:** `YYYY-MM-DD HH:mm`
+**MD5:** `<md5-hash-of-source-file>`
+**Summarised by model:** `Claude Sonnet 4.6`
+```
+
+### MD5 Verification Workflow
+
+When updating a doc after changing the source file:
+
+1. Compute the MD5 and last-modified time:
+   ```powershell
+   $file = "scrapers\map-hk-to-jp.ts"
+   $md5  = (Get-FileHash $file -Algorithm MD5).Hash
+   $mod  = (Get-Item $file).LastWriteTime.ToString("yyyy-MM-dd HH:mm")
+   Write-Host "MD5: $md5  Modified: $mod"
+   ```
+2. Paste the values into the doc header (`**MD5:**` and `**Last modified:**`).
+3. To verify a doc is current, re-run the command and compare — if the hash differs, the doc is stale and must be updated.
 
 **Workspace package imports:** Use `@ptcg/database` and `@ptcg/shared-types` aliases (defined in each app's tsconfig.json).
 

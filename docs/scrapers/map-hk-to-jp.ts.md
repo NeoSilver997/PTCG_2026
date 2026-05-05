@@ -1,6 +1,9 @@
 # map-hk-to-jp.ts — Documentation
 
 **Source file:** `scrapers/map-hk-to-jp.ts`
+**Last modified:** `2026-05-05 22:38`
+**MD5:** `B80C2F315811444FCBA8DD227555293D`
+**Summarised by model:** `Claude Sonnet 4.6`
 
 Maps Hong Kong (`ZH_TW`) cards in the database to their Japanese (`JA_JP`) counterparts by linking them to the same `PrimaryCard` record.
 
@@ -17,6 +20,9 @@ npx tsx scrapers/map-hk-to-jp.ts --apply
 
 # Apply without confirmation prompt
 npx tsx scrapers/map-hk-to-jp.ts --apply --yes
+
+# Apply only one partial-coverage expansion (e.g. M4)
+npx tsx scrapers/map-hk-to-jp.ts --apply m4
 ```
 
 ---
@@ -74,8 +80,11 @@ Two expansions are hard-coded as excluded regardless of apparent match rate:
 For each HK card in the database the script:
 
 1. Looks up the card in the HK JSON source (`hkSrcByWebId`). If not found → `notInJsonHK`.
-2. Skips the card if its expansion is not in `fullMatchExpansions` → `skippedNon100`.
-3. Attempts an **exact** variant match (`jpLookup`), then falls back to **any** variant (`jpLookupAny`). If neither matches → `unmatchedHK`.
+2. **Routes by expansion coverage:**
+   - If the expansion is in `OFFSET_EXPANSIONS` (`SVK`, `SVHK`) → skip entirely (`skippedNon100`). Handled by dedicated fix scripts.
+   - If the expansion is **not** in `fullMatchExpansions` (partial coverage) → still attempts matching, but results are stored in `partialExpUpdates` (a separate per-expansion queue requiring manual confirmation). Requires **supertype** to also match (collector-number alone is not safe for partial sets).
+   - If the expansion is in `fullMatchExpansions` (100% coverage) → results go into the normal `updates` queue.
+3. Attempts an **exact** variant match (`jpLookup`), then falls back to **any** variant (`jpLookupAny`). If neither matches → `unmatchedHK` (or `skippedNon100` for partial expansions).
 4. **Pokédex cross-check** (Pokémon cards only): if both cards have a `pokedexNumber` and they differ, logs a `pokedexMismatch` warning but **still proceeds** — HK dex data is known to be unreliable.
 5. Looks up the matched JP card in the database (`jpDbByWebId`). If not found → `noJPInDB`.
 6. Checks if the HK card is already pointing at the correct JP `PrimaryCard` → `alreadyLinked`.
@@ -145,12 +154,30 @@ Fields to sync from HK → JP:
 
 When `--apply` is passed:
 
-1. **Confirmation prompt** — shows total number of DB changes; requires typing `yes` (skipped with `--yes`).
-2. **Batch updates** — HK cards are updated in chunks of 200 inside `prisma.$transaction` calls:
+1. **Confirmation prompt** — shows total number of DB changes; requires typing `yes` (skipped with `--yes` or when targeting a specific expansion).
+2. **Batch updates (full-match expansions)** — HK cards from 100%-coverage expansions are updated in chunks of 200 inside `prisma.$transaction` calls:
    - `primaryCardId` is set to the JP card's `PrimaryCard` ID.
    - Any computed `syncFields` are applied in the same update.
-3. **Reverse sync** — JP cards with missing `regulationMark` are updated from HK data, also in chunks of 200.
-4. **Orphan cleanup** — after relinking, any `PrimaryCard` record that was HK-only (now has no cards pointing to it) is deleted.
+3. **Partial-expansion interactive flow** — For each partial-coverage expansion a per-expansion prompt is shown:
+   ```
+   Expansion M4: 84 HK cards matched to JP  (84/120 JP cards = 70% matched)
+     Apply 84 links for M4? (yes/no):
+   ```
+   - Answer `yes` to link that expansion, `no` to skip it.
+   - Skipped with `--yes` or when using `--apply <expansion>` to target one expansion directly.
+4. **Reverse sync** — JP cards with missing `regulationMark` are updated from HK data, also in chunks of 200. (Skipped when targeting a specific expansion.)
+5. **Orphan cleanup** — after relinking, any `PrimaryCard` record that was HK-only (now has no cards pointing to it) is deleted.
+
+### Targeting a Single Partial Expansion
+
+```bash
+npx tsx scrapers/map-hk-to-jp.ts --apply m4
+```
+
+- Only the `M4` expansion updates are applied (case-insensitive).
+- Per-expansion confirmation is skipped automatically.
+- Reverse sync and global confirmation are also skipped.
+- If the named expansion does not exist in `partialExpUpdates`, the script reports available partial expansions and exits.
 
 ---
 
