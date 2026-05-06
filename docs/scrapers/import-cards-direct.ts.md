@@ -1,8 +1,8 @@
 # import-cards-direct.ts — Documentation
 
 **Source file:** `scrapers/import-cards-direct.ts`
-**Last modified:** `2026-04-24 00:13`
-**MD5:** `6E4C7F8D17B97FD00EA29F8F8F26DA7E`
+**Last modified:** `2026-05-06 21:01`
+**MD5:** `FB7A11407A543DA6F4F6D1FC290DDA87`
 **Summarised by model:** `Claude Sonnet 4.6`
 
 Directly imports card data from JSON files into the database using Prisma Client. This script is the recommended method as it bypasses the API layer's DTO validation and allows direct manipulation of the database schema.
@@ -49,7 +49,8 @@ For every card object found in the JSON files, the script performs extensive nor
 1. **WebCardId/PrimaryCardId**: The `webCardId` is used as the primary key for deduplication. The script attempts to derive the `PrimaryCardId` and `PrimaryExpansion` ID if they are missing.
 2. **Language/Region**: Determines the `LanguageCode` and `Region` based on the source folder.
 3. **Attribute Mapping**: Maps scraped text codes (e.g., JP rarity codes like `AR`, `SAR`) to the correct Prisma enums.
-4. **Data Structure**: Builds a standardized `Card` object containing all necessary fields for the database.
+4. **`collectorNumber`**: The raw scraper field (e.g., `"062/071"`) is passed through directly to `Card.collectorNumber`. The number-only portion (e.g., `"062"`) is separately extracted for `PrimaryCard.cardNumber` via `collectorNumber.split('/')[0]`.
+5. **Data Structure**: Builds a standardized `Card` object containing all necessary fields for the database.
 
 ### Step 4 — Database Upsert Logic
 
@@ -77,6 +78,7 @@ The script intelligently handles field synchronization:
 | **Direct Import** | Bypasses API validation, allowing bulk data loading from raw scrapes. |
 | **WebCardId as Key** | Ensures global uniqueness across all languages and regions. |
 | **PrimaryCardId Derivation** | Uses `[primaryExpansionId, cardNumber]` as the canonical key, ensuring consistency. |
+| **`collectorNumber` stored on `Card`** | Each regional print has its own collector number (e.g., sv5M `062/071` vs SVN `020/...`). Storing it on `Card` (not `PrimaryCard`) correctly models per-print numbering. The number-only portion is still extracted into `PrimaryCard.cardNumber`. |
 | **Language/Region Mapping** | Uses explicit maps (`SUPERTYPE_MAP`, etc.) to ensure correct enum usage. |
 | **Transaction Usage** | Guarantees atomicity for all related inserts/updates, preventing partial data commits. |
 | **Handling Missing Data** | Uses `if (!dbCard.field)` checks to ensure that only missing fields are updated, preserving existing data. |

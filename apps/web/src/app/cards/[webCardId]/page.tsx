@@ -33,6 +33,7 @@ interface CardDetail {
   evolvesTo: string | null;
   evolutionStage: string | null;
   region: string | null;
+  collectorNumber: string | null;
   scrapedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -1635,12 +1636,12 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                 <div className="flex justify-between">
                   <dt className="text-gray-600">擴展包</dt>
                   <dd className="font-medium text-gray-900">
-                    {preferredProduct?.productName || (card.primaryCard.primaryExpansion?.code || card.primaryCard.primaryExpansionId)}
+                    {preferredProduct?.productName || card.regionalExpansion?.primaryExpansion?.code || card.regionalExpansion?.code || (card.primaryCard.primaryExpansion?.code || card.primaryCard.primaryExpansionId)}
                   </dd>
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-gray-600">卡片編號</dt>
-                  <dd className="font-medium text-gray-900">{card.primaryCard.cardNumber}</dd>
+                  <dd className="font-medium text-gray-900">{card.collectorNumber || card.primaryCard.cardNumber}</dd>
                 </div>
                 {(() => {
                     const date = card.primaryCard.primaryExpansion?.releaseDate

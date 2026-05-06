@@ -409,6 +409,7 @@ async function importCardOptimized(prisma: PrismaClient, card: any) {
       imageUrl: card.imageUrl || null,
       imageUrlHiRes: card.imageUrlHiRes || null,
       sourceUrl: card.sourceUrl || null,
+      collectorNumber: card.collectorNumber || null,
       variantType,
     },
     create: {
@@ -440,6 +441,7 @@ async function importCardOptimized(prisma: PrismaClient, card: any) {
       imageUrl: card.imageUrl || null,
       imageUrlHiRes: card.imageUrlHiRes || null,
       sourceUrl: card.sourceUrl || null,
+      collectorNumber: card.collectorNumber || null,
     },
   });
 }

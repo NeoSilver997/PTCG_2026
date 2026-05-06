@@ -66,19 +66,26 @@ const CHUNK = 200;
 // ─────────────────────────────────────────────────────────────
 
 /**
- * Compute a fingerprint from attack cost + damage only.
+ * Compute a fingerprint from attack cost + damage, HP, and types.
  * These fields are identical across JP and ZH_TW prints of the same card.
  * Card name, attack name, and effect text are excluded (they are translated).
+ * Adding HP and types narrows false-positive collisions between different Pokémon
+ * that happen to share the same attack cost/damage structure.
  *
  * Returns null if the card has no attacks (trainer/energy/Pokémon with no attacks stored).
  */
-function computeAttackFingerprint(attacks: any): string | null {
+function computeAttackFingerprint(
+  attacks: any,
+  hp: number | null,
+  types: string[],
+): string | null {
   if (!attacks || !Array.isArray(attacks) || attacks.length === 0) return null;
   const normalized = attacks.map((a: any) => ({
     cost: [...(a.cost ?? [])].sort().join(','),
     damage: String(a.damage ?? ''),
   }));
-  return JSON.stringify(normalized);
+  const typesKey = [...(types ?? [])].sort().join(',');
+  return `HP:${hp ?? '?'}|T:${typesKey}|${JSON.stringify(normalized)}`;
 }
 
 /**
@@ -187,7 +194,7 @@ async function loadHKOnlyPrimaryCards(): Promise<DbPrimaryCard[]> {
   const pcFingerprint = new Map<string, string | null>();
   for (const c of rawCards) {
     if (!pcFingerprint.has(c.primaryCardId)) {
-      pcFingerprint.set(c.primaryCardId, computeAttackFingerprint(c.attacks));
+      pcFingerprint.set(c.primaryCardId, computeAttackFingerprint(c.attacks, c.hp, c.types));
     }
   }
 
@@ -250,7 +257,7 @@ async function loadJPPrimaryCardsByExpansion(expansionIds: string[]): Promise<Ma
   const jpPcFingerprint = new Map<string, string | null>();
   for (const c of rawJPCards) {
     if (!jpPcFingerprint.has(c.primaryCardId)) {
-      jpPcFingerprint.set(c.primaryCardId, computeAttackFingerprint(c.attacks));
+      jpPcFingerprint.set(c.primaryCardId, computeAttackFingerprint(c.attacks, c.hp, c.types));
     }
   }
 
