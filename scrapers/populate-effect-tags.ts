@@ -637,7 +637,7 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
 
   // HP boost (ZH + JA + EN)
   if (
-    (has('最大HP') && has('+10', '+20', '+30', '+40', '+50', '+60', '+70')) ||
+    (has('最大HP') && /\+\d+/.test(effect)) ||
     (has('最大HP') && has('多くなる', '増える', '大きくなる')) ||
     has('最大HPが') ||
     // EN: "+N HP" for each Pokémon in play
@@ -704,17 +704,36 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     primary.add('弱點消除');
   }
 
-  if (has('受到對手的寶可夢招式的傷害', '傷害「-30」點') && has('【鋼】', '【鬥】')) {
+  if (
+    (has('受到對手的寶可夢招式的傷害') || /傷害「-\d+/.test(effect)) &&
+    has('【鋼】', '【鬥】')
+  ) {
     primary.add('屬性防禦');
   }
 
+  // Energy requirement increase (ZH + EN)
   if (
-    has('使用招式所需的能量', '各增加1個') ||
+    (has('使用招式所需的能量') && has('增加')) ||
+    /各增加\d+個/.test(effect) ||
     // EN
     (has('Retreat Cost') && has('more') && (has('for each', 'is {', 'costs'))) ||
     (has('costs') && has('more Energy') && has('to use', 'to attack'))
   ) {
     primary.add('能量需求增加');
+  }
+
+  // Energy requirement decrease (ZH + JA + EN) — e.g. Counter Gain (反擊増幅器)
+  if (
+    (has('使用招式所需的能量') && has('減少')) ||
+    /各減少\d+個/.test(effect) ||
+    // JA
+    (has('ワザに必要なエネルギー', 'ワザのエネルギー') && has('少なくなる', '少ない', '少なく')) ||
+    (has('使用するためのエネルギー') && has('少なく')) ||
+    // EN
+    /\d+ less Energy/i.test(effect) ||
+    /fewer Energy/i.test(effect)
+  ) {
+    primary.add('能量需求減少');
   }
 
   if (
@@ -800,7 +819,7 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
 
   // Specific Pokemon defense (ZH + JA)
   if (
-    (has('的所有「', '的寶可夢」') && has('傷害「-30」點')) ||
+    (has('的所有「', '的寶可夢」') && /傷害「-\d+/.test(effect)) ||
     (has('すべての「') && has('ダメージ') && has('少なくなる', '減る'))
   ) {
     primary.add('特定寶可夢防禦');
@@ -822,24 +841,29 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     primary.add('招式複製對手');
   }
 
-  // High damage reduction (ZH + JA + EN)
+  // High damage reduction (ZH + JA + EN) — threshold ≥ 70
   if (
-    has('傷害「-80', '傷害「-100') ||
-    has('受けるダメージは「80」少なくなる', '受けるダメージは「100」少なくなる',
-        '受けるダメージを80少なく', '受けるダメージを100少なく') ||
+    (/傷害「-(\d+)/.test(effect) && parseInt(effect.match(/傷害「-(\d+)/)?.[1] ?? '0', 10) >= 70) ||
+    (/受けるダメージは?「?(\d+)」?少なく/.test(effect) &&
+      parseInt(effect.match(/受けるダメージは?「?(\d+)」?少なく/)?.[1] ?? '0', 10) >= 70) ||
     // EN
-    has('takes 80 less damage', 'takes 100 less damage', '80 less damage', '100 less damage')
+    (/takes? (\d+) less damage/i.test(effect) &&
+      parseInt(effect.match(/takes? (\d+) less damage/i)?.[1] ?? '0', 10) >= 70)
   ) {
     primary.add('高額傷害減免');
   }
 
-  // Damage reduction (ZH + JA + EN)
+  // Damage reduction (ZH + JA + EN) — any positive reduction < 70
   if (
-    (has('受到招式的傷害', '傷害「-') && has('-10', '-20', '-30') && !has('【鋼】', '【鬥】', '所有寶可夢')) ||
-    (has('受けるダメージは') && has('「10」少なくなる', '「20」少なくなる', '「30」少なくなる',
-        '10少なくなる', '20少なくなる', '30少なくなる') && !has('80', '100')) ||
+    ((has('受到招式的傷害') || has('傷害「-')) &&
+      /傷害「-(\d+)/.test(effect) &&
+      parseInt(effect.match(/傷害「-(\d+)/)?.[1] ?? '0', 10) < 70 &&
+      !has('【鋼】', '【鬥】', '所有寶可夢')) ||
+    (/受けるダメージは?「?(\d+)」?少なく/.test(effect) &&
+      parseInt(effect.match(/受けるダメージは?「?(\d+)」?少なく/)?.[1] ?? '0', 10) < 70) ||
     // EN
-    (/takes? (?:10|20|30|40|50|60) less damage/i.test(effect) && !has('80', '100'))
+    (/takes? (\d+) less damage/i.test(effect) &&
+      parseInt(effect.match(/takes? (\d+) less damage/i)?.[1] ?? '0', 10) < 70)
   ) {
     primary.add('傷害減免');
   }
@@ -986,8 +1010,13 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
   }
 
   // Energy requirement increase (JA)
-  if (has('使用するためのエネルギー') && has('多く', '1個多く')) {
+  if (has('使用するためのエネルギー') && has('多く')) {
     primary.add('能量需求增加');
+  }
+
+  // Energy requirement decrease (JA) — e.g. Counter Gain (カウンターゲイン)
+  if (has('使用するためのエネルギー') && has('少なく', '少ない')) {
+    primary.add('能量需求減少');
   }
 
   // Graveyard damage bonus (JA + EN)
@@ -1135,7 +1164,7 @@ const PRIMARY_SCORES: Record<string, number> = {
   '道具消除': 3, '道具移除': 3, '招式封鎖': 3, '招式鎖定': 2,
   '招式複製': 3, '招式複製對手': 3, '物品卡封鎖': 3,
   '撤退封鎖': 2, '撤退干擾': 2, '附著干擾': 3, '支援者限制': 1,
-  '能量需求增加': 3,
+  '能量需求增加': 3, '能量需求減少': 3,
   // Positioning / Utility
   '對手切換': 9, '位置控制': 3, '切換效果': 2, '情報收集': 2, '情報效果': 2,
   '進化支援': 3, '進化效果': 3, '獎賞控制': 2,
