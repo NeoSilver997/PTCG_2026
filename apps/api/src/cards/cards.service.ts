@@ -943,6 +943,8 @@ export class CardsService {
         name: true,
         language: true,
         variantType: true,
+        rarity: true,
+        collectorNumber: true,
         imageUrl: true,
         regionalExpansion: {
           select: {

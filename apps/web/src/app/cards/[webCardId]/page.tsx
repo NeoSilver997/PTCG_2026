@@ -79,6 +79,8 @@ interface CardDetail {
     name: string;
     language: string;
     variantType: string;
+    rarity: string | null;
+    collectorNumber: string | null;
     imageUrl: string | null;
     regionalExpansion: {
       code: string;
@@ -640,7 +642,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
 
                   {/* Expansion Code and Card Number */}
                   <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded-full">
-                    {(currentVariant?.regionalExpansion?.primaryExpansion?.code || currentVariant?.regionalExpansion?.code || card.primaryCard?.primaryExpansion?.code || 'N/A').toUpperCase()} #{card.primaryCard?.cardNumber || 'N/A'} {currentVariantIndex + 1}/{allVariants.length}
+                    {(currentVariant?.regionalExpansion?.primaryExpansion?.code || currentVariant?.regionalExpansion?.code || card.primaryCard?.primaryExpansion?.code || 'N/A').toUpperCase()} #{currentVariant?.collectorNumber || card.collectorNumber || card.primaryCard?.cardNumber || 'N/A'} {currentVariantIndex + 1}/{allVariants.length}
                   </div>
                 </>
               )}
@@ -1636,12 +1638,12 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                 <div className="flex justify-between">
                   <dt className="text-gray-600">擴展包</dt>
                   <dd className="font-medium text-gray-900">
-                    {preferredProduct?.productName || card.regionalExpansion?.primaryExpansion?.code || card.regionalExpansion?.code || (card.primaryCard.primaryExpansion?.code || card.primaryCard.primaryExpansionId)}
+                    {currentVariant?.regionalExpansion?.primaryExpansion?.code || currentVariant?.regionalExpansion?.code || preferredProduct?.productName || card.regionalExpansion?.primaryExpansion?.code || card.regionalExpansion?.code || card.primaryCard.primaryExpansion?.code || card.primaryCard.primaryExpansionId}
                   </dd>
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-gray-600">卡片編號</dt>
-                  <dd className="font-medium text-gray-900">{card.collectorNumber || card.primaryCard.cardNumber}</dd>
+                  <dd className="font-medium text-gray-900">{currentVariant?.collectorNumber || card.collectorNumber || card.primaryCard.cardNumber}</dd>
                 </div>
                 {(() => {
                     const date = card.primaryCard.primaryExpansion?.releaseDate
