@@ -250,7 +250,18 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     primary.add('硬幣判定');
   }
 
-  // Switch (ZH + JA)
+  // Opponent forced-switch — "Boss's Orders / グズマ" gust effect (tier S)
+  // ZH: 選擇對手的備戰寶可夢，與戰鬥寶可夢互換
+  // JA: 相手のベンチポケモンをバトル場に呼び出す / 相手のバトルポケモンとベンチポケモンを入れ替える
+  if (
+    (has('對手') && has('互換') && has('戰鬥寶可夢')) ||
+    (has('相手') && has('バトル場に呼び出す')) ||
+    (has('相手') && has('バトルポケモンとベンチポケモンを入れ替え'))
+  ) {
+    primary.add('對手切換');
+  }
+
+  // Switch (ZH + JA) — general self-switch / retreat replacement
   if (
     has('切換', '互換') ||
     has('バトル場に呼び出す', 'バトル場のポケモンと入れ替える',
@@ -894,7 +905,7 @@ const PRIMARY_SCORES: Record<string, number> = {
   '撤退封鎖': 2, '撤退干擾': 2, '附著干擾': 3, '支援者限制': 1,
   '能量需求增加': 3,
   // Positioning / Utility
-  '位置控制': 3, '切換效果': 2, '情報收集': 2, '情報效果': 2,
+  '對手切換': 9, '位置控制': 3, '切換效果': 2, '情報收集': 2, '情報效果': 2,
   '進化支援': 3, '進化效果': 3, '獎賞控制': 2,
   '昏厥條件': 3, '連續技': 2, '硬幣判定': 1,
   // Misc
