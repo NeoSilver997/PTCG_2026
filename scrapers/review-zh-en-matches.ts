@@ -1,4 +1,4 @@
-/**
+﻿/**
  * review-zh-en-matches.ts
  *
  * Local review server for ZH_TW → EN_US card mapping.
@@ -123,6 +123,16 @@ interface UpdateRecord {
   matchMethod: string;
 }
 
+interface AmbiguousRecord {
+  zhPrimaryCardId: string;
+  zhPrimaryCardName: string;
+  zhExpansionCode: string | null;
+  zhCards: DbCard[];
+  enCandidates: DbPrimaryCard[];
+  matchMethod: string;
+  reason: string;
+}
+
 export interface ReviewMatch {
   id: string;              // zhPrimaryCardId
   enPrimaryCardId: string;
@@ -140,6 +150,87 @@ export interface ReviewMatch {
   types: string[];
   rarity: string | null;
   regulationMark: string | null;
+}
+
+export interface AmbiguousReview {
+  id: string;              // zhPrimaryCardId
+  zhName: string;
+  zhExpansion: string;
+  zhWebCardId: string;
+  zhImageUrl: string | null;
+  hp: number | null;
+  types: string[];
+  rarity: string | null;
+  regulationMark: string | null;
+  matchMethod: string;
+  reason: string;
+  candidates: {
+    enPrimaryCardId: string;
+    enName: string;
+    enExpansion: string;
+    enWebCardId: string;
+    enImageUrl: string | null;
+    enNumber: string | null;
+    hp: number | null;
+    types: string[];
+    rarity: string | null;
+    regulationMark: string | null;
+  }[];
+}
+
+function toReviewMatch(u: UpdateRecord): ReviewMatch {
+  const zhCard = u.zhCards[0];
+  const enCard = u.enCard;
+  return {
+    id: u.zhPrimaryCardId,
+    enPrimaryCardId: u.enPrimaryCard.id,
+    zhName: u.zhPrimaryCardName,
+    enName: u.enPrimaryCard.name,
+    zhExpansion: u.zhExpansionCode ?? '?',
+    enExpansion: u.enPrimaryCard.expansionCode ?? '?',
+    enNumber: u.enPrimaryCard.cardNumber,
+    matchMethod: u.matchMethod,
+    zhWebCardId: zhCard?.webCardId ?? '',
+    enWebCardId: enCard?.webCardId ?? '',
+    zhImageUrl: zhCard?.imageUrl ?? null,
+    enImageUrl: enCard?.imageUrl ?? null,
+    hp: enCard?.hp ?? zhCard?.hp ?? null,
+    types: enCard?.types ?? zhCard?.types ?? [],
+    rarity: enCard?.rarity ?? zhCard?.rarity ?? null,
+    regulationMark: enCard?.regulationMark ?? zhCard?.regulationMark ?? null,
+  };
+}
+
+function toAmbiguousReview(a: AmbiguousRecord): AmbiguousReview {
+  const zhCard = a.zhCards[0];
+  return {
+    id: a.zhPrimaryCardId,
+    zhName: a.zhPrimaryCardName,
+    zhExpansion: a.zhExpansionCode ?? '?',
+    zhWebCardId: zhCard?.webCardId ?? '',
+    zhImageUrl: zhCard?.imageUrl ?? null,
+    hp: zhCard?.hp ?? null,
+    types: zhCard?.types ?? [],
+    rarity: zhCard?.rarity ?? null,
+    regulationMark: zhCard?.regulationMark ?? null,
+    matchMethod: a.matchMethod,
+    reason: a.reason,
+    candidates: a.enCandidates.map(en => {
+      const enCard = en.cards[0] ?? null;
+      return {
+        enPrimaryCardId: en.id,
+        enName: en.name,
+        enExpansion: en.expansionCode ?? '?',
+        enWebCardId: enCard?.webCardId ?? '',
+        enImageUrl: enCard?.imageUrl ?? null,
+        enNumber: en.cardNumber,
+        hp: enCard?.hp ?? null,
+        types: enCard?.types ?? [],
+        rarity: enCard?.rarity ?? null,
+        regulationMark: enCard?.regulationMark ?? null,
+      };
+    }),
+  };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -259,9 +350,12 @@ async function buildEnByExpansion(
 // ─────────────────────────────────────────────────────────────
 // Matching  (same logic as map-zh-to-en.ts runMatching)
 // ─────────────────────────────────────────────────────────────
-function runMatching(zhCards: DbPrimaryCard[], enByExpansion: Map<string, DbPrimaryCard[]>): UpdateRecord[] {
+function runMatching(
+  zhCards: DbPrimaryCard[],
+  enByExpansion: Map<string, DbPrimaryCard[]>,
+): { updates: UpdateRecord[]; ambiguous: AmbiguousRecord[] } {
   const updates: UpdateRecord[] = [];
-
+  const ambiguous: AmbiguousRecord[] = [];
   const enAtkFpLookup  = new Map<string, Map<string, DbPrimaryCard[]>>();
   const enSpecFpLookup = new Map<string, Map<string, DbPrimaryCard[]>>();
   const enEffFpLookup  = new Map<string, Map<string, DbPrimaryCard[]>>();
@@ -332,6 +426,21 @@ function runMatching(zhCards: DbPrimaryCard[], enByExpansion: Map<string, DbPrim
           zhCards: zh.cards, enPrimaryCard: enCandidates[0],
           enCard: enCandidates[0].cards[0] ?? null, matchMethod: method,
         });
+      } else if (enCandidates.length > 1) {
+        ambiguous.push({
+          zhPrimaryCardId: zh.id, zhPrimaryCardName: zh.name,
+          zhExpansionCode: zh.expansionCode,
+          zhCards: zh.cards, enCandidates, matchMethod: method,
+          reason: `${enCandidates.length} EN candidates share same fingerprint`,
+        });
+      } else if (sibCount > 1) {
+        ambiguous.push({
+          zhPrimaryCardId: zh.id, zhPrimaryCardName: zh.name,
+          zhExpansionCode: zh.expansionCode,
+          zhCards: zh.cards, enCandidates: enCandidates.length === 1 ? enCandidates : [],
+          matchMethod: method,
+          reason: `${sibCount} ZH cards share same fingerprint (reprint)`,
+        });
       }
       matched = true;
     }
@@ -346,21 +455,38 @@ function runMatching(zhCards: DbPrimaryCard[], enByExpansion: Map<string, DbPrim
           zhCards: zh.cards, enPrimaryCard: enCandidates[0],
           enCard: enCandidates[0].cards[0] ?? null, matchMethod: 'effect-tag+regmark',
         });
+      } else if (enCandidates.length > 1) {
+        ambiguous.push({
+          zhPrimaryCardId: zh.id, zhPrimaryCardName: zh.name,
+          zhExpansionCode: zh.expansionCode,
+          zhCards: zh.cards, enCandidates, matchMethod: 'effect-tag+regmark',
+          reason: `${enCandidates.length} EN candidates share same effect fingerprint`,
+        });
+      } else if (sibCount > 1) {
+        ambiguous.push({
+          zhPrimaryCardId: zh.id, zhPrimaryCardName: zh.name,
+          zhExpansionCode: zh.expansionCode,
+          zhCards: zh.cards, enCandidates: enCandidates.length === 1 ? enCandidates : [],
+          matchMethod: 'effect-tag+regmark',
+          reason: `${sibCount} ZH cards share same effect fingerprint (reprint)`,
+        });
       }
     }
   }
-  return updates;
+  return { updates, ambiguous };
 }
 
 // ─────────────────────────────────────────────────────────────
 // Match cache (built once on first request)
 // ─────────────────────────────────────────────────────────────
 let cachedUpdates: UpdateRecord[] | null = null;
+let cachedAmbiguous: AmbiguousRecord[] | null = null;
 let cacheBuilding = false;
-let cacheCallbacks: Array<(u: UpdateRecord[]) => void> = [];
+let cacheCallbacks: Array<(u: UpdateRecord[], a: AmbiguousRecord[]) => void> = [];
 
-function getMatches(): Promise<UpdateRecord[]> {
-  if (cachedUpdates !== null) return Promise.resolve(cachedUpdates);
+function getMatches(): Promise<{ updates: UpdateRecord[]; ambiguous: AmbiguousRecord[] }> {
+  if (cachedUpdates !== null && cachedAmbiguous !== null)
+    return Promise.resolve({ updates: cachedUpdates, ambiguous: cachedAmbiguous });
   return new Promise(resolve => {
     cacheCallbacks.push(resolve);
     if (cacheBuilding) return;
@@ -370,92 +496,19 @@ function getMatches(): Promise<UpdateRecord[]> {
       const zhOnly   = await loadPCards('ZH_TW', 'EN_US');
       const allEnOnly = await loadPCards('EN_US', 'ZH_TW');
       const enByExpansion = await buildEnByExpansion(zhOnly, allEnOnly);
-      cachedUpdates = runMatching(zhOnly, enByExpansion);
-      console.log(`Cache ready: ${cachedUpdates.length} matches`);
+      const result = runMatching(zhOnly, enByExpansion);
+      cachedUpdates = result.updates;
+      cachedAmbiguous = result.ambiguous;
+      console.log(`Cache ready: ${cachedUpdates.length} matches, ${cachedAmbiguous.length} ambiguous`);
       const cbs = cacheCallbacks; cacheCallbacks = [];
-      for (const cb of cbs) cb(cachedUpdates!);
+      for (const cb of cbs) cb(cachedUpdates!, cachedAmbiguous!);
     })().catch(e => {
       console.error('Cache build error:', e);
       cacheBuilding = false;
       const cbs = cacheCallbacks; cacheCallbacks = [];
-      for (const cb of cbs) cb([]);
+      for (const cb of cbs) cb([], []);
     });
   });
-}
-
-function toReviewMatch(u: UpdateRecord): ReviewMatch {
-  const zhCard = u.zhCards[0];
-  const enCard = u.enCard;
-  return {
-    id: u.zhPrimaryCardId,
-    enPrimaryCardId: u.enPrimaryCard.id,
-    zhName: u.zhPrimaryCardName,
-    enName: u.enPrimaryCard.name,
-    zhExpansion: u.zhExpansionCode ?? '?',
-    enExpansion: u.enPrimaryCard.expansionCode ?? '?',
-    enNumber: u.enPrimaryCard.cardNumber,
-    matchMethod: u.matchMethod,
-    zhWebCardId: zhCard?.webCardId ?? '',
-    enWebCardId: enCard?.webCardId ?? '',
-    zhImageUrl: zhCard?.imageUrl ?? null,
-    enImageUrl: enCard?.imageUrl ?? null,
-    hp: enCard?.hp ?? zhCard?.hp ?? null,
-    types: enCard?.types ?? zhCard?.types ?? [],
-    rarity: enCard?.rarity ?? zhCard?.rarity ?? null,
-    regulationMark: enCard?.regulationMark ?? zhCard?.regulationMark ?? null,
-  };
-}
-
-// ─────────────────────────────────────────────────────────────
-// Apply confirmed
-// ─────────────────────────────────────────────────────────────
-async function applyConfirmed(ids: string[], allUpdates: UpdateRecord[]): Promise<{ applied: number; deleted: number }> {
-  const toApply = allUpdates.filter(u => ids.includes(u.zhPrimaryCardId));
-  const orphanIds = new Set<string>();
-  const CHUNK = 200;
-  let applied = 0;
-
-  for (let i = 0; i < toApply.length; i += CHUNK) {
-    const chunk = toApply.slice(i, i + CHUNK);
-    const ops: Promise<any>[] = [];
-    for (const u of chunk) {
-      orphanIds.add(u.enPrimaryCard.id);
-      const enCard = u.enCard;
-      for (const ec of u.enPrimaryCard.cards) {
-        ops.push(prisma.card.update({ where: { id: ec.id }, data: { primaryCardId: u.zhPrimaryCardId } }));
-      }
-      if (enCard) {
-        for (const zc of u.zhCards) {
-          const sync: Record<string, unknown> = {};
-          if (enCard.rarity && zc.rarity !== enCard.rarity)                        sync.rarity       = enCard.rarity;
-          if (enCard.variantType && zc.variantType !== enCard.variantType)          sync.variantType  = enCard.variantType;
-          if (enCard.regulationMark && zc.regulationMark !== enCard.regulationMark) sync.regulationMark = enCard.regulationMark;
-          if (!zc.artist     && enCard.artist)     sync.artist     = enCard.artist;
-          if (!zc.evolvesFrom && enCard.evolvesFrom) sync.evolvesFrom = enCard.evolvesFrom;
-          if (!zc.ruleBox    && enCard.ruleBox)    sync.ruleBox    = enCard.ruleBox;
-          if ((!zc.subtypes || zc.subtypes.length === 0) && enCard.subtypes?.length > 0)
-            sync.subtypes = enCard.subtypes;
-          if (Object.keys(sync).length > 0)
-            ops.push(prisma.card.update({ where: { id: zc.id }, data: sync }));
-          if (!enCard.regulationMark && zc.regulationMark)
-            ops.push(prisma.card.update({ where: { id: enCard.id }, data: { regulationMark: zc.regulationMark } }));
-        }
-      }
-    }
-    await prisma.$transaction(ops);
-    applied += chunk.reduce((s, u) => s + u.enPrimaryCard.cards.length, 0);
-  }
-
-  let deleted = 0;
-  for (const pcId of orphanIds) {
-    const remaining = await prisma.card.count({ where: { primaryCardId: pcId } });
-    if (remaining === 0) { await prisma.primaryCard.delete({ where: { id: pcId } }); deleted++; }
-  }
-
-  // Invalidate cache so next request re-runs matching
-  cachedUpdates = null;
-  cacheBuilding = false;
-  return { applied, deleted };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -527,13 +580,22 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px
 .tog.off:hover{background:#3d444e}
 #toast{position:fixed;bottom:20px;right:20px;background:#1b3626;border:1px solid #238636;color:#3fb950;padding:12px 20px;border-radius:8px;display:none;font-weight:600;z-index:100;max-width:340px}
 #toast.err{background:#3d1a1a;border-color:#f85149;color:#f85149}
-.empty{padding:40px;text-align:center;color:#8b949e}
+ .empty{padding:40px;text-align:center;color:#8b949e}
+ .candidates{display:flex;gap:6px;overflow-x:auto;padding:4px 0}
+ .candidate-card{display:flex;flex-direction:column;gap:2px;align-items:center;min-width:0}
+ .candidate-card .card-img-wrap{width:60px;height:84px}
+ .candidate-card .card-name{font-size:11px}
+ .candidate-card .card-id{font-size:9px}
+ .reason{font-size:10px;color:#f0883e;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 </style>
 </head>
 <body>
 <div id="topbar">
   <h1>ZH &#8594; EN Card Review</h1>
   <span class="stat" id="stat-label">Loading...</span>
+  <span class="stat" id="stat-ambig"></span>
+  <button class="btn btn-ghost tab-btn active" id="tab-matches" onclick="switchTab('matches')">Matches</button>
+  <button class="btn btn-ghost tab-btn" id="tab-ambiguous" onclick="switchTab('ambiguous')">Ambiguous</button>
   <select id="filter-exp" onchange="applyFilters()"><option value="">All expansions</option></select>
   <select id="filter-method" onchange="applyFilters()">
     <option value="">All methods</option>
@@ -547,14 +609,54 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px
 </div>
 <div id="loading">Loading matches&#8230;</div>
 <div id="matches" style="display:none"></div>
+<div id="ambiguous" style="display:none"></div>
 <div id="toast"></div>
 
 <script>
 var state = {
   matches: [],
+  ambiguous: [],
   confirmed: {},
+  activeTab: 'matches',
   filter: { exp: '', method: '' }
 };
+
+function rebuildExpFilter() {
+  var sel = document.getElementById('filter-exp');
+  var prev = sel.value;
+  if (state.activeTab === 'matches') {
+    var exps = [];
+    state.matches.forEach(function(m) { if (exps.indexOf(m.enExpansion) === -1) exps.push(m.enExpansion); });
+    exps.sort();
+    sel.innerHTML = '<option value="">All (' + state.matches.length + ')</option>';
+    exps.forEach(function(e) {
+      var count = state.matches.filter(function(m) { return m.enExpansion === e; }).length;
+      sel.innerHTML += '<option value="' + esc(e) + '">' + esc(e) + ' (' + count + ')</option>';
+    });
+  } else {
+    var exps = [];
+    state.ambiguous.forEach(function(a) { if (exps.indexOf(a.zhExpansion) === -1) exps.push(a.zhExpansion); });
+    exps.sort();
+    sel.innerHTML = '<option value="">All (' + state.ambiguous.length + ')</option>';
+    exps.forEach(function(e) {
+      var count = state.ambiguous.filter(function(a) { return a.zhExpansion === e; }).length;
+      sel.innerHTML += '<option value="' + esc(e) + '">' + esc(e) + ' (' + count + ')</option>';
+    });
+  }
+  if (prev) sel.value = prev;
+  if (!sel.value) state.filter.exp = '';
+}
+
+function switchTab(tab) {
+  state.activeTab = tab;
+  state.filter.exp = '';
+  document.getElementById('tab-matches').className = 'btn btn-ghost tab-btn' + (tab === 'matches' ? ' active' : '');
+  document.getElementById('tab-ambiguous').className = 'btn btn-ghost tab-btn' + (tab === 'ambiguous' ? ' active' : '');
+  document.getElementById('matches').style.display = tab === 'matches' ? 'block' : 'none';
+  document.getElementById('ambiguous').style.display = tab === 'ambiguous' ? 'block' : 'none';
+  rebuildExpFilter();
+  renderMatches();
+}
 
 function esc(s) {
   if (s === null || s === undefined) return '';
@@ -567,7 +669,9 @@ function esc(s) {
 
 function imgSrc(url) {
   if (!url) return '';
+  // Handle both remote URLs and local paths
   if (url.indexOf('http') === 0) return url;
+  // For local paths, serve via /local-img endpoint
   return '/local-img?p=' + encodeURIComponent(url);
 }
 
@@ -633,36 +737,88 @@ function renderRow(m) {
   return p.join('');
 }
 
-function filtered() {
-  return state.matches.filter(function(m) {
-    if (state.filter.exp && m.expansion !== state.filter.exp) return false;
-    if (state.filter.method && m.matchMethod !== state.filter.method) return false;
-    return true;
+function renderAmbiguousRow(a) {
+  var isOn = state.confirmed[a.id] !== false;
+  var p = [];
+  p.push('<div class="row' + (isOn ? '' : ' skipped') + '" id="r-' + esc(a.id) + '">');
+  p.push(cardSide(a.zhName, a.zhWebCardId, a.zhImageUrl, a.hp, a.types, a.rarity, a.regulationMark, false));
+  p.push('<div class="mid">');
+  p.push('<div class="exp-row">');
+  p.push('<span class="exp-zh">' + esc(a.zhExpansion) + '</span>');
+  p.push('</div>');
+  p.push('<span class="method-badge ' + methodClass(a.matchMethod) + '">' + methodLabel(a.matchMethod) + '</span>');
+  p.push('<div class="reason" title="' + esc(a.reason) + '">' + esc(a.reason) + '</div>');
+  p.push('</div>');
+  p.push('<div class="candidates">');
+  a.candidates.forEach(function(c, idx) {
+    p.push('<div class="candidate-card">');
+    p.push(cardSide(c.enName, c.enWebCardId, c.enImageUrl, c.hp, c.types, c.rarity, c.regulationMark, true));
+    p.push('<div class="exp-badge">' + esc(c.enExpansion) + (c.enNumber ? ' #' + esc(c.enNumber) : '') + '</div>');
+    p.push('</div>');
   });
+  p.push('</div>');
+  p.push('<div class="act">');
+  p.push('<button class="tog ' + (isOn ? 'on' : 'off') + '" onclick="toggle(\\'' + esc(a.id) + '\\')"> ' + (isOn ? '&#10003; Link' : '&#10007; Skip') + '</button>');
+  p.push('</div>');
+  p.push('</div>');
+  return p.join('');
+}
+
+function filtered() {
+  if (state.activeTab === 'matches') {
+    return state.matches.filter(function(m) {
+      if (state.filter.exp && m.enExpansion !== state.filter.exp) return false;
+      if (state.filter.method && m.matchMethod !== state.filter.method) return false;
+      return true;
+    });
+   } else {
+     return state.ambiguous.filter(function(a) {
+       if (state.filter.exp && !a.candidates.some(function(c) { return c.enExpansion === state.filter.exp; })) return false;
+       if (state.filter.method && a.matchMethod !== state.filter.method) return false;
+       return true;
+     });
+   }
 }
 
 function renderMatches() {
   var vis = filtered();
   if (vis.length === 0) {
-    document.getElementById('matches').innerHTML = '<div class="empty">No matches for current filter</div>';
+    var container = state.activeTab === 'matches' ? 'matches' : 'ambiguous';
+    document.getElementById(container).innerHTML = '<div class="empty">No ' + state.activeTab + ' for current filter</div>';
     updateStats();
     return;
   }
-  // Group by EN expansion for cleaner browsing
-  var byExp = {};
-  vis.forEach(function(m) {
-    var key = m.enExpansion;
-    if (!byExp[key]) byExp[key] = [];
-    byExp[key].push(m);
-  });
-  var html = [];
-  Object.keys(byExp).sort().forEach(function(exp) {
-    var rows = byExp[exp];
-    var confirmed = rows.filter(function(m) { return state.confirmed[m.id] !== false; }).length;
-    html.push('<div class="section-head">' + esc(exp) + ' &mdash; ' + confirmed + ' / ' + rows.length + ' confirmed</div>');
-    rows.forEach(function(m) { html.push(renderRow(m)); });
-  });
-  document.getElementById('matches').innerHTML = html.join('');
+  if (state.activeTab === 'matches') {
+    var byExp = {};
+    vis.forEach(function(m) {
+      var key = m.enExpansion;
+      if (!byExp[key]) byExp[key] = [];
+      byExp[key].push(m);
+    });
+    var html = [];
+    Object.keys(byExp).sort().forEach(function(exp) {
+      var rows = byExp[exp];
+      var confirmed = rows.filter(function(m) { return state.confirmed[m.id] !== false; }).length;
+      html.push('<div class="section-head">' + esc(exp) + ' &mdash; ' + confirmed + ' / ' + rows.length + ' confirmed</div>');
+      rows.forEach(function(m) { html.push(renderRow(m)); });
+    });
+    document.getElementById('matches').innerHTML = html.join('');
+   } else {
+     var byExp = {};
+     vis.forEach(function(a) {
+       var key = a.candidates.length > 0 ? a.candidates[0].enExpansion : a.zhExpansion;
+       if (!byExp[key]) byExp[key] = [];
+       byExp[key].push(a);
+     });
+     var html = [];
+     Object.keys(byExp).sort().forEach(function(exp) {
+       var rows = byExp[exp];
+       var confirmed = rows.filter(function(a) { return state.confirmed[a.id] !== false; }).length;
+       html.push('<div class="section-head">' + esc(exp) + ' &mdash; ' + confirmed + ' / ' + rows.length + ' confirmed</div>');
+       rows.forEach(function(a) { html.push(renderAmbiguousRow(a)); });
+     });
+     document.getElementById('ambiguous').innerHTML = html.join('');
+   }
   updateStats();
 }
 
@@ -721,9 +877,13 @@ function showToast(msg, isErr) {
 }
 
 function doApply() {
-  var ids = state.matches
+  var matchIds = state.matches
     .filter(function(m) { return state.confirmed[m.id] !== false; })
     .map(function(m) { return m.id; });
+  var ambigIds = state.ambiguous
+    .filter(function(a) { return state.confirmed[a.id] !== false && a.candidates && a.candidates.length === 1; })
+    .map(function(a) { return a.id; });
+  var ids = matchIds.concat(ambigIds);
   if (!ids.length) return;
   var btn = document.getElementById('btn-apply');
   btn.disabled = true;
@@ -754,30 +914,34 @@ function doApply() {
 
 function init(data) {
   state.matches = data.matches || [];
+  state.ambiguous = data.ambiguous || [];
   state.confirmed = {};
+  
+  // Initialize confirmed state for both matches and ambiguous records
   state.matches.forEach(function(m) { state.confirmed[m.id] = true; });
+  state.ambiguous.forEach(function(a) { state.confirmed[a.id] = true; }); // Use the same state object for simplicity, but track ambiguous IDs separately if needed later.
 
-  // Populate expansion filter (group by EN expansion)
-  var exps = [];
-  state.matches.forEach(function(m) {
-    if (exps.indexOf(m.enExpansion) === -1) exps.push(m.enExpansion);
-  });
-  exps.sort();
-  var sel = document.getElementById('filter-exp');
-  sel.innerHTML = '<option value="">All (' + state.matches.length + ')</option>';
-  exps.forEach(function(e) {
-    var count = state.matches.filter(function(m) { return m.enExpansion === e; }).length;
-    sel.innerHTML += '<option value="' + esc(e) + '">' + esc(e) + ' (' + count + ')</option>';
-  });
-
+  rebuildExpFilter();
   document.getElementById('loading').style.display = 'none';
-  document.getElementById('matches').style.display = 'block';
+  document.getElementById('matches').style.display = state.activeTab === 'matches' ? 'block' : 'none';
+  document.getElementById('ambiguous').style.display = state.activeTab === 'ambiguous' ? 'block' : 'none';
   renderMatches();
 }
 
 fetch('/api/matches')
   .then(function(r) { return r.json(); })
-  .then(init)
+  .then(function(data) {
+    // Fetch ambiguous matches as well
+    return Promise.all([
+      Promise.resolve(data),
+      fetch('/api/ambiguous').then(function(r) { return r.json(); })
+    ]);
+  })
+  .then(function(results) {
+    var data = results[0];
+    var ambiguousData = results[1];
+    init({ matches: data.matches, ambiguous: ambiguousData.ambiguous });
+  })
   .catch(function(e) {
     document.getElementById('loading').textContent = 'Error: ' + e.message;
   });
@@ -788,6 +952,314 @@ fetch('/api/matches')
 // ─────────────────────────────────────────────────────────────
 // HTTP Server
 // ─────────────────────────────────────────────────────────────
+// ?????????????????????????????????????????????????????????????
+// Linkage Review Page  (/link)
+// ?????????????????????????????????????????????????????????????
+const LINK_PAGE_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ZH?N Linkage Review</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0d1117;color:#c9d1d9;font:13px/1.5 system-ui,sans-serif;padding-bottom:60px}
+#topbar{position:sticky;top:0;z-index:10;background:#161b22;border-bottom:1px solid #30363d;padding:8px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+#topbar h1{font-size:15px;color:#58a6ff;white-space:nowrap}
+#topbar a{color:#8b949e;font-size:12px;text-decoration:none}#topbar a:hover{color:#c9d1d9}
+select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:6px;font-size:12px}
+.stat{color:#8b949e;font-size:12px;white-space:nowrap}
+.green{color:#3fb950}.red{color:#f85149}
+#progress{position:fixed;bottom:0;left:0;right:0;background:#161b22;border-top:1px solid #30363d;padding:8px 16px;display:flex;align-items:center;gap:12px;z-index:20}
+#prog-bar-wrap{flex:1;background:#21262d;border-radius:4px;height:8px;overflow:hidden}
+#prog-bar{height:8px;background:#3fb950;border-radius:4px;transition:width .3s}
+#prog-text{color:#8b949e;font-size:12px;white-space:nowrap;min-width:80px;text-align:right}
+.exp-section{margin:20px 16px 0}
+.exp-header{font-size:14px;font-weight:600;color:#e6edf3;padding:8px 0 6px;border-bottom:1px solid #21262d;margin-bottom:10px;display:flex;align-items:center;gap:10px}
+.exp-header .exp-count{font-size:12px;color:#8b949e;font-weight:400}
+.card-grid{display:flex;flex-wrap:wrap;gap:12px}
+.link-card{background:#161b22;border:2px solid #30363d;border-radius:10px;padding:10px;width:340px;transition:border-color .15s}
+.link-card.done{border-color:#3fb950;opacity:.7}
+.link-card.skipped{border-color:#484f58;opacity:.5}
+.zh-side{display:flex;gap:8px;align-items:flex-start;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #21262d}
+.zh-img{width:70px;height:97px;object-fit:contain;border-radius:4px;background:#0d1117;flex-shrink:0}
+.zh-info{flex:1;min-width:0}
+.zh-name{font-size:13px;font-weight:600;color:#e6edf3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.zh-meta{font-size:11px;color:#8b949e;margin-top:2px}
+.zh-exp{font-size:11px;color:#58a6ff;font-weight:600}
+.reason-tag{display:inline-block;background:#1f2937;border:1px solid #374151;color:#9ca3af;font-size:10px;padding:1px 5px;border-radius:3px;margin-top:4px}
+.candidates-label{font-size:11px;color:#8b949e;margin-bottom:5px}
+.candidates{display:flex;flex-wrap:wrap;gap:6px}
+.cand{cursor:pointer;border:2px solid #30363d;border-radius:7px;padding:5px;transition:border-color .15s,background .15s;position:relative;width:calc(50% - 3px)}
+.cand:hover{border-color:#58a6ff;background:#1a2233}
+.cand.selected{border-color:#3fb950;background:#122318}
+.cand img{width:100%;aspect-ratio:3/4;object-fit:contain;border-radius:4px;background:#0d1117;display:block}
+.cand-meta{font-size:10px;color:#8b949e;text-align:center;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cand-name{font-size:11px;color:#e6edf3;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cand-tick{position:absolute;top:3px;right:3px;background:#3fb950;color:#fff;border-radius:50%;width:16px;height:16px;font-size:10px;display:none;align-items:center;justify-content:center}
+.cand.selected .cand-tick{display:flex}
+.card-actions{display:flex;gap:6px;margin-top:8px}
+.btn-skip{flex:1;background:#21262d;border:1px solid #30363d;color:#8b949e;padding:5px;border-radius:6px;cursor:pointer;font-size:12px}
+.btn-skip:hover{background:#30363d;color:#c9d1d9}
+.btn-apply{flex:2;background:#238636;border:1px solid #2ea043;color:#fff;padding:5px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600}
+.btn-apply:hover:not(:disabled){background:#2ea043}
+.btn-apply:disabled{opacity:.5;cursor:default}
+.done-badge{font-size:11px;color:#3fb950;text-align:center;padding:4px 0}
+.skip-badge{font-size:11px;color:#8b949e;text-align:center;padding:4px 0}
+#loading{padding:40px;text-align:center;color:#8b949e}
+#toast{position:fixed;bottom:60px;left:50%;transform:translateX(-50%);background:#161b22;border:1px solid #30363d;color:#c9d1d9;padding:8px 16px;border-radius:8px;font-size:13px;display:none;z-index:30}
+#toast.err{border-color:#f85149;color:#f85149}
+</style>
+</head>
+<body>
+<div id="topbar">
+  <h1>ZH&#8594;EN Linkage</h1>
+  <a href="/">&#8592; Main Review</a>
+  <select id="filter-exp" onchange="filterExp(this.value)"><option value="">All expansions</option></select>
+  <span class="stat" id="stat-total"></span>
+  <span class="stat green" id="stat-linked"></span>
+  <span class="stat" id="stat-remain"></span>
+</div>
+<div id="loading">Loading ambiguous cards&#8230;</div>
+<div id="content"></div>
+<div id="progress" style="display:none">
+  <div id="prog-bar-wrap"><div id="prog-bar" style="width:0%"></div></div>
+  <div id="prog-text">0 / 0</div>
+</div>
+<div id="toast"></div>
+
+<script>
+var state = {
+  all: [],
+  byExp: {},
+  expList: [],
+  resolved: {},  // id -> 'linked' | 'skipped'
+  selected: {},  // id -> enPrimaryCardId
+  activeExp: ''
+};
+
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function imgSrc(url) {
+  if (!url) return '';
+  if (url.indexOf('http') === 0) return url;
+  return '/local-img?p=' + encodeURIComponent(url);
+}
+
+function showToast(msg, isErr) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = isErr ? 'err' : '';
+  t.style.display = 'block';
+  clearTimeout(t._tid);
+  t._tid = setTimeout(function(){ t.style.display='none'; }, 3000);
+}
+
+function updateProgress() {
+  var total = state.all.length;
+  var linked = Object.values(state.resolved).filter(function(v){ return v==='linked'; }).length;
+  var skipped = Object.values(state.resolved).filter(function(v){ return v==='skipped'; }).length;
+  var done = linked + skipped;
+  document.getElementById('stat-total').textContent = total + ' ambiguous';
+  document.getElementById('stat-linked').textContent = '\u2713 ' + linked + ' linked';
+  document.getElementById('stat-remain').textContent = (total - done) + ' remaining';
+  if (total > 0) {
+    document.getElementById('progress').style.display = 'flex';
+    document.getElementById('prog-bar').style.width = Math.round(done/total*100) + '%';
+    document.getElementById('prog-text').textContent = done + ' / ' + total;
+  }
+}
+
+function filterExp(exp) {
+  state.activeExp = exp;
+  render();
+}
+
+function buildExpFilter() {
+  var sel = document.getElementById('filter-exp');
+  sel.innerHTML = '<option value="">All expansions (' + state.all.length + ')</option>';
+  state.expList.forEach(function(e) {
+    var count = (state.byExp[e] || []).length;
+    sel.innerHTML += '<option value="' + esc(e) + '">' + esc(e) + ' (' + count + ')</option>';
+  });
+  if (state.activeExp) sel.value = state.activeExp;
+}
+
+function handleCandClick(el) { selectCandidate(el.dataset.cardid, el.dataset.enid); }
+function handleSkip(el) { skipCard(el.dataset.cardid); }
+function handleApply(el) { applyCard(el.dataset.cardid); }
+
+function selectCandidate(cardId, enPrimaryCardId) {
+  state.selected[cardId] = enPrimaryCardId;
+  // Update UI of all candidate buttons in this card
+  var row = document.getElementById('lc-' + cardId);
+  if (!row) return;
+  row.querySelectorAll('.cand').forEach(function(el) {
+    el.classList.toggle('selected', el.dataset.enid === enPrimaryCardId);
+  });
+  var applyBtn = row.querySelector('.btn-apply');
+  if (applyBtn) applyBtn.disabled = false;
+}
+
+function skipCard(cardId) {
+  state.resolved[cardId] = 'skipped';
+  var row = document.getElementById('lc-' + cardId);
+  if (row) {
+    row.classList.add('skipped');
+    row.querySelector('.card-actions').innerHTML = '<div class="skip-badge">&#10007; Skipped</div>';
+  }
+  updateProgress();
+}
+
+function applyCard(cardId) {
+  var enId = state.selected[cardId];
+  if (!enId) return;
+  var row = document.getElementById('lc-' + cardId);
+  var btn = row ? row.querySelector('.btn-apply') : null;
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving\u2026'; }
+  fetch('/api/link-one', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ zhId: cardId, enId: enId })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data) {
+    if (data.error) throw new Error(data.error);
+    state.resolved[cardId] = 'linked';
+    if (row) {
+      row.classList.add('done');
+      row.querySelector('.card-actions').innerHTML = '<div class="done-badge">&#10003; Linked</div>';
+    }
+    updateProgress();
+  })
+  .catch(function(e) {
+    showToast('Error: ' + e.message, true);
+    if (btn) { btn.disabled = false; btn.textContent = 'Link'; }
+  });
+}
+
+function renderCard(a) {
+  var resolved = state.resolved[a.id];
+  var selectedEnId = state.selected[a.id];
+  var p = [];
+  p.push('<div class="link-card' + (resolved==='done'?' done':resolved==='skipped'?' skipped':'') + '" id="lc-' + esc(a.id) + '">');
+  // ZH side
+  p.push('<div class="zh-side">');
+  if (a.zhImageUrl) {
+    p.push('<img class="zh-img" src="' + esc(imgSrc(a.zhImageUrl)) + '" loading="lazy" alt="" onerror="this.hidden=true">');
+  } else {
+    p.push('<div class="zh-img" style="display:flex;align-items:center;justify-content:center;color:#484f58;font-size:11px">No img</div>');
+  }
+  p.push('<div class="zh-info">');
+  p.push('<div class="zh-name">' + esc(a.zhName) + '</div>');
+  p.push('<div class="zh-exp">' + esc(a.zhExpansion) + '</div>');
+  var meta = [];
+  if (a.hp) meta.push('HP ' + a.hp);
+  if (a.types && a.types.length) meta.push(a.types.join('/'));
+  if (a.rarity) meta.push(a.rarity);
+  if (a.regulationMark) meta.push('Reg:' + a.regulationMark);
+  if (meta.length) p.push('<div class="zh-meta">' + esc(meta.join(' \u00b7 ')) + '</div>');
+  p.push('<div class="reason-tag">' + esc(a.reason || a.matchMethod) + '</div>');
+  p.push('</div></div>');
+  // Candidates
+  p.push('<div class="candidates-label">' + a.candidates.length + ' candidate' + (a.candidates.length!==1?'s':'') + ' \u2014 click to select:</div>');
+  p.push('<div class="candidates">');
+  a.candidates.forEach(function(c) {
+    var isSel = selectedEnId === c.enPrimaryCardId;
+    p.push('<div class="cand' + (isSel?' selected':'') + '" data-cardid="' + esc(a.id) + '" data-enid="' + esc(c.enPrimaryCardId) + '" onclick="handleCandClick(this)">');
+    p.push('<div class="cand-tick">\u2713</div>');
+    if (c.enImageUrl) {
+      p.push('<img src="' + esc(imgSrc(c.enImageUrl)) + '" loading="lazy" alt="" onerror="this.hidden=true">');
+    } else {
+      p.push('<div style="aspect-ratio:3/4;background:#0d1117;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#484f58;font-size:10px">No img</div>');
+    }
+    p.push('<div class="cand-name">' + esc(c.enName) + '</div>');
+    var cmeta = [esc(c.enExpansion)];
+    if (c.enNumber) cmeta.push('#'+esc(c.enNumber));
+    if (c.hp) cmeta.push('HP'+c.hp);
+    p.push('<div class="cand-meta">' + cmeta.join(' ') + '</div>');
+    p.push('</div>');
+  });
+  p.push('</div>');
+  // Actions
+  p.push('<div class="card-actions">');
+  if (resolved === 'linked') {
+    p.push('<div class="done-badge">\u2713 Linked</div>');
+  } else if (resolved === 'skipped') {
+    p.push('<div class="skip-badge">\u2717 Skipped</div>');
+  } else {
+    p.push('<button class="btn-skip" data-cardid="' + esc(a.id) + '" onclick="handleSkip(this)">Skip</button>');
+    p.push('<button class="btn-apply" data-cardid="' + esc(a.id) + '" onclick="handleApply(this)" ' + (selectedEnId?'':'disabled') + '>Link</button>');
+  }
+  p.push('</div></div>');
+  return p.join('');
+}
+
+function render() {
+  var list = state.activeExp
+    ? (state.byExp[state.activeExp] || [])
+    : state.all;
+
+  if (!list.length) {
+    document.getElementById('content').innerHTML = '<div style="padding:40px;text-align:center;color:#8b949e">No cards to review' + (state.activeExp ? ' in ' + state.activeExp : '') + '</div>';
+    return;
+  }
+
+  var html = [];
+  if (state.activeExp) {
+    html.push('<div class="exp-section">');
+    html.push('<div class="exp-header">' + esc(state.activeExp) + ' <span class="exp-count">(' + list.length + ' cards)</span></div>');
+    html.push('<div class="card-grid">');
+    list.forEach(function(a) { html.push(renderCard(a)); });
+    html.push('</div></div>');
+  } else {
+    state.expList.forEach(function(exp) {
+      var cards = state.byExp[exp] || [];
+      if (!cards.length) return;
+      html.push('<div class="exp-section">');
+      html.push('<div class="exp-header">' + esc(exp) + ' <span class="exp-count">(' + cards.length + ' cards)</span></div>');
+      html.push('<div class="card-grid">');
+      cards.forEach(function(a) { html.push(renderCard(a)); });
+      html.push('</div></div>');
+    });
+  }
+  document.getElementById('content').innerHTML = html.join('');
+}
+
+function init(data) {
+  state.all = data || [];
+  state.byExp = {};
+  state.expList = [];
+  // Auto-select single candidates
+  state.all.forEach(function(a) {
+    if (a.candidates.length === 1) {
+      state.selected[a.id] = a.candidates[0].enPrimaryCardId;
+    }
+  });
+  state.all.forEach(function(a) {
+    if (!state.byExp[a.zhExpansion]) {
+      state.byExp[a.zhExpansion] = [];
+      state.expList.push(a.zhExpansion);
+    }
+    state.byExp[a.zhExpansion].push(a);
+  });
+  state.expList.sort();
+  buildExpFilter();
+  updateProgress();
+  document.getElementById('loading').style.display = 'none';
+  render();
+}
+
+fetch('/api/ambiguous')
+  .then(function(r){ return r.json(); })
+  .then(function(data){ init(data.ambiguous || []); })
+  .catch(function(e){ document.getElementById('loading').textContent = 'Error: ' + e.message; });
+</script>
+</body>
+</html>`;
+
 const server = createServer((req, res) => {
   const u = new URL(req.url ?? '/', `http://localhost:${PORT}`);
   const p = u.pathname;
@@ -800,7 +1272,17 @@ const server = createServer((req, res) => {
 
   if (p === '/api/matches') {
     getMatches()
-      .then(updates => sendJson(res, { total: updates.length, matches: updates.map(toReviewMatch) }))
+      .then(result => sendJson(res, { total: result.updates.length, matches: result.updates.map(toReviewMatch) }))
+      .catch(e => sendJson(res, { error: String(e) }, 500));
+    return;
+  }
+
+  if (p === '/api/ambiguous') {
+    getMatches()
+      .then(result => sendJson(res, {
+        total: result.ambiguous.length,
+        ambiguous: result.ambiguous.map(toAmbiguousReview),
+      }))
       .catch(e => sendJson(res, { error: String(e) }, 500));
     return;
   }
@@ -809,12 +1291,53 @@ const server = createServer((req, res) => {
     let body = '';
     req.on('data', chunk => { body += chunk.toString(); });
     req.on('end', () => {
-      getMatches().then(updates => {
+      getMatches().then(async (result) => {
         const { ids } = JSON.parse(body) as { ids: string[] };
-        return applyConfirmed(ids, updates);
+        const linkMap = new Map<string, string>();
+        result.updates.forEach(u => {
+          if (ids.includes(u.zhPrimaryCardId)) linkMap.set(u.zhPrimaryCardId, u.enPrimaryCard.id);
+        });
+        result.ambiguous.forEach(a => {
+          if (ids.includes(a.zhPrimaryCardId) && a.enCandidates.length === 1)
+            linkMap.set(a.zhPrimaryCardId, a.enCandidates[0].id);
+        });
+        let applied = 0;
+        let deleted = 0;
+        for (const [zhId, enId] of linkMap) {
+          await prisma.card.updateMany({ where: { primaryCardId: enId }, data: { primaryCardId: zhId } }).catch(() => null);
+          // Delete orphaned EN PrimaryCard if no cards remain
+          const remaining = await prisma.card.count({ where: { primaryCardId: enId } }).catch(() => 1);
+          if (remaining === 0) { await prisma.primaryCard.delete({ where: { id: enId } }).catch(() => null); deleted++; }
+          applied++;
+        }
+        cachedUpdates = null; cachedAmbiguous = null; cacheBuilding = false;
+        return { applied, deleted };
       })
       .then(result => sendJson(res, result))
       .catch(e => sendJson(res, { error: String(e) }, 500));
+    });
+    return;
+  }
+
+  if (p === '/link' || p === '/link/') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(LINK_PAGE_HTML);
+    return;
+  }
+
+  if (p === '/api/link-one' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk.toString(); });
+    req.on('end', () => {
+      const { zhId, enId } = JSON.parse(body) as { zhId: string; enId: string };
+      prisma.card.updateMany({ where: { primaryCardId: enId }, data: { primaryCardId: zhId } })
+        .then(async () => {
+          // Delete orphaned EN PrimaryCard if no cards remain
+          const remaining = await prisma.card.count({ where: { primaryCardId: enId } }).catch(() => 1);
+          if (remaining === 0) await prisma.primaryCard.delete({ where: { id: enId } }).catch(() => null);
+          cachedUpdates = null; cachedAmbiguous = null; cacheBuilding = false;
+          sendJson(res, { ok: true });
+        }).catch(e => sendJson(res, { error: String(e) }, 500));
     });
     return;
   }
