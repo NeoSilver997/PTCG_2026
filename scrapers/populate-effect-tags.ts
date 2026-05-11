@@ -72,8 +72,8 @@ function extractDrawCount(effect: string): number {
   if (enExplicit) return parseInt(enExplicit[1], 10);
   if (/[Dd]raw a card/.test(effect)) return 1;
 
-  // EN: "draw cards until you have N cards in your hand" (Iono / N-style)
-  const enHandSize = effect.match(/have (\d+) cards? in your hand/);
+  // EN: "draw cards until you have / they have N cards in your hand" (Iono / Rose Tower style)
+  const enHandSize = effect.match(/have (\d+) cards? in (?:your|their) hand/);
   if (enHandSize) return parseInt(enHandSize[1], 10);
 
   return 0;
@@ -185,6 +185,15 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
   const primary = new Set<string>();
   const special = new Set<string>();
 
+  // Normalize typographic apostrophes/quotes to ASCII for consistent substring matching.
+  // EN card text scraped from HTML often uses curly apostrophes (U+2018/U+2019).
+  effect = effect.replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"');
+
+  // Normalize scraper line-break artifacts: spaces injected between CJK characters.
+  // e.g. "エネルギーは、すべてな くなる" → "エネルギーは、すべてなくなる"
+  // This only removes spaces between non-ASCII (CJK) characters, leaving EN/mixed untouched.
+  effect = effect.replace(/([^\x00-\x7F]) +([^\x00-\x7F])/g, '$1$2');
+
   const has = (...words: string[]) => words.some(w => effect.includes(w));
 
   // --- Primary ---
@@ -195,9 +204,14 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     (has('抽取', '抽出', '加入手牌', '抽卡') && has('牌庫')) ||
     (has('山札から') && has('引く', 'カードを引')) ||
     (has('手札に加える', '手札に入れる') && has('山札', '引く')) ||
+    // JA: 山札をN枚引く (without から) — e.g. インフルエンサーの紹介, 殿堂の書
+    /山札を\d+枚引く/.test(effect) ||
+    // JA: draw to hand size — 手札がN枚になるように引く (Lillie / N / アオキ style)
+    // Also handles 引いてよい (Rose Tower) and other て-form inflections
+    (has('手札が') && has('になるように') && has('引く', '引いて', '引い')) ||
     // EN: "Draw a card" / "Draw 2 cards" etc. / "draw cards until you have N cards in your hand"
     /[Dd]raw (?:a card|\d+ cards?)/.test(effect) ||
-    (has('draw cards until') && has('in your hand'));
+    (has('draw cards until', 'Draw cards until') && has('in your hand', 'in their hand'));
   if (_isDrawEffect) {
     const drawCount = extractDrawCount(effect);
     if (drawCount > 0) {
@@ -228,7 +242,12 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     (has('トラッシュから') && has('手札に加える', '手札に')) ||
     // EN: retrieve non-energy card from discard pile to hand
     (has('from your discard pile') && has('into your hand', 'to your hand') &&
-      !has('Energy') && !has('attach'))
+      !has('Energy') && !has('attach')) ||
+    // EN: shuffle cards from discard pile into own deck (Super Rod, Ordinary Rod, Team Yell's Cheer)
+    (has('from your discard pile') && has('into your deck') && !has('Supporter') && !has('Energy')) ||
+    // JA: recover non-energy cards from discard to deck
+    (has('トラッシュから') && has('山札にもどして切', '山札に戻して切', '山札に戻す', '山札にもどす') &&
+      !has('サポート') && !has('エネルギー'))
   ) {
     const qty = extractQuantity(effect);
     primary.add(qty > 0 ? `棄牌搜索×${qty}` : '棄牌搜索');
@@ -268,10 +287,16 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     has('エネルギーをつけ替える', 'エネルギーをはがし', 'エネルギーを手札に戻す') ||
     (has('エネルギー') && has('トラッシュ') && has('ポケモン')) ||
     (has('エネルギーカード') && has('つける', 'はがす')) ||
+    // JA: return opponent's Energy to hand / deck (Team Yell Grunt, Raihan style)
+    (has('相手') && has('エネルギー') && (has('手札にもどす') || has('山札の上にもどす') || has('山札にもどす'))) ||
     // EN
     has('Move an Energy', 'Move a Basic Energy') ||
     (has('Discard') && has('Energy from this Pok\u00e9mon', 'Energy from your opponent')) ||
-    (has('discard all') && has('Energy from'))
+    (has('discard all') && has('Energy from')) ||
+    // EN: discard a Special Energy from each of opponent's Pokémon (Giacomo)
+    (has('Discard') && has('Special Energy') && has("opponent's Pok\u00e9mon", "opponent's")) ||
+    // EN: put attached Energy into opponent's hand / deck (Team Yell Grunt)
+    (has('Energy attached') && (has('into their hand') || has('into their deck') || has("opponent's deck")))
   ) {
     primary.add('能量操作');
   }
@@ -319,7 +344,9 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     (has('對手') && has('互換') && has('戰鬥寶可夢')) ||
     (has('相手') && has('バトル場に呼び出す')) ||
     (has('相手') && has('バトルポケモンとベンチポケモンを入れ替え')) ||
-    // EN: Boss's Orders / Gust of Wind style effects
+    // JA: Lysandre / Guzma gust — バトルポケモンと入れ替える
+    (has('相手') && has('バトルポケモンと入れ替える')) ||
+    // EN: Boss's Orders / Gust of Wind style effects (after apostrophe normalization)
     (has("your opponent's Benched") && has('Active Spot', 'Active Pok\u00e9mon') && !has('damage')) ||
     has("Switch out your opponent's Active Pok\u00e9mon") ||
     (has('switch in') && has("opponent's Benched") && has('Active Spot'))
@@ -332,10 +359,16 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     has('切換', '互換') ||
     has('バトル場に呼び出す', 'バトル場のポケモンと入れ替える',
         'ベンチポケモンと交代', 'ベンチに下がる', '強制的に入れ替え') ||
+    // JA: Guzma self-switch component
+    has('バトルポケモンをベンチポケモンと入れ替える') ||
     // EN: self-switch effects
     has('Switch this Pok\u00e9mon with', 'switch it with your Active Pok\u00e9mon',
         'Switch out your Active Pok\u00e9mon', 'switch in 1 of your Benched',
-        'switch this Pok\u00e9mon')
+        'switch this Pok\u00e9mon') ||
+    // EN: Switch card — "Switch your Active Pok\u00e9mon with 1 of your Benched"
+    has('Switch your Active Pok\u00e9mon with 1 of your Benched') ||
+    // EN: Escape Rope — "Each player switches their Active Pok\u00e9mon"
+    has('switches their Active Pok\u00e9mon', 'Each player switches')
   ) {
     primary.add('切換效果');
   }
@@ -372,9 +405,13 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
   if (
     (has('若', '在這個回合', '在上個', '在下個') && has('增加', '點傷害')) ||
     (has('の数×', 'の枚数×', '×10', '×20', '×30', '×40', '×50') && has('ダメージ')) ||
+    // JA: flat damage boost tools (プラスパワー, ちからのハチマキ, エレキパワー, etc.)
+    (has('バトルポケモンへのダメージは') && /「[+＋]\d+」/.test(effect)) ||
     // EN: "does N more damage for each" / "does N damage for each"
     (has('more damage for each', 'damage for each') && !has('Benched Pok\u00e9mon (both yours')) ||
-    (has('this attack does') && has('more damage') && (has('if ', 'during ')))
+    (has('this attack does') && has('more damage') && (has('if ', 'during '))) ||
+    // EN: flat damage boost to opponent's Active / Benched (Choice Belt, Leon, etc.)
+    (has('more damage to your opponent') && has('Pok\u00e9mon') && !has('for each'))
   ) {
     primary.add('條件傷害');
   }
@@ -382,10 +419,12 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
   // Status recovery (ZH + JA + EN)
   if (
     (has('恢復', '回復') && has('特殊狀態', '狀態')) ||
-    has('特殊状態を回復', '特殊状態がなおる', '状態異常を回復') ||
+    has('特殊状態を回復', '特殊状態がなおる', '状態異常を回復',
+        '特殊状態を、すべて回復', '特殊状態がすべて回復') ||
     // EN
     has('recover from a Special Condition', 'remove all Special Conditions',
-        'isn\'t affected by any Special Condition', 'can\'t be affected by any Special Condition')
+        'isn\'t affected by any Special Condition', 'can\'t be affected by any Special Condition',
+        'recovers from all Special Conditions', 'recovers from all of them')
   ) {
     primary.add('狀態恢復');
   }
@@ -394,8 +433,10 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
   if (
     (has('傷害指示物') && has('放置', '增加')) ||
     (has('ダメカン') && has('のせる', '乗せる', 'ダメカンを')) ||
-    // EN
-    (has('put') && has('damage counters on') && has('Pok\u00e9mon'))
+    // EN: place damage counters
+    (has('put') && has('damage counters on') && has('Pok\u00e9mon')) ||
+    // EN: move damage counters (Agatha, Damage Pump)
+    (has('Move', 'move') && has('damage counters') && has('Pok\u00e9mon'))
   ) {
     primary.add('傷害指示物');
   }
@@ -416,7 +457,9 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     (has('手札を見る', '相手の手札を見る') && !primary.has('牌庫搜索') && !primary.has('棄牌搜索')) ||
     // EN: peek at opponent's hand or top of deck
     ((has('look at', 'Look at') && (has("opponent's hand", 'their hand', 'the top'))) &&
-      !primary.has('牌庫搜索') && !primary.has('棄牌搜索'))
+      !primary.has('牌庫搜索') && !primary.has('棄牌搜索')) ||
+    // EN: opponent reveals hand (Eri, Oleana, Riley)
+    (has('reveals their hand', 'reveal their hand', 'reveals the top') && !primary.has('牌庫搜索'))
   ) {
     primary.add('情報收集');
   }
@@ -447,6 +490,8 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
   if (
     (has('撤退') && has('增加', '所需的能量')) ||
     (has('にげるためのエネルギー') && has('多く', '必要')) ||
+    // JA: Aqua's Secret Base / Moon's Altar — にげるために必要なエネルギー.*多く
+    (has('にげるために必要なエネルギー') && has('多く')) ||
     // EN: Retreat Cost increases (not retreat lock, which is handled separately)
     (has('Retreat Cost') && (has(' more', 'increased') && !has('no Retreat Cost', 'Retreat Cost is 0')))
   ) {
@@ -519,9 +564,13 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
   if (
     (has('從自己的手牌選擇', '選擇1張能量卡') && has('附於')) ||
     (has('手札のエネルギーカード') && has('つける', 'ポケモンにつける')) ||
+    // JA: attach Energy from hand (various phrasings — Bede, Welder, etc.)
+    (has('手札から基本エネルギー') && has('つける')) ||
+    (has('手札にある') && has('エネルギー') && has('つける')) ||
+    (has('手札') && has('エネルギー') && has('つける') && !has('山札から') && !has('トラッシュから')) ||
     // EN: attach Energy from hand (not from deck/discard, those are 附上搜索能量)
-    (has('attach') && (has('Energy card from your hand', 'Basic Energy card from your hand',
-        'Energy cards from your hand')) && !has('discard pile') && !has('your deck'))
+    (has('attach', 'Attach') && (has('Energy card from your hand', 'Basic Energy card from your hand',
+        'Energy cards from your hand', 'basic Energy card from your hand')) && !has('discard pile') && !has('your deck'))
   ) {
     primary.add('能量附著');
   }
@@ -540,10 +589,11 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     (has('牌庫') && has('基本') && has('能量卡', '能量') && has('加入手牌')) ||
     // JA: deck/discard → attach energy
     (has('山札から') && has('エネルギー') && has('つける', 'ポケモンにつける', 'をつける')) ||
-    (has('トラッシュから') && has('エネルギーカード') && has('つける', 'ポケモンにつける', 'をつける')) ||
-    // EN: attach Energy from discard pile or deck
-    (has('attach') && has('Energy') && has('from your discard pile', 'from your deck', 'from their discard pile')) ||
-    (has('Attach') && has('Energy') && (has('discard pile') || has('your deck')))
+    (has('トラッシュから') && has('エネルギー') && has('つける', 'ポケモンにつける', 'をつける')) ||
+    // EN: attach Energy from discard pile or deck (cover both capital and lowercase, Bea pattern)
+    ((has('attach', 'Attach')) && has('Energy') && (has('discard pile') || has('your deck') || has('from their discard pile'))) ||
+    // EN: search Basic Energy to hand (Lady, Earthen Vessel)
+    (has('Search your deck') && (has('basic Energy card', 'Basic Energy card')) && has('into your hand', 'your hand') && !has('attach', 'Attach'))
   ) {
     primary.add('附上搜索能量');
   }
@@ -564,8 +614,8 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
       has('基本エネルギー') &&
       (has('山札', 'トラッシュ')) &&
       !has('手札から')) ||
-    // EN: Basic {X} Energy search by type name
-    (/Basic \{[RGWLFPDMC]\} Energy/i.test(effect) &&
+    // EN: Basic {X} Energy search by type name (also match {W} without "Basic" prefix)
+    (/(Basic )?\{[RGWLFPDMC]\} Energy/i.test(effect) &&
       (has('Search your deck', 'search your deck', 'from your discard pile', 'attach')) &&
       !has('from your hand'))
   ) {
@@ -597,7 +647,11 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
   if (
     (has('放回牌庫並重洗', '各自從牌庫抽出') && has('支援者卡')) ||
     has('山札を引き直す', '山札をシャッフル') ||
-    (has('山札') && has('戻し', '並べ替え'))
+    (has('山札') && has('戻し', '並べ替え')) ||
+    // JA: mill top cards from own deck (あなあけスコップ, 未開の祭壇 optional trash)
+    (has('山札を上から') && has('トラッシュ')) ||
+    // EN: discard top cards from deck (Hole-Digging Shovel, PokéStop)
+    (has('Discard the top', 'discard the top') && has('of your deck', 'of their deck'))
   ) {
     primary.add('牌庫操作');
   }
@@ -652,7 +706,7 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     (has('最大HP') && has('多くなる', '増える', '大きくなる')) ||
     has('最大HPが') ||
     // EN: "+N HP" for each Pokémon in play
-    (/get \+\d+ HP/.test(effect)) ||
+    (/gets? \+\d+ HP/.test(effect)) ||
     (has('maximum HP') && /\+\d+/.test(effect))
   ) {
     primary.add('HP提升');
@@ -662,9 +716,13 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
   if (
     (has('場上所有', '最大HP各') && has('競技場')) ||
     (has('スタジアム') && has('HP', 'ダメージ', '効果')) ||
+    // JA: bench size changes (スカイフィールド, 崩れたスタジアム)
+    has('ベンチに出せるポケモンの数は') ||
     // EN: stadium cards that buff/debuff Pokémon in play
     (has('each Pok\u00e9mon in play') && (has('gets +', 'gets -', 'takes', 'more damage', 'less damage'))) ||
-    (has('while this card is in play') && (has('HP', 'damage', 'Energy')))
+    (has('while this card is in play') && (has('HP', 'damage', 'Energy'))) ||
+    // EN: bench size changes (Collapsed Stadium, Area Zero Underdepths, Sky Field)
+    (has('Benched Pok\u00e9mon') && (has("can't have more than", 'can have up to') && has('their Bench', 'on their Bench')))
   ) {
     primary.add('場地增幅');
   }
@@ -714,6 +772,8 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
 
   if (
     has('弱點全部消除', '弱點消除') ||
+    // JA: Shadow Circle / Altar of the Sunne
+    has('弱点は、すべてなくなる', '弱点がなくなる') ||
     // EN
     has('has no Weakness', 'this Pok\u00e9mon has no Weakness', 'no Weakness')
   ) {
@@ -740,13 +800,19 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
 
   // Energy requirement decrease (ZH + JA + EN) — e.g. Counter Gain (反擊増幅器)
   if (
-    (has('使用招式所需的能量') && has('減少')) ||
+    // ZH: also handles '使用那個招式所需的能量減少' (Sparkling Crystal)
+    ((has('招式所需的能量') || has('使用招式所需的能量')) && has('減少')) ||
     /各減少\d+個/.test(effect) ||
     // JA
     (has('ワザに必要なエネルギー', 'ワザのエネルギー') && has('少なくなる', '少ない', '少なく')) ||
     (has('使用するためのエネルギー') && has('少なく')) ||
+    // JA: Sparkling Crystal / other cost-reduction tools — ためのエネルギー.*少なく
+    (has('ためのエネルギー') && has('少なく')) ||
+    // JA: Float Stone / Fairy Garden — にげる.*エネルギーは、すべてなくなる
+    (has('にげる') && has('エネルギーは、すべてなくなる')) ||
     // EN
     /\d+ less Energy/i.test(effect) ||
+    /\d+ Energy less/i.test(effect) ||
     /fewer Energy/i.test(effect)
   ) {
     primary.add('能量需求減少');
@@ -817,7 +883,9 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     (has('トラッシュから') && has('エネルギーカード') && has('手札に加える', 'つける', '拾う')) ||
     // EN: retrieve Energy from discard pile to hand (not attaching, which is 附上搜索能量)
     (has('from your discard pile') && has('Energy card', 'Energy cards') &&
-      has('into your hand', 'to your hand') && !has('attach'))
+      has('into your hand', 'to your hand') && !has('attach')) ||
+    // EN: Training Court (third-person: "from their discard pile into their hand")
+    (has('from their discard pile') && has('Energy card') && has('into their hand'))
   ) {
     primary.add('能量回收');
   }
@@ -922,9 +990,13 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
   if (
     (has('手牌') && (has('放回牌庫並重洗') || has('洗入牌庫') || has('放入牌庫並重洗')) && (has('抽出', '抽取', '抽卡'))) ||
     (has('手札') && (has('山札に加えてシャッフル') || has('山札に戻してシャッフル')) && has('引く')) ||
+    // JA: Marnie / Kabu / コトブキムラ style — shuffle hand into deck (bottom or shuffled), then draw
+    (has('手札') && (has('山札の下にもどす') || has('山札にもどして切') || has('山札に戻して切')) && has('引く')) ||
     // EN: Iono / N-style hand shuffle and redraw
     (has('shuffle your hand') && has('draw') && has('deck')) ||
-    (has('shuffle') && has('hand') && has('deck') && has('draw') && !has('your opponent'))
+    (has('shuffle') && has('hand') && has('deck') && has('draw') && !has('your opponent')) ||
+    // EN: draw cards until they have N (Rose Tower stadium)
+    (has('draw cards until') && has('cards in their hand'))
   ) {
     const drawCount = extractDrawCount(effect);
     primary.add(drawCount > 0 ? `重新抽牌×${drawCount}` : '重新抽牌');
@@ -989,11 +1061,15 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
   if (
     (has('牌庫頂') && (has('查看') || has('觀看') || has('翻開'))) ||
     (has('山札の上') && (has('見る') || has('見て') || has('確認'))) ||
+    // JA: 山札を上から (いたずらスコップ, ビクトリーリング, マクワ style)
+    (has('山札を上から') && (has('見る') || has('見て'))) ||
     // EN
-    (has('look at the top') && has('of your deck', 'of their deck'))
+    (has('look at the top') && has('of your deck', 'of their deck')) ||
+    // EN: look at bottom N cards and put on top (Expedition Uniform)
+    (has('the bottom') && has('cards of your deck') && has('put them on top'))
   ) {
     const zhTop = effect.match(/牌庫頂[的]?(\d+)張/);
-    const jaTop = effect.match(/山札の上から(\d+)枚/);
+    const jaTop = effect.match(/山札(?:の上|を上から)(\d+)枚/);
     const enTop = effect.match(/look at the top (\d+) cards? of/i);
     const topN = zhTop ? parseInt(zhTop[1], 10) : jaTop ? parseInt(jaTop[1], 10) : enTop ? parseInt(enTop[1], 10) : 0;
     primary.add(topN > 0 ? `查看牌庫頂×${topN}` : '查看牌庫頂');
@@ -1003,10 +1079,14 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
   if (
     (has('棄牌區') && (has('物品卡') || has('支援者卡') || has('道具卡')) && has('加入手牌') && !has('附', '能量')) ||
     (has('トラッシュ') && (has('グッズ') || has('サポート') || has('どうぐ')) && has('手札に加える') && !has('エネルギー')) ||
-    // EN
+    // EN: from discard pile to hand (Item Retrieval, Superior Energy Retrieval, etc.)
     (has('from your discard pile') &&
       (has('Item card', 'Supporter card', 'Tool card', 'Trainer card')) &&
-      has('into your hand', 'your hand') && !has('Energy'))
+      has('into your hand', 'your hand') && !has('Energy')) ||
+    // EN: from discard pile into deck (Pal Pad)
+    (has('from your discard pile') &&
+      (has('Supporter card', 'Trainer card')) &&
+      has('into your deck'))
   ) {
     primary.add('回收訓練師');
   }
@@ -1026,11 +1106,14 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
   // Field removal / bounce (ZH + JA + EN)
   if (
     (has('手札に戻す') && has('ポケモン')) ||
+    // JA: hiragana version (手札にもどす = same word as 手札に戻す)
+    (has('手札にもどす') && has('ポケモン')) ||
     // ZH: 將寶可夢返回備戰區 / 手牌
     (has('寶可夢') && (has('返回備戰區') || has('放回所有者的手牌'))) ||
     // EN
     (has('return') && has('to your hand') && has('Pok\u00e9mon')) ||
-    (has('put') && has('into your hand') && has('Pok\u00e9mon') && !has('Knocked Out'))
+    // EN: capital P "Put 1 of your Pokémon...into your hand" (Prof Turo, Scoop Up Cyclone, Penny)
+    (has('put', 'Put') && has('into your hand') && has('Pok\u00e9mon') && !has('Knocked Out'))
   ) {
     primary.add('手牌回收');
   }
@@ -1299,22 +1382,90 @@ async function main() {
     }> = [];
 
     for (const pc of primaryCards) {
-      // Pick best card: prefer ZH_TW (HK Chinese) > JA_JP > EN_US
-      const card =
-        pc.cards.find(c => c.language === 'ZH_TW') ??
-        pc.cards.find(c => c.language === 'JA_JP') ??
-        pc.cards[0];
-
-      if (!card) {
+      if (!pc.cards.length) {
         processed++;
         continue;
       }
+
+      // Detect cards that have only scraper artifact / boilerplate text, not actual effect text.
+      const TOOL_BOILERPLATE_PREFIXES = [
+        'ポケモンのどうぐは、自分のポケモンにつけて使う。',
+        '自分の番に何枚でも、自分のポケモンにつけられる。',
+      ];
+      const isBoilerplateOnly = (text: string | null | undefined) => {
+        if (!text) return true;
+        // Copyright-only text: scraper captured legal boilerplate instead of card effect
+        if (text.includes('©Pokémon') || text.includes('©Nintendo')) return true;
+        // TOOL boilerplate: generic tool rules text without actual effect
+        return TOOL_BOILERPLATE_PREFIXES.some(p => text.includes(p) && text.length < p.length + 30);
+      };
+
+      // Pick best representative card per language:
+      // 1. Non-boilerplate cards come before boilerplate-only cards
+      // 2. Among non-boilerplate, prefer the MOST COMMON text (handles reprints where one
+      //    variant has a different effect — e.g. フラダリ Lost Zone variant vs 12x gust copies)
+      const pickBestPerLang = (lang: string) => {
+        const langCards = pc.cards.filter(c => c.language === lang);
+        if (!langCards.length) return undefined;
+
+        // Count text frequency across all cards of this language
+        const textFreq = new Map<string, number>();
+        for (const c of langCards) {
+          const t = (c as { text?: string | null }).text ?? '';
+          textFreq.set(t, (textFreq.get(t) ?? 0) + 1);
+        }
+
+        return langCards.sort((a, b) => {
+          const ta = (a as { text?: string | null }).text ?? '';
+          const tb = (b as { text?: string | null }).text ?? '';
+          const aBoiler = isBoilerplateOnly(ta);
+          const bBoiler = isBoilerplateOnly(tb);
+          if (aBoiler !== bBoiler) return aBoiler ? 1 : -1; // non-boilerplate first
+          // Among non-boilerplate, prefer most common text (frequency desc)
+          return (textFreq.get(tb) ?? 0) - (textFreq.get(ta) ?? 0);
+        })[0];
+      };
+
+      // Prefer ZH_TW > JA_JP > EN_US, skipping boilerplate-only cards
+      const cardCandidates = [
+        pickBestPerLang('ZH_TW'),
+        pickBestPerLang('JA_JP'),
+        pickBestPerLang('EN_US'),
+      ].filter(Boolean);
+
+      // Primary card: first non-boilerplate candidate (ZH_TW → JA_JP → EN_US)
+      const card = cardCandidates[0] ?? pc.cards[0];
 
       const attacks = (card.attacks ?? []) as Attack[];
       const abilities = (card.abilities ?? []) as Ability[];
       const cardText = (card as { text?: string | null }).text ?? null;
 
       let [primaryTags, specialTags, maxDrawCount, maxDamage] = classifyCard(attacks, abilities, cardText);
+
+      // If the result is only 其他效果 AND there are other language cards to try,
+      // run classifyCard on each unique text until we get a better result.
+      if (
+        primaryTags.length === 1 &&
+        primaryTags[0] === '其他效果' &&
+        cardCandidates.length > 1
+      ) {
+        for (const altCard of cardCandidates.slice(1)) {
+          const altText = (altCard as { text?: string | null }).text ?? null;
+          if (!altText || altText === cardText || isBoilerplateOnly(altText)) continue;
+          const [altPrimary, altSpecial, altDraw, altDmg] = classifyCard(
+            (altCard.attacks ?? []) as Attack[],
+            (altCard.abilities ?? []) as Ability[],
+            altText,
+          );
+          if (altPrimary.length > 1 || (altPrimary.length === 1 && altPrimary[0] !== '其他効果')) {
+            primaryTags = altPrimary;
+            specialTags = altSpecial;
+            maxDrawCount = altDraw;
+            maxDamage = altDmg;
+            break;
+          }
+        }
+      }
 
       // Apply manual overrides
       const tagsToRemove = MANUAL_REMOVE_TAGS[pc.name];
