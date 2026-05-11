@@ -23,6 +23,7 @@ import type { ServerResponse } from 'http';
 import { PrismaClient } from '../packages/database/node_modules/.prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
+import { spawnSync } from 'child_process';
 
 const prisma = new PrismaClient();
 
@@ -1042,6 +1043,7 @@ select,input{background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4
     <select id="sel-en"><option value="">— select —</option></select>
   </label>
   <button class="btn btn-load" onclick="loadCards()">Load</button>
+  <button class="btn" id="btn-remap" onclick="remapExpansion()" title="Run map-zh-to-en --apply for current ZH expansion">Re-map</button>
   <button class="btn" id="f-all"    onclick="setFilter('all')"    >All</button>
   <button class="btn" id="f-fp"     onclick="setFilter('fp')"     >Pokemon FP</button>
   <button class="btn" id="f-tag"    onclick="setFilter('tag')"    >Trainer tag</button>
@@ -1066,6 +1068,15 @@ select,input{background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4
     <option value="COLORLESS">&#x2b55; Colorless</option>
     <option value="FAIRY">&#x2728; Fairy</option>
   </select>
+  <select id="f-subtype" onchange="setSubtype(this.value)" style="font-size:12px;background:#161b22;color:#c9d1d9;border:1px solid #30363d;border-radius:4px;padding:2px 6px">
+    <option value="">All subtypes</option>
+    <option value="SUPPORTER">Supporter</option>
+    <option value="ITEM">Item</option>
+    <option value="STADIUM">Stadium</option>
+    <option value="TOOL">Tool</option>
+    <option value="BASIC_ENERGY">Basic Energy</option>
+    <option value="SPECIAL_ENERGY">Special Energy</option>
+  </select>
   <select id="f-reg" onchange="setRegMark(this.value)" style="font-size:12px;background:#161b22;color:#c9d1d9;border:1px solid #30363d;border-radius:4px;padding:2px 6px">
     <option value="">All &#35215;&#26684;</option>
     <option value="H">H</option>
@@ -1082,9 +1093,11 @@ select,input{background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4
   </select>
   <select id="f-sort" onchange="setSortBy(this.value)" style="font-size:12px;background:#161b22;color:#c9d1d9;border:1px solid #30363d;border-radius:4px;padding:2px 6px">
     <option value="">Sort: default</option>
-    <option value="hp">Sort: HP &#x2193;</option>
-    <option value="damage">Sort: damage &#x2193;</option>
+    <option value="type">Sort: type &#x2192; HP &#x2193; &#x2192; DMG</option>
+    <option value="hp">Sort: HP &#x2193; then DMG</option>
+    <option value="damage">Sort: DMG &#x2193; then HP</option>
     <option value="tag">Sort: tag count &#x2193;</option>
+    <option value="subtype">Sort: subtype &#x2192; tag &#x2193;</option>
   </select>
   <div class="stats">
     <span class="stat-g" id="st-linked">0 linked</span>
@@ -1139,6 +1152,7 @@ var g = {
   showHidden: false,
   supertype: '',        // 'POKEMON'|'TRAINER'|'ENERGY'|''
   ptype: '',            // PokemonType filter
+  subtype: '',          // Trainer/Energy subtype filter
   regMark: '',          // regulationMark filter
   sortBy: '',           // 'hp'|'damage'|'tag'|''
 };
@@ -1228,6 +1242,7 @@ function applyFilter(list) {
   else if (f === 'tag') result = result.filter(function(c){ return c.effectFp && !c.attackFp; });
   if (g.supertype) result = result.filter(function(c){ return c.supertype === g.supertype; });
   if (g.ptype) result = result.filter(function(c){ return c.types && c.types.indexOf(g.ptype) !== -1; });
+  if (g.subtype) result = result.filter(function(c){ return c.subtypes && c.subtypes.indexOf(g.subtype) !== -1; });
   if (g.regMark === 'NONE') result = result.filter(function(c){ return !c.regulationMark; });
   else if (g.regMark) result = result.filter(function(c){ return c.regulationMark === g.regMark; });
   return result;
@@ -1235,16 +1250,60 @@ function applyFilter(list) {
 
 function setSupertype(v) { g.supertype = v; render(); }
 function setPtype(v) { g.ptype = v; render(); }
+function setSubtype(v) { g.subtype = v; render(); }
 function setRegMark(v) { g.regMark = v; render(); }
 function setSortBy(v) { g.sortBy = v; render(); }
+
+function remapExpansion() {
+  var zh = document.getElementById('sel-zh').value;
+  if (!zh || zh === 'ALL') { alert('Select a specific ZH expansion to re-map (not All unlinked)'); return; }
+  var btn = document.getElementById('btn-remap');
+  btn.disabled = true; btn.textContent = 'Re-mapping...';
+  fetch('/api/remap-expansion', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ expansion: zh })
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    btn.disabled = false; btn.textContent = 'Re-map';
+    if (d.error) { alert('Error: ' + d.error); return; }
+    alert((d.ok ? 'Re-map complete' : 'Re-map finished (exit ' + d.exitCode + ')') + '\\n\\n' + (d.summary || 'No output'));
+    loadCards();
+  }).catch(function(e) { btn.disabled = false; btn.textContent = 'Re-map'; alert('Error: ' + e); });
+}
+
+var TYPE_ORDER = ['FIRE','WATER','GRASS','LIGHTNING','PSYCHIC','FIGHTING','DARKNESS','METAL','DRAGON','COLORLESS','FAIRY'];
+var SUBTYPE_ORDER = ['SUPPORTER','ITEM','STADIUM','TOOL','BASIC_ENERGY','SPECIAL_ENERGY'];
 
 function applySort(list) {
   if (!g.sortBy) return list;
   var s = g.sortBy;
   return list.slice().sort(function(a, b) {
-    if (s === 'hp') return (b.hp || 0) - (a.hp || 0);
-    if (s === 'damage') return (b.maxDamage || 0) - (a.maxDamage || 0);
+    if (s === 'type') {
+      var ta = (a.types && a.types[0]) || 'ZZZ';
+      var tb = (b.types && b.types[0]) || 'ZZZ';
+      var ti = TYPE_ORDER.indexOf(ta); var tj = TYPE_ORDER.indexOf(tb);
+      if (ti === -1) ti = 99; if (tj === -1) tj = 99;
+      if (ti !== tj) return ti - tj;
+      var hd = (b.hp || 0) - (a.hp || 0);
+      return hd !== 0 ? hd : (b.maxDamage || 0) - (a.maxDamage || 0);
+    }
+    if (s === 'hp') {
+      var d = (b.hp || 0) - (a.hp || 0);
+      return d !== 0 ? d : (b.maxDamage || 0) - (a.maxDamage || 0);
+    }
+    if (s === 'damage') {
+      var d = (b.maxDamage || 0) - (a.maxDamage || 0);
+      return d !== 0 ? d : (b.hp || 0) - (a.hp || 0);
+    }
     if (s === 'tag') return (b.effectTags ? b.effectTags.length : 0) - (a.effectTags ? a.effectTags.length : 0);
+    if (s === 'subtype') {
+      var sa = (a.subtypes && a.subtypes[0]) || '';
+      var sb = (b.subtypes && b.subtypes[0]) || '';
+      var si = SUBTYPE_ORDER.indexOf(sa); var sj = SUBTYPE_ORDER.indexOf(sb);
+      if (si === -1) si = 99; if (sj === -1) sj = 99;
+      if (si !== sj) return si - sj;
+      return (b.effectTags ? b.effectTags.length : 0) - (a.effectTags ? a.effectTags.length : 0);
+    }
     return 0;
   });
 }
@@ -2052,11 +2111,30 @@ const server = createServer((req, res) => {
         }
         const zhPcId = zhCard.primaryCardId;
         const enPcId = enCard.primaryCardId;
+        // Fetch EN PrimaryCard's effect tags before merge/delete
+        const enPc = await prisma.primaryCard.findUnique({
+          where: { id: enPcId },
+          select: { effectTags: true, specialEffectTags: true },
+        });
+        // Re-point EN cards → ZH primaryCard
         await prisma.card.updateMany({ where: { primaryCardId: enPcId }, data: { primaryCardId: zhPcId } });
+        // Merge EN tags into ZH PrimaryCard (union — no duplicates)
+        let tagsMerged = 0;
+        if (enPc && (enPc.effectTags.length > 0 || enPc.specialEffectTags.length > 0)) {
+          const zhPc = await prisma.primaryCard.findUnique({ where: { id: zhPcId }, select: { effectTags: true, specialEffectTags: true } });
+          const mergedTags = [...new Set([...(zhPc?.effectTags ?? []), ...enPc.effectTags])];
+          const mergedSpecial = [...new Set([...(zhPc?.specialEffectTags ?? []), ...enPc.specialEffectTags])];
+          const addedTags = mergedTags.length - (zhPc?.effectTags?.length ?? 0);
+          const addedSpecial = mergedSpecial.length - (zhPc?.specialEffectTags?.length ?? 0);
+          if (addedTags > 0 || addedSpecial > 0) {
+            await prisma.primaryCard.update({ where: { id: zhPcId }, data: { effectTags: mergedTags, specialEffectTags: mergedSpecial } });
+            tagsMerged = addedTags + addedSpecial;
+          }
+        }
         const remaining = await prisma.card.count({ where: { primaryCardId: enPcId } }).catch(() => 1);
         if (remaining === 0) await prisma.primaryCard.delete({ where: { id: enPcId } }).catch(() => null);
         cachedUpdates = null; cachedAmbiguous = null; cacheBuilding = false;
-        sendJson(res, { ok: true, zhName: zhCard.name, enName: enCard.name });
+        sendJson(res, { ok: true, zhName: zhCard.name, enName: enCard.name, tagsMerged });
       } catch (e) {
         sendJson(res, { error: String(e) }, 500);
       }
@@ -2076,6 +2154,33 @@ const server = createServer((req, res) => {
           cachedUpdates = null; cachedAmbiguous = null; cacheBuilding = false;
           sendJson(res, { ok: true });
         }).catch(e => sendJson(res, { error: String(e) }, 500));
+    });
+    return;
+  }
+
+  if (p === '/api/remap-expansion' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk.toString(); });
+    req.on('end', () => {
+      try {
+        const { expansion } = JSON.parse(body) as { expansion?: string };
+        const args = ['tsx', 'scrapers/map-zh-to-en.ts', '--apply', '--yes'];
+        if (expansion) args.push('--expansion', expansion);
+        const result = spawnSync('npx', args, {
+          cwd: WORKSPACE_ROOT,
+          encoding: 'utf-8',
+          timeout: 180000,
+        });
+        cachedUpdates = null; cachedAmbiguous = null; cacheBuilding = false;
+        const output = (result.stdout || '') + (result.stderr || '');
+        const summaryLines = output.split('\n').filter(l =>
+          /matched|ambiguous|unmatched|re-pointed|synced|deleted|applied|error/i.test(l) ||
+          l.includes('\u2705') || l.includes('\u274c') || l.includes('\u2717') || l.includes('\u270f')
+        );
+        sendJson(res, { ok: result.status === 0, summary: summaryLines.join('\n') || output.slice(-800), exitCode: result.status });
+      } catch (e) {
+        sendJson(res, { error: String(e) }, 500);
+      }
     });
     return;
   }

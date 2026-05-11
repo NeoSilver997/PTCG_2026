@@ -82,6 +82,7 @@ interface CardDetail {
     rarity: string | null;
     collectorNumber: string | null;
     imageUrl: string | null;
+    text: string | null;
     regionalExpansion: {
       code: string;
       name: string;
@@ -732,7 +733,12 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                     <dt className="text-sm text-gray-600">擴展包</dt>
                     <dd className="font-medium text-gray-900">
                       <Link
-                        href={`/products?productTypeGroup=expansion_series&expansionCode=${encodeURIComponent(currentVariant.regionalExpansion.code)}`}
+                        href={(() => {
+                          const expLang = (currentVariant as any).language || card.language;
+                          const expCountry = LANGUAGE_TO_COUNTRY[expLang] || '';
+                          const base = `/products?productTypeGroup=expansion_series&expansionCode=${encodeURIComponent(currentVariant.regionalExpansion!.code)}`;
+                          return expCountry ? `${base}&country=${encodeURIComponent(expCountry)}` : base;
+                        })()}
                         className="text-blue-600 hover:text-blue-800 hover:underline"
                       >
                         {currentVariant.regionalExpansion.primaryExpansion?.code || currentVariant.regionalExpansion.code}
@@ -897,9 +903,10 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
 
             {/* Trainer / Energy Card Text/Description */}
             {(card?.supertype === 'TRAINER' || card?.supertype === 'ENERGY') && (() => {
-              // text may be null for some scraped cards; fall back to abilities[].text
+              // text may be null for some scraped cards; fall back to abilities[].text, then to other variants
               const effectText = card.text?.trim() ||
                 (Array.isArray(card.abilities) ? card.abilities.map((a: any) => a.text || a.description).filter(Boolean).join('\n\n') : '') ||
+                card.languageVariants?.find((v) => v.text?.trim())?.text?.trim() ||
                 '';
               if (!effectText) return null;
               let label = '效果';

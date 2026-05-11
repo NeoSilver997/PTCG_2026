@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import apiClient from '@/lib/api-client';
 import Link from 'next/link';
 
@@ -34,18 +35,20 @@ interface ProductsResponse {
 // Module-level cache (clears on page hard-refresh / server restart)
 const _productsCache = new Map<string, { data: ProductsResponse; ts: number }>();
 
-export default function ProductsPage() {
+function ProductsPageContent() {
+  const searchParams = useSearchParams();
+
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ imported: number; skipped: number; errors: number } | null>(null);
   
-  // Filters
-  const [country, setCountry] = useState('');
-  const [productTypeGroup, setProductTypeGroup] = useState('expansion_series');
-  const [search, setSearch] = useState('');
-  const [codeSearch, setCodeSearch] = useState('');
+  // Filters – initialised from URL query params when navigating from a card's expansion link
+  const [country, setCountry] = useState(() => searchParams?.get('country') || '');
+  const [productTypeGroup, setProductTypeGroup] = useState(() => searchParams?.get('productTypeGroup') || 'expansion_series');
+  const [search, setSearch] = useState(() => searchParams?.get('search') || '');
+  const [codeSearch, setCodeSearch] = useState(() => searchParams?.get('expansionCode') || '');
   const [skip, setSkip] = useState(0);
   const take = 120;
 
@@ -322,5 +325,17 @@ export default function ProductsPage() {
       )}
       </div>
     </div>
+  );
+}
+
+export default function ProductsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-gray-600">載入中...</div>
+      </div>
+    }>
+      <ProductsPageContent />
+    </Suspense>
   );
 }

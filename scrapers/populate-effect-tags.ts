@@ -421,10 +421,12 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     primary.add('情報收集');
   }
 
-  // KO condition (ZH + JA)
+  // KO condition (ZH + JA + EN)
   if (
     (has('昏厥') && has('若', '當')) ||
-    (has('きぜつ') && has('なら', 'したなら', 'していたなら'))
+    (has('きぜつ') && has('なら', 'したなら', 'していたなら')) ||
+    // EN: effects that trigger when this Pokémon is Knocked Out
+    (has('Knocked Out') && (has('your opponent takes') || has('instead of') || has('opponent takes 1 fewer')))
   ) {
     primary.add('昏厥條件');
   }
@@ -571,8 +573,10 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
   }
 
   if (
-    has('灼傷', '中毒', '燃燒') &&
-    has('若')
+    (has('灼傷', '中毒', '燃燒') && has('若')) ||
+    // EN: conditional status application ("if heads, the Defending Pokémon is now Burned")
+    (has('Flip a coin', 'flip a coin') &&
+      has('is now Poisoned', 'is now Burned', 'is now Paralyzed', 'is now Asleep', 'is now Confused'))
   ) {
     primary.add('狀態施加');
   }
@@ -619,18 +623,25 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     primary.add('招式封鎖');
   }
 
-  // Energy condition (ZH + JA)
+  // Energy condition (ZH + JA + EN)
   if (
     (has('若自己', '只需要') && has('能量即可使用')) ||
-    (has('エネルギーが') && has('ついているなら', 'ついているポケモン', 'たりないなら'))
+    (has('エネルギーが') && has('ついているなら', 'ついているポケモン', 'たりないなら')) ||
+    // EN: attack requires a specific energy condition or scales with energy count
+    (has('as long as this Pok\u00e9mon has') && has('Energy')) ||
+    (has('if this Pok\u00e9mon has') && has('Energy')) ||
+    (has('if there is no') && has('Energy attached'))
   ) {
     primary.add('能量條件');
   }
 
-  // Attachment disruption (ZH + JA)
+  // Attachment disruption (ZH + JA + EN)
   if (
     (has('若對手', '將能量卡附於') && has('對手的回合結束')) ||
-    (has('対戦相手') && has('エネルギーカードをつけ') && has('ターン'))
+    (has('対戦相手') && has('エネルギーカードをつけ') && has('ターン')) ||
+    // EN: prevent opponent from attaching Energy
+    (has("can't attach") && has('Energy') && has('opponent')) ||
+    (has('your opponent') && has('can\'t attach') && has('Energy'))
   ) {
     primary.add('附著干擾');
   }
@@ -647,10 +658,13 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     primary.add('HP提升');
   }
 
-  // Stadium amplify (ZH + JA)
+  // Stadium amplify (ZH + JA + EN)
   if (
     (has('場上所有', '最大HP各') && has('競技場')) ||
-    (has('スタジアム') && has('HP', 'ダメージ', '効果'))
+    (has('スタジアム') && has('HP', 'ダメージ', '効果')) ||
+    // EN: stadium cards that buff/debuff Pokémon in play
+    (has('each Pok\u00e9mon in play') && (has('gets +', 'gets -', 'takes', 'more damage', 'less damage'))) ||
+    (has('while this card is in play') && (has('HP', 'damage', 'Energy')))
   ) {
     primary.add('場地增幅');
   }
@@ -690,8 +704,10 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
   }
 
   if (
-    effect.includes('將對手的戰鬥寶可夢【灼傷】') &&
-    !has('若', '沒有', '失敗')
+    (effect.includes('將對手的戰鬥寶可夢【灼傷】') &&
+      !has('若', '沒有', '失敗')) ||
+    // EN: unconditional burn of opponent's Active Pokémon
+    (has('is now Burned') && !has('Flip a coin', 'flip a coin', 'heads', 'tails'))
   ) {
     primary.add('簡單灼傷');
   }
@@ -785,10 +801,12 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     primary.add('撤退封鎖');
   }
 
-  // Move lockout (ZH + JA)
+  // Move lockout (ZH + JA + EN)
   if (
     (has('離開戰鬥場前無法使用', '無法使用') && !has('招式')) ||
-    has('バトル場からいなくなるまでワザを使えない')
+    has('バトル場からいなくなるまでワザを使えない') ||
+    // EN: can't use attacks until it moves away from Active Spot
+    (has("can't use any attacks") && has('moves to the Bench', 'until it moves', 'leaves the Active'))
   ) {
     primary.add('招式鎖定');
   }
@@ -804,39 +822,49 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     primary.add('能量回收');
   }
 
-  // Deck reshuffle (ZH + JA)
+  // Deck reshuffle (ZH + JA + EN)
   if (
     has('放回各自的牌庫並重洗', '全部放回牌庫並重洗') ||
-    has('すべてのポケモンを山札に戻し', 'すべてを山札に戻し')
+    has('すべてのポケモンを山札に戻し', 'すべてを山札に戻し') ||
+    // EN: mass shuffle-all Pokémon back into decks (Lost World / Night March style)
+    (has('each player shuffles all') && has('Pok\u00e9mon') && has('deck')) ||
+    (has('return all') && has('Pok\u00e9mon') && has('deck') && has('shuffle')) ||
+    (has("your opponent's Pok\u00e9mon") && has('return') && has('deck'))
   ) {
-    if (has('對手')){
+    if (has('對手') || has("your opponent's Pok\u00e9mon")){
       primary.add('對手干擾');
     }else{
       primary.add('牌庫重洗');
     }
-    
   }
 
-  // Specific Pokemon defense (ZH + JA)
+  // Specific Pokemon defense (ZH + JA + EN)
   if (
     (has('的所有「', '的寶可夢」') && /傷害「-\d+/.test(effect)) ||
-    (has('すべての「') && has('ダメージ') && has('少なくなる', '減る'))
+    (has('すべての「') && has('ダメージ') && has('少なくなる', '減る')) ||
+    // EN: "each of your {Name} Pokémon" / "all of your {Name} Pokémon" + damage reduction
+    (/each of your \"[^\"]+\" Pok\u00e9mon/i.test(effect) && has('less damage', 'takes')) ||
+    (/all of your \"[^\"]+\" Pok\u00e9mon/i.test(effect) && has('less damage'))
   ) {
     primary.add('特定寶可夢防禦');
   }
 
-  // Weakness change (ZH + JA)
+  // Weakness change (ZH + JA + EN)
   if (
     has('弱點改為', '弱點以') ||
-    has('弱点を', 'タイプに変える', '弱点タイプを変え')
+    has('弱点を', 'タイプに変える', '弱点タイプを変え') ||
+    // EN: change Weakness type
+    (has('Weakness') && (has('becomes', 'changes to', 'is changed to', 'instead of')))
   ) {
     primary.add('弱點改變');
   }
 
-  // Copy opponent move (ZH + JA)
+  // Copy opponent move (ZH + JA + EN)
   if (
     (has('對手選擇對手自己的', '作為這個招式使用') && primary.has('招式複製對手')) ||
-    has('相手が選んだ', '相手のポケモンのワザ') && has('使う')
+    has('相手が選んだ', '相手のポケモンのワザ') && has('使う') ||
+    // EN: choose one of opponent's attacks and use it
+    (has("Choose 1 of your opponent's") && has('attacks') && has('use it as this attack', 'and use it'))
   ) {
     primary.add('招式複製對手');
   }
@@ -915,12 +943,18 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     primary.add(qty > 0 ? `搜索進化×${qty}` : '搜索進化寶可夢');
   }
 
-  // Search for any Pokémon from deck (搜索任意×N) — ZH + JA
+  // Search for any Pokémon from deck (搜索任意×N) — ZH + JA + EN
   // e.g. Ultra Ball (any), Quick Ball-like unlimited search; guarded to avoid overlap with 放置基礎寶可夢
   if (
     (has('任意') && has('寶可夢') && has('牌庫') && (has('加入手牌') || has('備戰區'))) ||
     (has('ポケモン') && has('山札') && has('何でも', 'どんな', '1枚') && (has('手札に加える') || has('ベンチに出す')) &&
-      !has('基本', '進化', 'たね'))
+      !has('基本', '進化', 'たね')) ||
+    // EN: generic Pokémon search — Ultra Ball / Nest Ball variants not already covered
+    (has('Search your deck for', 'search your deck for') &&
+      has('Pok\u00e9mon') &&
+      has('into your hand', 'your hand') &&
+      !has('Basic Pok\u00e9mon', 'Basic {') && !has('evolves from') && !has('Evolution card') &&
+      !has('Stage 1') && !has('Stage 2'))
   ) {
     const qty = extractQuantity(effect);
     primary.add(qty > 0 ? `搜索任意×${qty}` : '搜索任意寶可夢');
@@ -992,6 +1026,8 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
   // Field removal / bounce (ZH + JA + EN)
   if (
     (has('手札に戻す') && has('ポケモン')) ||
+    // ZH: 將寶可夢返回備戰區 / 手牌
+    (has('寶可夢') && (has('返回備戰區') || has('放回所有者的手牌'))) ||
     // EN
     (has('return') && has('to your hand') && has('Pok\u00e9mon')) ||
     (has('put') && has('into your hand') && has('Pok\u00e9mon') && !has('Knocked Out'))
