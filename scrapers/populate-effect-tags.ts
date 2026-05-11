@@ -205,7 +205,10 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     (has('山札から') && has('引く', 'カードを引')) ||
     (has('手札に加える', '手札に入れる') && has('山札', '引く')) ||
     // JA: 山札をN枚引く (without から) — e.g. インフルエンサーの紹介, 殿堂の書
-    /山札を\d+枚引く/.test(effect) ||
+    // Also 山札を2枚引いてよい (プレイヤーズセレモニー, optional draw stadiums)
+    /山札を\d+枚引/.test(effect) ||
+    // JA: 数ぶん、山札を引く (variable draw by bench count etc. — ミツバ, ジェット, ジンダイ etc.)
+    has('山札を引く') ||
     // JA: draw to hand size — 手札がN枚になるように引く (Lillie / N / アオキ style)
     // Also handles 引いてよい (Rose Tower) and other て-form inflections
     (has('手札が') && has('になるように') && has('引く', '引いて', '引い')) ||
@@ -231,7 +234,14 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     // EN: generic deck search (not Basic Pokémon, not energy-only, not evolution — those have dedicated blocks)
     (has('Search your deck for', 'search your deck for') &&
       !has('Basic Pokémon', 'Basic {') && !has('Energy card', ' Energy card') &&
-      !has('evolves from') && !has('Supporter card') && !has('Item card') && !has('Tool card'))
+      !has('evolves from') && !has('Supporter card') && !has('Item card') && !has('Tool card')) ||
+    // EN: Adaman-style — "Search your deck for up to N cards and put them into your hand"
+    //     (blocked by Energy card guard above due to discard cost; add explicit match)
+    (has('Search your deck for up to') && has('cards and put them into your hand')) ||
+    // EN: stadium third-person search (Turffield Stadium — "search their deck for ... into their hand")
+    (has('search their deck') && has('Pokémon') && has('into their hand')) ||
+    // EN: Riley — reveal top N cards, opponent picks to discard, rest to hand
+    (has('Reveal the top') && has('your opponent choose') && has('into your hand'))
   ) {
     const qty = extractQuantity(effect);
     primary.add(qty > 0 ? `牌庫搜索×${qty}` : '牌庫搜索');
@@ -246,7 +256,7 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     // EN: shuffle cards from discard pile into own deck (Super Rod, Ordinary Rod, Team Yell's Cheer)
     (has('from your discard pile') && has('into your deck') && !has('Supporter') && !has('Energy')) ||
     // JA: recover non-energy cards from discard to deck
-    (has('トラッシュから') && has('山札にもどして切', '山札に戻して切', '山札に戻す', '山札にもどす') &&
+    (has('トラッシュから') && has('山札にもどして切', '山札に戻して切', '山札に戻す', '山札にもどす', '山札の上にもどす') &&
       !has('サポート') && !has('エネルギー'))
   ) {
     const qty = extractQuantity(effect);
@@ -267,8 +277,8 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     (has('【基礎】寶可夢', '基本寶可夢', '「太晶」寶可夢') && has('加入手牌') && has('牌庫')) ||
     // ZH: search any non-rule-box Pokémon from deck — e.g. 寶可平板
     (has('擁有規則的寶可夢') && has('除外') && has('加入手牌') && has('牌庫')) ||
-    // JA: bench/hand from deck — 基本ポケモン or テラスタルのポケモン
-    ((has('基本ポケモン') || has('テラスタルのポケモン')) && (
+    // JA: bench/hand from deck — 基本ポケモン / たねポケモン (old sets) / テラスタルのポケモン
+    ((has('基本ポケモン') || has('たねポケモン') || has('テラスタルのポケモン')) && (
       has('ベンチに出す', 'ベンチに置く', 'バトル場に出す', 'ベンチに出せる', 'ベンチに') ||
       has('手札に加える')
     ) && has('山札から', '山札を', '選び', '選んで')) ||
@@ -285,6 +295,14 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
   if (
     (has('附上', '附加', '移除') && has('能量')) ||
     has('エネルギーをつけ替える', 'エネルギーをはがし', 'エネルギーを手札に戻す') ||
+    // JA: energy rearrangement (カスミの水さばき, タッグスイッチ, マルチつけかえ, ポピー)
+    (has('エネルギー') && has('つけ替える')) ||
+    // EN: Fan of Waves — put opponent's Special Energy back to their deck
+    (has('Special Energy') && has("your opponent's") && (has('their deck') || has('bottom of their deck'))) ||
+    // EN: Exp. Share — move Energy on KO'd Active Pokémon to this one
+    (has('move') && has('Energy') && has('Knocked Out') && has('Pokémon this card is attached to')) ||
+    // EN: Rugged Helmet — put Energy from attacking Pokémon into opponent's hand
+    (has('Attacking Pokémon') && has('Energy') && has("your opponent's hand")) ||
     (has('エネルギー') && has('トラッシュ') && has('ポケモン')) ||
     (has('エネルギーカード') && has('つける', 'はがす')) ||
     // JA: return opponent's Energy to hand / deck (Team Yell Grunt, Raihan style)
@@ -368,7 +386,11 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     // EN: Switch card — "Switch your Active Pok\u00e9mon with 1 of your Benched"
     has('Switch your Active Pok\u00e9mon with 1 of your Benched') ||
     // EN: Escape Rope — "Each player switches their Active Pok\u00e9mon"
-    has('switches their Active Pok\u00e9mon', 'Each player switches')
+    has('switches their Active Pok\u00e9mon', 'Each player switches') ||
+    // JA: swap active with card in hand (スズキサン とりかえっこ)
+    (has('バトルポケモン') && has('とりかえっこ')) ||
+    // JA: swap field Pokémon with discard Pokémon (ネジキ, クチナシ)
+    (has('トラッシュ') && has('ポケモン') && has('入れ替える') && !has('エネルギー'))
   ) {
     primary.add('切換效果');
   }
@@ -407,6 +429,10 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     (has('の数×', 'の枚数×', '×10', '×20', '×30', '×40', '×50') && has('ダメージ')) ||
     // JA: flat damage boost tools (プラスパワー, ちからのハチマキ, エレキパワー, etc.)
     (has('バトルポケモンへのダメージは') && /「[+＋]\d+」/.test(effect)) ||
+    // JA: damage to バトル場のポケモン (older tool phrasing — おはらいグローブ, ファイティングスタジアム)
+    (has('バトル場の') && has('へのダメージ') && /「[+＋]\d+」/.test(effect)) ||
+    // EN: Supereffective Glasses — modify Weakness multiplier (adds bonus damage)
+    (has('Weakness') && has('apply it as') && /×\d/.test(effect)) ||
     // EN: "does N more damage for each" / "does N damage for each"
     (has('more damage for each', 'damage for each') && !has('Benched Pok\u00e9mon (both yours')) ||
     (has('this attack does') && has('more damage') && (has('if ', 'during '))) ||
@@ -446,7 +472,9 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     (has('道具', '物品') && has('消除', '移除') && !has('選擇最多')) ||
     has('ポケモンのどうぐをトラッシュ', 'ポケモンのどうぐを捨て', 'どうぐをトラッシュ') ||
     // EN: discard a single Pokémon Tool
-    (has('discard') && has('Pok\u00e9mon Tool') && !has('all Pok\u00e9mon Tools'))
+    (has('discard') && has('Pokémon Tool') && !has('all Pokémon Tools')) ||
+    // EN: Tool Jammer — opponent's Tool has no effect while this Pokémon is Active
+    (has('Pokémon Tools') && has('no effect'))
   ) {
     primary.add('道具消除');
   }
@@ -454,7 +482,8 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
   // Information (ZH + JA + EN)
   if (
     (has('查看', '看') && !primary.has('牌庫搜索') && !primary.has('棄牌搜索')) ||
-    (has('手札を見る', '相手の手札を見る') && !primary.has('牌庫搜索') && !primary.has('棄牌搜索')) ||
+    // JA: 見る (look at) as well as 見てよい (may look at) and other て-form inflections
+    (has('手札を見る', '手札を見てよい', '相手の手札を見る', '相手の手札を見てよい', '相手の手札を見て') && !primary.has('牌庫搜索') && !primary.has('棄牌搜索')) ||
     // EN: peek at opponent's hand or top of deck
     ((has('look at', 'Look at') && (has("opponent's hand", 'their hand', 'the top'))) &&
       !primary.has('牌庫搜索') && !primary.has('棄牌搜索')) ||
@@ -535,7 +564,13 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
   if (
     (has('傷害不計算', '不計算弱點', '不計算抵抗力') && has('弱點', '抵抗力', '附加效果') && !has('備戰區不計算')) ||
     has('弱点・抵抗力は計算しない', '弱点は計算しない', '弱点を使わない') ||
-    has('ついている場合のダメージは計算しない')
+    has('ついている場合のダメージは計算しない') ||
+    // JA: ignore effects applied to opponent's Active (フヨウ / Phantom Dreamer style)
+    has('かかっている効果を計算しない') ||
+    // EN: Phoebe — damage ignores all effects on opponent's Active Pokémon
+    has("isn't affected by any effects on your opponent's Active Pok\u00e9mon") ||
+    // EN: Single Strike Scroll of Piercing — ignore Weakness/Resistance
+    has("isn't affected by Weakness or Resistance")
   ) {
     primary.add('無視弱點/效果');
   }
@@ -589,6 +624,8 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     (has('牌庫') && has('基本') && has('能量卡', '能量') && has('加入手牌')) ||
     // JA: deck/discard → attach energy
     (has('山札から') && has('エネルギー') && has('つける', 'ポケモンにつける', 'をつける')) ||
+    // JA: energy from within deck (山札にある) — カキ, マツリカ, ビーストリング
+    (has('山札にある') && has('エネルギー') && has('つける')) ||
     (has('トラッシュから') && has('エネルギー') && has('つける', 'ポケモンにつける', 'をつける')) ||
     // EN: attach Energy from discard pile or deck (cover both capital and lowercase, Bea pattern)
     ((has('attach', 'Attach')) && has('Energy') && (has('discard pile') || has('your deck') || has('from their discard pile'))) ||
@@ -631,7 +668,11 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     primary.add('狀態施加');
   }
 
-  if (has('備戰寶可夢的數量', '數量×') && has('傷害')) {
+  if (
+    (has('備戰寶可夢的數量', '數量×') && has('傷害')) ||
+    // JA: damage boost targeting opponent's Bench (望遠スコープ, etc.)
+    (has('ベンチ') && has('へのダメージ') && /「[+＋]\d+」/.test(effect))
+  ) {
     primary.add('備戰傷害加成');
   }
 
@@ -651,13 +692,17 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     // JA: mill top cards from own deck (あなあけスコップ, 未開の祭壇 optional trash)
     (has('山札を上から') && has('トラッシュ')) ||
     // EN: discard top cards from deck (Hole-Digging Shovel, PokéStop)
-    (has('Discard the top', 'discard the top') && has('of your deck', 'of their deck'))
+    (has('Discard the top', 'discard the top') && has('of your deck', 'of their deck')) ||
+    // EN: Switching Cups — swap a card in hand with top of deck
+    (has('Switch') && has('from your hand') && has('top card of your deck'))
   ) {
     primary.add('牌庫操作');
   }
 
-  // Chain moves (ZH + JA + EN)
+  // Chain moves / multi-Supporter play (ZH + JA + EN)
   if (
+    // JA: use extra Supporters in one turn (マチスの作戦)
+    (has('サポートの枚数は') && has('になる')) ||
     (has('在上個自己的回合', '在上個對手的回合', '在上個回合', '在上回合') && has('才可使用')) ||
     (has('前の番に') && has('使っていたなら', 'このワザを使っていた')) ||
     // EN
@@ -722,7 +767,27 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     (has('each Pok\u00e9mon in play') && (has('gets +', 'gets -', 'takes', 'more damage', 'less damage'))) ||
     (has('while this card is in play') && (has('HP', 'damage', 'Energy'))) ||
     // EN: bench size changes (Collapsed Stadium, Area Zero Underdepths, Sky Field)
-    (has('Benched Pok\u00e9mon') && (has("can't have more than", 'can have up to') && has('their Bench', 'on their Bench')))
+    (has('Benched Pok\u00e9mon') && has("can't have more than", 'can have up to')) ||
+    // JA: special energy suppression (シンオウ神殿)
+    has('特殊エネルギーの効果はすべてなくなり') ||
+    // JA: Lost Zone stadium (ロストシティ)
+    (has('ロストゾーン') && has('きぜつ')) ||
+    // JA: resistance removal (磁気嵐)
+    has('抵抗力は、すべてなくなる') ||
+    // JA: tool effect disable (フラダリラボ)
+    (has('ポケモンのどうぐ') && has('効果は、すべてなくなる')) ||
+    // EN: Path to the Peak — Pokémon with Rule Box have no Abilities
+    (has('Rule Box') && has('no Abilities')) ||
+    // EN: Dyna Tree Hill — prevents healing
+    has("can't be healed") ||
+    // EN: Glimwood Tangle — re-flip coins for attacks
+    (has('ignore all results') && has('coin flip', 'coins again', 'flipping those coins')) ||
+    // EN: PokéStop — discard top 3, gain any Item cards revealed
+    (has('discard') && has('from the top of their deck') && has('Item cards') && has('their hand')) ||
+    // EN: Turffield Stadium — search deck for Evolution Pokémon to hand
+    (has('search their deck') && has('Pok\u00e9mon') && has('into their hand')) ||
+    // EN: Shopping Center — return a Tool to hand
+    (has('Pok\u00e9mon Tool') && has('put a Pok\u00e9mon Tool', 'may put') && has('into their hand'))
   ) {
     primary.add('場地增幅');
   }
@@ -732,10 +797,19 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     has('不會受到', '效果的影響') ||
     has('ワザの効果を受けない', '効果を受けない', 'この特性の効果は受けない') ||
     (has('効果') && has('受けない', '受けない。')) ||
+    // JA: clear all active move effects (きとうし, ポケモンレンジャー)
+    (has('かかっている') && has('ワザの効果') && has('なくなる')) ||
     // EN
     has('Prevent all effects of attacks',
+        'prevent all effects of attacks',
         "isn't affected by any effects of",
-        'not affected by any effects from')
+        'not affected by any effects from') ||
+    // EN: prevent all effects of opponent's Supporter targeting this Pokémon (Moon & Sun Badge, Leafy Camo Poncho)
+    (has("your opponent plays a Supporter") && has('prevent all effects of that card')) ||
+    // EN: Canceling Cologne — Active can't use Abilities this turn
+    (has('no Abilities') && has("until the end of your turn", 'during that turn')) ||
+    // EN: Windup Arm — attack even if Asleep or Paralyzed
+    (has('can attack even if') && has('Asleep or Paralyzed'))
   ) {
     primary.add('效果免疫');
   }
@@ -756,7 +830,11 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     has('このワザとして使う', 'ワザとして使う', 'のワザを使う') ||
     // EN
     (has('use it as this attack', 'attacks and use it as this attack') ||
-     (has('Choose 1 of your') && has('attacks') && has('use it as this attack', 'and use it')))
+     (has('Choose 1 of your') && has('attacks') && has('use it as this attack', 'and use it'))) ||
+    // EN: Memory Capsule — use attack from previous Evolution
+    (has('attacks from its previous Evolutions') || has('attack from its previous Evolution')) ||
+    // EN: Rapid Strike Scroll of Swirls — use the attack on this card
+    has('can use the attack on this card')
   ) {
     primary.add('招式複製');
   }
@@ -885,9 +963,27 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     (has('from your discard pile') && has('Energy card', 'Energy cards') &&
       has('into your hand', 'to your hand') && !has('attach')) ||
     // EN: Training Court (third-person: "from their discard pile into their hand")
-    (has('from their discard pile') && has('Energy card') && has('into their hand'))
+    (has('from their discard pile') && has('Energy card') && has('into their hand')) ||
+    // EN: shuffle Energy cards from discard into deck (Urn of Vitality, Ordinary Rod energy part)
+    (has('from your discard pile') && has('Energy') && has('into your deck') && has('Shuffle', 'shuffle'))
   ) {
     primary.add('能量回收');
+  }
+
+  // Opponent interference — force opponent action / discard from hand / Target Whistle
+  if (
+    // JA: put opponent's Pokemon from their discard to their bench (ターゲットホイッスル)
+    (has('相手のトラッシュ') && has('ポケモン') && has('ベンチに出す')) ||
+    // JA: put cards from opponent's hand back to their deck (マツバ style)
+    (has('相手の手札') && (has('山札にもどして切') || has('山札にもどす'))) ||
+    // EN: Echoing Horn — put opponent's Basic from discard onto their Bench
+    (has("your opponent's discard pile") && has('onto their Bench')) ||
+    // EN: Spirit Mask — opponent discards from hand when this Pokémon takes damage
+    (has('your opponent discards') && has('from their hand') && has('damaged by an attack')) ||
+    // EN: Cursed Shovel — discard top cards of opponent's deck when this Pokémon is KO'd
+    (has('Knocked Out') && has('discard the top') && has("your opponent's deck"))
+  ) {
+    primary.add('對手干擾');
   }
 
   // Deck reshuffle (ZH + JA + EN)
@@ -938,30 +1034,42 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
   }
 
   // High damage reduction (ZH + JA + EN) — threshold ≥ 70
-  if (
-    (/傷害「-(\d+)/.test(effect) && parseInt(effect.match(/傷害「-(\d+)/)?.[1] ?? '0', 10) >= 70) ||
-    (/受けるダメージは?「?(\d+)」?少なく/.test(effect) &&
-      parseInt(effect.match(/受けるダメージは?「?(\d+)」?少なく/)?.[1] ?? '0', 10) >= 70) ||
-    // EN
-    (/takes? (\d+) less damage/i.test(effect) &&
-      parseInt(effect.match(/takes? (\d+) less damage/i)?.[1] ?? '0', 10) >= 70)
-  ) {
-    primary.add('高額傷害減免');
+  {
+    const _jaReductionDash = effect.match(/(?:受けるワザのダメージ|受けるダメージ)は「-(\d+)」/);
+    if (
+      (/傷害「-(\d+)/.test(effect) && parseInt(effect.match(/傷害「-(\d+)/)?.[1] ?? '0', 10) >= 70) ||
+      (/受けるダメージは?「?(\d+)」?少なく/.test(effect) &&
+        parseInt(effect.match(/受けるダメージは?「?(\d+)」?少なく/)?.[1] ?? '0', 10) >= 70) ||
+      // JA: 「-XX」 dash form (ガラルのむねあて, タケシのニビシティジム, リバースバレー, etc.)
+      (_jaReductionDash !== null && parseInt(_jaReductionDash[1] ?? '0', 10) >= 70) ||
+      // EN
+      (/takes? (\d+) less damage/i.test(effect) &&
+        parseInt(effect.match(/takes? (\d+) less damage/i)?.[1] ?? '0', 10) >= 70)
+    ) {
+      primary.add('高額傷害減免');
+    }
   }
 
   // Damage reduction (ZH + JA + EN) — any positive reduction < 70
-  if (
-    ((has('受到招式的傷害') || has('傷害「-')) &&
-      /傷害「-(\d+)/.test(effect) &&
-      parseInt(effect.match(/傷害「-(\d+)/)?.[1] ?? '0', 10) < 70 &&
-      !has('【鋼】', '【鬥】', '所有寶可夢')) ||
-    (/受けるダメージは?「?(\d+)」?少なく/.test(effect) &&
-      parseInt(effect.match(/受けるダメージは?「?(\d+)」?少なく/)?.[1] ?? '0', 10) < 70) ||
-    // EN
-    (/takes? (\d+) less damage/i.test(effect) &&
-      parseInt(effect.match(/takes? (\d+) less damage/i)?.[1] ?? '0', 10) < 70)
-  ) {
-    primary.add('傷害減免');
+  {
+    const _jaReductionDash = effect.match(/(?:受けるワザのダメージ|受けるダメージ)は「-(\d+)」/);
+    if (
+      ((has('受到招式的傷害') || has('傷害「-')) &&
+        /傷害「-(\d+)/.test(effect) &&
+        parseInt(effect.match(/傷害「-(\d+)/)?.[1] ?? '0', 10) < 70 &&
+        !has('【鋼】', '【鬥】', '所有寶可夢')) ||
+      (/受けるダメージは?「?(\d+)」?少なく/.test(effect) &&
+        parseInt(effect.match(/受けるダメージは?「?(\d+)」?少なく/)?.[1] ?? '0', 10) < 70) ||
+      // JA: 「-XX」 dash form < 70 (ガラルのむねあて, タケシのニビシティジム, リバースバレー)
+      (_jaReductionDash !== null && parseInt(_jaReductionDash[1] ?? '0', 10) < 70) ||
+      // EN
+      (/takes? (\d+) less damage/i.test(effect) &&
+        parseInt(effect.match(/takes? (\d+) less damage/i)?.[1] ?? '0', 10) < 70) ||
+      // EN: Panic Mask — prevent all damage from low-HP opponents (conditional damage block)
+      (has('Prevent all damage') && has('HP or less remaining'))
+    ) {
+      primary.add('傷害減免');
+    }
   }
 
   // Supporter restriction (ZH + JA + EN)
@@ -978,9 +1086,16 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
   if (
     (has('昏厥') && has('寶可夢') && (has('加入手牌') || has('放入牌庫') || has('放回牌庫') || has('備戰區'))) ||
     (has('きぜつした') && has('ポケモン') && (has('手札に加える') || has('山札に戻す') || has('ベンチに出す'))) ||
+    // JA: recover Pokemon from discard to bench (げんきのかけら, ターゲットホイッスル opponent bench)
+    (has('トラッシュから') && has('ポケモン') && has('ベンチに出す') && !has('相手のトラッシュ')) ||
+    // JA: return all discarded Pokemon to deck (カリン, スイレンのつりざお)
+    (has('トラッシュにある') && has('ポケモン') && (has('山札にもどす') || has('山札に戻す') || has('山札にもどして切'))) ||
     // EN
     (has('Knocked Out') && has('Pokémon') &&
-      (has('put it into your hand', 'into your hand', 'onto your Bench', 'into your deck')))
+      (has('put it into your hand', 'into your hand', 'onto your Bench', 'into your deck'))) ||
+    // EN: Ordinary Rod (Pokemon part), Thorton — shuffle/swap Basic Pokémon from discard to deck/field
+    (has('Pokémon') && has('discard pile') && has('into your deck') && has('Shuffle', 'shuffle')) ||
+    (has('discard pile') && has('switch it with') && has('in play'))
   ) {
     const qty = extractQuantity(effect);
     primary.add(qty > 0 ? `KO回收×${qty}` : 'KO回收');
@@ -996,7 +1111,9 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     (has('shuffle your hand') && has('draw') && has('deck')) ||
     (has('shuffle') && has('hand') && has('deck') && has('draw') && !has('your opponent')) ||
     // EN: draw cards until they have N (Rose Tower stadium)
-    (has('draw cards until') && has('cards in their hand'))
+    (has('draw cards until') && has('cards in their hand')) ||
+    // EN: Caitlin — put N cards from hand to deck then draw that many
+    (has('from your hand') && has('deck') && has('draw that many cards'))
   ) {
     const drawCount = extractDrawCount(effect);
     primary.add(drawCount > 0 ? `重新抽牌×${drawCount}` : '重新抽牌');
@@ -1113,7 +1230,9 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     // EN
     (has('return') && has('to your hand') && has('Pok\u00e9mon')) ||
     // EN: capital P "Put 1 of your Pokémon...into your hand" (Prof Turo, Scoop Up Cyclone, Penny)
-    (has('put', 'Put') && has('into your hand') && has('Pok\u00e9mon') && !has('Knocked Out'))
+    (has('put', 'Put') && has('into your hand') && has('Pok\u00e9mon') && !has('Knocked Out')) ||
+    // JA: bounce Pokemon from field back to deck (クロケア)
+    (has('ポケモン') && has('山札にもどす', '山札に戻す') && !has('トラッシュ') && !has('エネルギー') && !has('サポート'))
   ) {
     primary.add('手牌回收');
   }
@@ -1133,8 +1252,15 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     primary.add('能量需求增加');
   }
 
-  // Energy requirement decrease (JA) — e.g. Counter Gain (カウンターゲイン)
-  if (has('使用するためのエネルギー') && has('少なく', '少ない')) {
+  // Energy requirement decrease (JA + EN) — e.g. Counter Gain (カウンターゲイン), Elemental Badge
+  if (
+    (has('使用するためのエネルギー') && has('少なく', '少ない')) ||
+    (has('招式所需的能量') && has('少')) ||
+    // EN: attacks cost less Energy (Elemental Badge, Jet Badge, etc.)
+    (has('attacks cost') && has('less')) ||
+    // EN: cost reduction phrasing — e.g. "its attacks cost {C} less"
+    (has('cost') && has('less') && has('Energy'))
+  ) {
     primary.add('能量需求減少');
   }
 
