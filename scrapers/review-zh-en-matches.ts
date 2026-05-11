@@ -97,6 +97,7 @@ interface DbCard {
   types: string[];
   supertype: string | null;
   imageUrl: string | null;
+  sourceUrl: string | null;
 }
 
 interface DbPrimaryCard {
@@ -158,6 +159,7 @@ export interface AmbiguousReview {
   zhExpansion: string;
   zhWebCardId: string;
   zhImageUrl: string | null;
+  zhSourceUrl: string | null;
   hp: number | null;
   types: string[];
   rarity: string | null;
@@ -171,10 +173,7 @@ export interface AmbiguousReview {
     enWebCardId: string;
     enImageUrl: string | null;
     enNumber: string | null;
-    hp: number | null;
-    types: string[];
-    rarity: string | null;
-    regulationMark: string | null;
+    enSourceUrl: string | null;
   }[];
 }
 
@@ -209,6 +208,7 @@ function toAmbiguousReview(a: AmbiguousRecord): AmbiguousReview {
     zhExpansion: a.zhExpansionCode ?? '?',
     zhWebCardId: zhCard?.webCardId ?? '',
     zhImageUrl: zhCard?.imageUrl ?? null,
+    zhSourceUrl: zhCard?.sourceUrl ?? null,
     hp: zhCard?.hp ?? null,
     types: zhCard?.types ?? [],
     rarity: zhCard?.rarity ?? null,
@@ -224,10 +224,7 @@ function toAmbiguousReview(a: AmbiguousRecord): AmbiguousReview {
         enWebCardId: enCard?.webCardId ?? '',
         enImageUrl: enCard?.imageUrl ?? null,
         enNumber: en.cardNumber,
-        hp: enCard?.hp ?? null,
-        types: enCard?.types ?? [],
-        rarity: enCard?.rarity ?? null,
-        regulationMark: enCard?.regulationMark ?? null,
+        enSourceUrl: enCard?.sourceUrl ?? null,
       };
     }),
   };
@@ -258,7 +255,7 @@ async function loadPCards(sourceLang: 'ZH_TW' | 'EN_US', absentLang: 'EN_US' | '
       id: true, primaryCardId: true, webCardId: true, language: true, name: true,
       variantType: true, rarity: true, regulationMark: true, artist: true,
       evolvesFrom: true, ruleBox: true, subtypes: true, attacks: true,
-      hp: true, types: true, supertype: true, imageUrl: true,
+      hp: true, types: true, supertype: true, imageUrl: true, sourceUrl: true,
     },
   });
   const cards = rawCards as unknown as DbCard[];
@@ -643,6 +640,7 @@ function rebuildExpFilter() {
       sel.innerHTML += '<option value="' + esc(e) + '">' + esc(e) + ' (' + count + ')</option>';
     });
   }
+  // Restore previous selection if still available
   if (prev) sel.value = prev;
   if (!sel.value) state.filter.exp = '';
 }
@@ -669,9 +667,7 @@ function esc(s) {
 
 function imgSrc(url) {
   if (!url) return '';
-  // Handle both remote URLs and local paths
   if (url.indexOf('http') === 0) return url;
-  // For local paths, serve via /local-img endpoint
   return '/local-img?p=' + encodeURIComponent(url);
 }
 
@@ -752,7 +748,7 @@ function renderAmbiguousRow(a) {
   p.push('<div class="candidates">');
   a.candidates.forEach(function(c, idx) {
     p.push('<div class="candidate-card">');
-    p.push(cardSide(c.enName, c.enWebCardId, c.enImageUrl, c.hp, c.types, c.rarity, c.regulationMark, true));
+    p.push(cardSide(c.enName, c.enWebCardId, c.enImageUrl, null, [], null, null, true));
     p.push('<div class="exp-badge">' + esc(c.enExpansion) + (c.enNumber ? ' #' + esc(c.enNumber) : '') + '</div>');
     p.push('</div>');
   });
@@ -771,13 +767,13 @@ function filtered() {
       if (state.filter.method && m.matchMethod !== state.filter.method) return false;
       return true;
     });
-   } else {
-     return state.ambiguous.filter(function(a) {
-       if (state.filter.exp && !a.candidates.some(function(c) { return c.enExpansion === state.filter.exp; })) return false;
-       if (state.filter.method && a.matchMethod !== state.filter.method) return false;
-       return true;
-     });
-   }
+  } else {
+    return state.ambiguous.filter(function(a) {
+      if (state.filter.exp && a.zhExpansion !== state.filter.exp) return false;
+      if (state.filter.method && a.matchMethod !== state.filter.method) return false;
+      return true;
+    });
+  }
 }
 
 function renderMatches() {
@@ -803,32 +799,36 @@ function renderMatches() {
       rows.forEach(function(m) { html.push(renderRow(m)); });
     });
     document.getElementById('matches').innerHTML = html.join('');
-   } else {
-     var byExp = {};
-     vis.forEach(function(a) {
-       var key = a.candidates.length > 0 ? a.candidates[0].enExpansion : a.zhExpansion;
-       if (!byExp[key]) byExp[key] = [];
-       byExp[key].push(a);
-     });
-     var html = [];
-     Object.keys(byExp).sort().forEach(function(exp) {
-       var rows = byExp[exp];
-       var confirmed = rows.filter(function(a) { return state.confirmed[a.id] !== false; }).length;
-       html.push('<div class="section-head">' + esc(exp) + ' &mdash; ' + confirmed + ' / ' + rows.length + ' confirmed</div>');
-       rows.forEach(function(a) { html.push(renderAmbiguousRow(a)); });
-     });
-     document.getElementById('ambiguous').innerHTML = html.join('');
-   }
+  } else {
+    var byExp = {};
+    vis.forEach(function(a) {
+      var key = a.zhExpansion;
+      if (!byExp[key]) byExp[key] = [];
+      byExp[key].push(a);
+    });
+    var html = [];
+    Object.keys(byExp).sort().forEach(function(exp) {
+      var rows = byExp[exp];
+      var confirmed = rows.filter(function(a) { return state.confirmed[a.id] !== false; }).length;
+      html.push('<div class="section-head">' + esc(exp) + ' &mdash; ' + confirmed + ' / ' + rows.length + ' confirmed</div>');
+      rows.forEach(function(a) { html.push(renderAmbiguousRow(a)); });
+    });
+    document.getElementById('ambiguous').innerHTML = html.join('');
+  }
   updateStats();
 }
 
 function updateStats() {
   var total = state.matches.length;
   var confirmed = state.matches.filter(function(m) { return state.confirmed[m.id] !== false; }).length;
-  document.getElementById('stat-label').textContent = confirmed + ' / ' + total + ' confirmed';
+  var ambigLinkable = state.ambiguous.filter(function(a) { return state.confirmed[a.id] !== false && a.candidates.length === 1; }).length;
+  var totalApply = confirmed + ambigLinkable;
+  document.getElementById('stat-label').textContent = confirmed + ' / ' + total + ' matches confirmed';
+  document.getElementById('stat-ambig').textContent = ambigLinkable + ' / ' + state.ambiguous.length + ' ambiguous linkable';
+  document.getElementById('tab-ambiguous').textContent = 'Ambiguous (' + state.ambiguous.length + ')';
   var btn = document.getElementById('btn-apply');
-  btn.textContent = 'Apply ' + confirmed;
-  btn.disabled = confirmed === 0;
+  btn.textContent = 'Apply ' + totalApply;
+  btn.disabled = totalApply === 0;
 }
 
 function toggle(id) {
@@ -880,8 +880,9 @@ function doApply() {
   var matchIds = state.matches
     .filter(function(m) { return state.confirmed[m.id] !== false; })
     .map(function(m) { return m.id; });
+  // Include ambiguous records with exactly 1 candidate that are confirmed
   var ambigIds = state.ambiguous
-    .filter(function(a) { return state.confirmed[a.id] !== false && a.candidates && a.candidates.length === 1; })
+    .filter(function(a) { return state.confirmed[a.id] !== false && a.candidates.length === 1; })
     .map(function(a) { return a.id; });
   var ids = matchIds.concat(ambigIds);
   if (!ids.length) return;
@@ -921,10 +922,10 @@ function init(data) {
   state.matches.forEach(function(m) { state.confirmed[m.id] = true; });
   state.ambiguous.forEach(function(a) { state.confirmed[a.id] = true; }); // Use the same state object for simplicity, but track ambiguous IDs separately if needed later.
 
-  rebuildExpFilter();
   document.getElementById('loading').style.display = 'none';
   document.getElementById('matches').style.display = state.activeTab === 'matches' ? 'block' : 'none';
   document.getElementById('ambiguous').style.display = state.activeTab === 'ambiguous' ? 'block' : 'none';
+  rebuildExpFilter();
   renderMatches();
 }
 
@@ -952,96 +953,84 @@ fetch('/api/matches')
 // ─────────────────────────────────────────────────────────────
 // HTTP Server
 // ─────────────────────────────────────────────────────────────
-// ?????????????????????????????????????????????????????????????
-// Linkage Review Page  (/link)
-// ?????????????????????????????????????????????????????????????
+// ── Linkage Review Page (/link) ───────────────────────────────────────────
 const LINK_PAGE_HTML = `<!DOCTYPE html>
-<html lang="en">
+<html lang="zh">
 <head>
-<meta charset="UTF-8">
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ZH?N Linkage Review</title>
+<title>ZH→EN Linkage Review</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:#0d1117;color:#c9d1d9;font:13px/1.5 system-ui,sans-serif;padding-bottom:60px}
-#topbar{position:sticky;top:0;z-index:10;background:#161b22;border-bottom:1px solid #30363d;padding:8px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-#topbar h1{font-size:15px;color:#58a6ff;white-space:nowrap}
-#topbar a{color:#8b949e;font-size:12px;text-decoration:none}#topbar a:hover{color:#c9d1d9}
-select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:6px;font-size:12px}
-.stat{color:#8b949e;font-size:12px;white-space:nowrap}
-.green{color:#3fb950}.red{color:#f85149}
-#progress{position:fixed;bottom:0;left:0;right:0;background:#161b22;border-top:1px solid #30363d;padding:8px 16px;display:flex;align-items:center;gap:12px;z-index:20}
-#prog-bar-wrap{flex:1;background:#21262d;border-radius:4px;height:8px;overflow:hidden}
-#prog-bar{height:8px;background:#3fb950;border-radius:4px;transition:width .3s}
-#prog-text{color:#8b949e;font-size:12px;white-space:nowrap;min-width:80px;text-align:right}
-.exp-section{margin:20px 16px 0}
-.exp-header{font-size:14px;font-weight:600;color:#e6edf3;padding:8px 0 6px;border-bottom:1px solid #21262d;margin-bottom:10px;display:flex;align-items:center;gap:10px}
-.exp-header .exp-count{font-size:12px;color:#8b949e;font-weight:400}
-.card-grid{display:flex;flex-wrap:wrap;gap:12px}
+body{background:#0d1117;color:#c9d1d9;font-family:system-ui,sans-serif;font-size:13px;padding:12px}
+h1{font-size:18px;margin-bottom:8px;color:#e6edf3}
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;padding:8px;background:#161b22;border-radius:8px;border:1px solid #30363d}
+select{background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:6px;font-size:12px}
+.stats{display:flex;gap:12px;font-size:12px;color:#8b949e;margin-left:auto}
+.stat.green{color:#3fb950}.stat.yellow{color:#e3b341}
+.grid{display:flex;flex-wrap:wrap;gap:10px}
 .link-card{background:#161b22;border:2px solid #30363d;border-radius:10px;padding:10px;width:340px;transition:border-color .15s}
 .link-card.done{border-color:#3fb950;opacity:.7}
 .link-card.skipped{border-color:#484f58;opacity:.5}
-.zh-side{display:flex;gap:8px;align-items:flex-start;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #21262d}
-.zh-img{width:70px;height:97px;object-fit:contain;border-radius:4px;background:#0d1117;flex-shrink:0}
+.zh-side{display:flex;gap:8px;margin-bottom:8px}
+.zh-img-wrap{width:80px;height:112px;flex-shrink:0;position:relative}
+.zh-img-wrap img{width:80px;height:112px;object-fit:contain;border-radius:4px;background:#0d1117}
+.img-placeholder{display:flex;align-items:center;justify-content:center;background:#0d1117;border-radius:4px;border:1px dashed #30363d;color:#484f58;font-size:10px;text-align:center}
 .zh-info{flex:1;min-width:0}
-.zh-name{font-size:13px;font-weight:600;color:#e6edf3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.zh-meta{font-size:11px;color:#8b949e;margin-top:2px}
-.zh-exp{font-size:11px;color:#58a6ff;font-weight:600}
-.reason-tag{display:inline-block;background:#1f2937;border:1px solid #374151;color:#9ca3af;font-size:10px;padding:1px 5px;border-radius:3px;margin-top:4px}
+.zh-name{font-weight:600;color:#e6edf3;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.zh-exp{font-size:11px;color:#8b949e;margin-bottom:4px}
+.zh-meta{font-size:10px;color:#6e7681;margin-bottom:4px}
+.reason-tag{font-size:10px;background:#21262d;padding:2px 6px;border-radius:4px;color:#8b949e;display:inline-block}
 .candidates-label{font-size:11px;color:#8b949e;margin-bottom:5px}
-.candidates{display:flex;flex-wrap:wrap;gap:6px}
-.cand{cursor:pointer;border:2px solid #30363d;border-radius:7px;padding:5px;transition:border-color .15s,background .15s;position:relative;width:calc(50% - 3px)}
-.cand:hover{border-color:#58a6ff;background:#1a2233}
-.cand.selected{border-color:#3fb950;background:#122318}
-.cand img{width:100%;aspect-ratio:3/4;object-fit:contain;border-radius:4px;background:#0d1117;display:block}
-.cand-meta{font-size:10px;color:#8b949e;text-align:center;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cand-name{font-size:11px;color:#e6edf3;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cand-tick{position:absolute;top:3px;right:3px;background:#3fb950;color:#fff;border-radius:50%;width:16px;height:16px;font-size:10px;display:none;align-items:center;justify-content:center}
-.cand.selected .cand-tick{display:flex}
-.card-actions{display:flex;gap:6px;margin-top:8px}
+.no-cands{font-size:11px;color:#e3b341;padding:8px;background:#21262d;border-radius:6px;text-align:center;margin-bottom:6px}
+.candidates{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.cand{width:96px;border:2px solid #30363d;border-radius:6px;padding:4px;cursor:pointer;transition:border-color .15s;position:relative}
+.cand:hover{border-color:#58a6ff}
+.cand.selected{border-color:#3fb950;background:#0d2118}
+.cand-tick{position:absolute;top:2px;right:3px;color:#3fb950;font-size:14px;display:none}
+.cand.selected .cand-tick{display:block}
+.cand img{width:100%;aspect-ratio:3/4;object-fit:contain;border-radius:4px;background:#0d1117}
+.cand-name{font-size:10px;color:#c9d1d9;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cand-meta{font-size:9px;color:#6e7681}
+.card-actions{display:flex;gap:6px}
 .btn-skip{flex:1;background:#21262d;border:1px solid #30363d;color:#8b949e;padding:5px;border-radius:6px;cursor:pointer;font-size:12px}
 .btn-skip:hover{background:#30363d;color:#c9d1d9}
 .btn-apply{flex:2;background:#238636;border:1px solid #2ea043;color:#fff;padding:5px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600}
 .btn-apply:hover:not(:disabled){background:#2ea043}
 .btn-apply:disabled{opacity:.5;cursor:default}
-.done-badge{font-size:11px;color:#3fb950;text-align:center;padding:4px 0}
-.skip-badge{font-size:11px;color:#8b949e;text-align:center;padding:4px 0}
-#loading{padding:40px;text-align:center;color:#8b949e}
-#toast{position:fixed;bottom:60px;left:50%;transform:translateX(-50%);background:#161b22;border:1px solid #30363d;color:#c9d1d9;padding:8px 16px;border-radius:8px;font-size:13px;display:none;z-index:30}
-#toast.err{border-color:#f85149;color:#f85149}
+.done-badge{color:#3fb950;font-size:12px;padding:6px;text-align:center;flex:1}
+.skip-badge{color:#6e7681;font-size:12px;padding:6px;text-align:center;flex:1}
+#toast{position:fixed;bottom:16px;right:16px;background:#238636;color:#fff;padding:8px 14px;border-radius:8px;display:none;font-size:13px;z-index:9999}
+#toast.err{background:#da3633}
+.src-link{color:#58a6ff;font-size:10px;text-decoration:none;opacity:0.75;display:inline-block;margin-top:2px}.src-link:hover{opacity:1}
 </style>
 </head>
 <body>
-<div id="topbar">
-  <h1>ZH&#8594;EN Linkage</h1>
-  <a href="/">&#8592; Main Review</a>
-  <select id="filter-exp" onchange="filterExp(this.value)"><option value="">All expansions</option></select>
-  <span class="stat" id="stat-total"></span>
-  <span class="stat green" id="stat-linked"></span>
-  <span class="stat" id="stat-remain"></span>
+<h1>ZH&#8594;EN Linkage</h1>
+<div class="toolbar">
+  <label>Expansion: <select id="exp-filter" onchange="filterByExp(this.value)"><option value="">All</option></select></label>
+  <div class="stats">
+    <span class="stat green" id="stat-linked"></span>
+    <span class="stat yellow" id="stat-skipped"></span>
+    <span class="stat" id="stat-total"></span>
+  </div>
 </div>
-<div id="loading">Loading ambiguous cards&#8230;</div>
-<div id="content"></div>
-<div id="progress" style="display:none">
-  <div id="prog-bar-wrap"><div id="prog-bar" style="width:0%"></div></div>
-  <div id="prog-text">0 / 0</div>
-</div>
+<div class="grid" id="grid"></div>
 <div id="toast"></div>
-
 <script>
 var state = {
   all: [],
   byExp: {},
-  expList: [],
-  resolved: {},  // id -> 'linked' | 'skipped'
-  selected: {},  // id -> enPrimaryCardId
-  activeExp: ''
+  activeExp: '',
+  resolved: {},
+  selected: {},
 };
 
 function esc(s) {
-  if (s === null || s === undefined) return '';
+  if (s == null) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+
 function imgSrc(url) {
   if (!url) return '';
   if (url.indexOf('http') === 0) return url;
@@ -1058,33 +1047,12 @@ function showToast(msg, isErr) {
 }
 
 function updateProgress() {
-  var total = state.all.length;
   var linked = Object.values(state.resolved).filter(function(v){ return v==='linked'; }).length;
   var skipped = Object.values(state.resolved).filter(function(v){ return v==='skipped'; }).length;
-  var done = linked + skipped;
-  document.getElementById('stat-total').textContent = total + ' ambiguous';
+  var total = state.all.length;
   document.getElementById('stat-linked').textContent = '\u2713 ' + linked + ' linked';
-  document.getElementById('stat-remain').textContent = (total - done) + ' remaining';
-  if (total > 0) {
-    document.getElementById('progress').style.display = 'flex';
-    document.getElementById('prog-bar').style.width = Math.round(done/total*100) + '%';
-    document.getElementById('prog-text').textContent = done + ' / ' + total;
-  }
-}
-
-function filterExp(exp) {
-  state.activeExp = exp;
-  render();
-}
-
-function buildExpFilter() {
-  var sel = document.getElementById('filter-exp');
-  sel.innerHTML = '<option value="">All expansions (' + state.all.length + ')</option>';
-  state.expList.forEach(function(e) {
-    var count = (state.byExp[e] || []).length;
-    sel.innerHTML += '<option value="' + esc(e) + '">' + esc(e) + ' (' + count + ')</option>';
-  });
-  if (state.activeExp) sel.value = state.activeExp;
+  document.getElementById('stat-skipped').textContent = '\u2717 ' + skipped + ' skipped';
+  document.getElementById('stat-total').textContent = total + ' total';
 }
 
 function handleCandClick(el) { selectCandidate(el.dataset.cardid, el.dataset.enid); }
@@ -1093,14 +1061,13 @@ function handleApply(el) { applyCard(el.dataset.cardid); }
 
 function selectCandidate(cardId, enPrimaryCardId) {
   state.selected[cardId] = enPrimaryCardId;
-  // Update UI of all candidate buttons in this card
   var row = document.getElementById('lc-' + cardId);
   if (!row) return;
   row.querySelectorAll('.cand').forEach(function(el) {
     el.classList.toggle('selected', el.dataset.enid === enPrimaryCardId);
   });
-  var applyBtn = row.querySelector('.btn-apply');
-  if (applyBtn) applyBtn.disabled = false;
+  var btn = row.querySelector('.btn-apply');
+  if (btn) btn.disabled = false;
 }
 
 function skipCard(cardId) {
@@ -1108,7 +1075,8 @@ function skipCard(cardId) {
   var row = document.getElementById('lc-' + cardId);
   if (row) {
     row.classList.add('skipped');
-    row.querySelector('.card-actions').innerHTML = '<div class="skip-badge">&#10007; Skipped</div>';
+    var acts = row.querySelector('.card-actions');
+    if (acts) acts.innerHTML = '<div class="skip-badge">\u2717 Skipped</div>';
   }
   updateProgress();
 }
@@ -1116,44 +1084,61 @@ function skipCard(cardId) {
 function applyCard(cardId) {
   var enId = state.selected[cardId];
   if (!enId) return;
-  var row = document.getElementById('lc-' + cardId);
-  var btn = row ? row.querySelector('.btn-apply') : null;
-  if (btn) { btn.disabled = true; btn.textContent = 'Saving\u2026'; }
+  var btn = document.querySelector('#lc-' + cardId + ' .btn-apply');
+  if (btn) { btn.disabled = true; btn.textContent = '...'; }
   fetch('/api/link-one', {
     method: 'POST',
-    headers: {'Content-Type':'application/json'},
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ zhId: cardId, enId: enId })
-  })
-  .then(function(r){ return r.json(); })
-  .then(function(data) {
-    if (data.error) throw new Error(data.error);
-    state.resolved[cardId] = 'linked';
-    if (row) {
-      row.classList.add('done');
-      row.querySelector('.card-actions').innerHTML = '<div class="done-badge">&#10003; Linked</div>';
-    }
-    updateProgress();
-  })
-  .catch(function(e) {
-    showToast('Error: ' + e.message, true);
-    if (btn) { btn.disabled = false; btn.textContent = 'Link'; }
-  });
+  }).then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.error) throw new Error(data.error);
+      state.resolved[cardId] = 'linked';
+      var row = document.getElementById('lc-' + cardId);
+      if (row) {
+        row.classList.add('done');
+        var acts = row.querySelector('.card-actions');
+        if (acts) acts.innerHTML = '<div class="done-badge">\u2713 Linked</div>';
+      }
+      updateProgress();
+    }).catch(function(err) {
+      showToast('Error: ' + err.message, true);
+      if (btn) { btn.disabled = false; btn.textContent = 'Link'; }
+    });
+}
+
+function cardSearchUrl(name, exp, src) {
+  if (src) return src;
+  return 'https://www.google.com/search?q=' + encodeURIComponent('pokemon card ' + (name||'') + ' ' + (exp||'')) + '&tbm=isch';
+}
+function imgError(el) { el.style.display='none'; if(el.nextSibling) el.nextSibling.style.display='flex'; }
+
+function zhImgHtml(url, id) {
+  var label = id ? esc(id) : 'No img';
+  if (!url) return '<div class="img-placeholder" style="width:80px;height:112px">' + label + '</div>';
+  return '<img src="' + esc(imgSrc(url)) + '" style="width:80px;height:112px;object-fit:contain;border-radius:4px;background:#0d1117" loading="lazy" alt=""'
+    + ' onerror="imgError(this)">'
+    + '<div class="img-placeholder" style="width:80px;height:112px;display:none">' + label + '</div>';
+}
+
+function candImgHtml(url, id) {
+  var label = id ? esc(id) : 'No img';
+  if (!url) return '<div class="img-placeholder" style="aspect-ratio:3/4">' + label + '</div>';
+  return '<img src="' + esc(imgSrc(url)) + '" loading="lazy" alt="" style="width:100%;aspect-ratio:3/4;object-fit:contain;border-radius:4px;background:#0d1117"'
+    + ' onerror="imgError(this)">'
+    + '<div class="img-placeholder" style="aspect-ratio:3/4;display:none">' + label + '</div>';
 }
 
 function renderCard(a) {
   var resolved = state.resolved[a.id];
   var selectedEnId = state.selected[a.id];
   var p = [];
-  p.push('<div class="link-card' + (resolved==='done'?' done':resolved==='skipped'?' skipped':'') + '" id="lc-' + esc(a.id) + '">');
-  // ZH side
+  p.push('<div class="link-card' + (resolved==='linked'?' done':resolved==='skipped'?' skipped':'') + '" id="lc-' + esc(a.id) + '">');
   p.push('<div class="zh-side">');
-  if (a.zhImageUrl) {
-    p.push('<img class="zh-img" src="' + esc(imgSrc(a.zhImageUrl)) + '" loading="lazy" alt="" onerror="this.hidden=true">');
-  } else {
-    p.push('<div class="zh-img" style="display:flex;align-items:center;justify-content:center;color:#484f58;font-size:11px">No img</div>');
-  }
+  p.push('<div class="zh-img-wrap">' + zhImgHtml(a.zhImageUrl, a.zhWebCardId) + '</div>');
   p.push('<div class="zh-info">');
   p.push('<div class="zh-name">' + esc(a.zhName) + '</div>');
+  p.push('<a class="src-link" href="' + esc(cardSearchUrl(a.zhName, a.zhExpansion, a.zhSourceUrl)) + '" target="_blank" onclick="event.stopPropagation()">&#128269; ref</a>');
   p.push('<div class="zh-exp">' + esc(a.zhExpansion) + '</div>');
   var meta = [];
   if (a.hp) meta.push('HP ' + a.hp);
@@ -1163,27 +1148,26 @@ function renderCard(a) {
   if (meta.length) p.push('<div class="zh-meta">' + esc(meta.join(' \u00b7 ')) + '</div>');
   p.push('<div class="reason-tag">' + esc(a.reason || a.matchMethod) + '</div>');
   p.push('</div></div>');
-  // Candidates
-  p.push('<div class="candidates-label">' + a.candidates.length + ' candidate' + (a.candidates.length!==1?'s':'') + ' \u2014 click to select:</div>');
-  p.push('<div class="candidates">');
-  a.candidates.forEach(function(c) {
-    var isSel = selectedEnId === c.enPrimaryCardId;
-    p.push('<div class="cand' + (isSel?' selected':'') + '" data-cardid="' + esc(a.id) + '" data-enid="' + esc(c.enPrimaryCardId) + '" onclick="handleCandClick(this)">');
-    p.push('<div class="cand-tick">\u2713</div>');
-    if (c.enImageUrl) {
-      p.push('<img src="' + esc(imgSrc(c.enImageUrl)) + '" loading="lazy" alt="" onerror="this.hidden=true">');
-    } else {
-      p.push('<div style="aspect-ratio:3/4;background:#0d1117;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#484f58;font-size:10px">No img</div>');
-    }
-    p.push('<div class="cand-name">' + esc(c.enName) + '</div>');
-    var cmeta = [esc(c.enExpansion)];
-    if (c.enNumber) cmeta.push('#'+esc(c.enNumber));
-    if (c.hp) cmeta.push('HP'+c.hp);
-    p.push('<div class="cand-meta">' + cmeta.join(' ') + '</div>');
+  if (a.candidates.length === 0) {
+    p.push('<div class="no-cands">No EN candidates found</div>');
+  } else {
+    p.push('<div class="candidates-label">' + a.candidates.length + ' candidate' + (a.candidates.length!==1?'s':'') + ' \u2014 click to select:</div>');
+    p.push('<div class="candidates">');
+    a.candidates.forEach(function(c) {
+      var isSel = selectedEnId === c.enPrimaryCardId;
+      p.push('<div class="cand' + (isSel?' selected':'') + '" data-cardid="' + esc(a.id) + '" data-enid="' + esc(c.enPrimaryCardId) + '" onclick="handleCandClick(this)">');
+      p.push('<div class="cand-tick">\u2713</div>');
+      p.push(candImgHtml(c.enImageUrl, c.enWebCardId));
+      p.push('<div class="cand-name">' + esc(c.enName) + '</div>');
+      var cmeta = [esc(c.enExpansion)];
+      if (c.enNumber) cmeta.push('#'+esc(c.enNumber));
+      if (c.hp) cmeta.push('HP'+c.hp);
+      p.push('<div class="cand-meta">' + cmeta.join(' ') + '</div>');
+      p.push('<a class="src-link" href="' + esc(cardSearchUrl(c.enName, c.enExpansion, c.enSourceUrl)) + '" target="_blank" onclick="event.stopPropagation()">&#128269; ref</a>');
+      p.push('</div>');
+    });
     p.push('</div>');
-  });
-  p.push('</div>');
-  // Actions
+  }
   p.push('<div class="card-actions">');
   if (resolved === 'linked') {
     p.push('<div class="done-badge">\u2713 Linked</div>');
@@ -1198,64 +1182,44 @@ function renderCard(a) {
 }
 
 function render() {
-  var list = state.activeExp
-    ? (state.byExp[state.activeExp] || [])
-    : state.all;
-
-  if (!list.length) {
-    document.getElementById('content').innerHTML = '<div style="padding:40px;text-align:center;color:#8b949e">No cards to review' + (state.activeExp ? ' in ' + state.activeExp : '') + '</div>';
-    return;
-  }
-
+  var list = state.activeExp ? (state.byExp[state.activeExp] || []) : state.all;
   var html = [];
-  if (state.activeExp) {
-    html.push('<div class="exp-section">');
-    html.push('<div class="exp-header">' + esc(state.activeExp) + ' <span class="exp-count">(' + list.length + ' cards)</span></div>');
-    html.push('<div class="card-grid">');
-    list.forEach(function(a) { html.push(renderCard(a)); });
-    html.push('</div></div>');
-  } else {
-    state.expList.forEach(function(exp) {
-      var cards = state.byExp[exp] || [];
-      if (!cards.length) return;
-      html.push('<div class="exp-section">');
-      html.push('<div class="exp-header">' + esc(exp) + ' <span class="exp-count">(' + cards.length + ' cards)</span></div>');
-      html.push('<div class="card-grid">');
-      cards.forEach(function(a) { html.push(renderCard(a)); });
-      html.push('</div></div>');
-    });
-  }
-  document.getElementById('content').innerHTML = html.join('');
+  list.forEach(function(a) { html.push(renderCard(a)); });
+  document.getElementById('grid').innerHTML = html.join('');
+  updateProgress();
 }
 
-function init(data) {
-  state.all = data || [];
-  state.byExp = {};
-  state.expList = [];
-  // Auto-select single candidates
-  state.all.forEach(function(a) {
-    if (a.candidates.length === 1) {
-      state.selected[a.id] = a.candidates[0].enPrimaryCardId;
-    }
+function filterByExp(exp) { state.activeExp = exp; render(); }
+
+function buildExpFilter(items) {
+  var exps = {};
+  items.forEach(function(a) { exps[a.zhExpansion] = (exps[a.zhExpansion]||0) + 1; });
+  var sel = document.getElementById('exp-filter');
+  var cur = sel.value;
+  sel.innerHTML = '<option value="">All (' + items.length + ')</option>';
+  Object.keys(exps).sort().forEach(function(exp) {
+    var opt = document.createElement('option');
+    opt.value = exp; opt.textContent = exp + ' (' + exps[exp] + ')';
+    if (exp === cur) opt.selected = true;
+    sel.appendChild(opt);
   });
-  state.all.forEach(function(a) {
-    if (!state.byExp[a.zhExpansion]) {
-      state.byExp[a.zhExpansion] = [];
-      state.expList.push(a.zhExpansion);
-    }
-    state.byExp[a.zhExpansion].push(a);
-  });
-  state.expList.sort();
-  buildExpFilter();
-  updateProgress();
-  document.getElementById('loading').style.display = 'none';
-  render();
 }
 
 fetch('/api/ambiguous')
-  .then(function(r){ return r.json(); })
-  .then(function(data){ init(data.ambiguous || []); })
-  .catch(function(e){ document.getElementById('loading').textContent = 'Error: ' + e.message; });
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    state.all = data.ambiguous || [];
+    state.byExp = {};
+    state.all.forEach(function(a) {
+      if (!state.byExp[a.zhExpansion]) state.byExp[a.zhExpansion] = [];
+      state.byExp[a.zhExpansion].push(a);
+    });
+    state.all.forEach(function(a) {
+      if (a.candidates.length === 1) state.selected[a.id] = a.candidates[0].enPrimaryCardId;
+    });
+    buildExpFilter(state.all);
+    render();
+  });
 </script>
 </body>
 </html>`;
@@ -1291,26 +1255,32 @@ const server = createServer((req, res) => {
     let body = '';
     req.on('data', chunk => { body += chunk.toString(); });
     req.on('end', () => {
-      getMatches().then(async (result) => {
+      getMatches().then(async result => {
         const { ids } = JSON.parse(body) as { ids: string[] };
+        // Build a combined map: zhPrimaryCardId → enPrimaryCardId
+        // from both confirmed matches and ambiguous records with 1 candidate
         const linkMap = new Map<string, string>();
-        result.updates.forEach(u => {
-          if (ids.includes(u.zhPrimaryCardId)) linkMap.set(u.zhPrimaryCardId, u.enPrimaryCard.id);
-        });
-        result.ambiguous.forEach(a => {
+        for (const u of result.updates) {
+          if (ids.includes(u.zhPrimaryCardId))
+            linkMap.set(u.zhPrimaryCardId, u.enPrimaryCard.id);
+        }
+        for (const a of result.ambiguous) {
           if (ids.includes(a.zhPrimaryCardId) && a.enCandidates.length === 1)
             linkMap.set(a.zhPrimaryCardId, a.enCandidates[0].id);
-        });
+        }
+        if (linkMap.size === 0) return { applied: 0, deleted: 0 };
+        // Re-point EN cards to ZH PrimaryCard (correct linking mechanism)
         let applied = 0;
         let deleted = 0;
         for (const [zhId, enId] of linkMap) {
           await prisma.card.updateMany({ where: { primaryCardId: enId }, data: { primaryCardId: zhId } }).catch(() => null);
-          // Delete orphaned EN PrimaryCard if no cards remain
           const remaining = await prisma.card.count({ where: { primaryCardId: enId } }).catch(() => 1);
           if (remaining === 0) { await prisma.primaryCard.delete({ where: { id: enId } }).catch(() => null); deleted++; }
           applied++;
         }
-        cachedUpdates = null; cachedAmbiguous = null; cacheBuilding = false;
+        cachedUpdates = null;
+        cachedAmbiguous = null;
+        cacheBuilding = false;
         return { applied, deleted };
       })
       .then(result => sendJson(res, result))
@@ -1332,7 +1302,6 @@ const server = createServer((req, res) => {
       const { zhId, enId } = JSON.parse(body) as { zhId: string; enId: string };
       prisma.card.updateMany({ where: { primaryCardId: enId }, data: { primaryCardId: zhId } })
         .then(async () => {
-          // Delete orphaned EN PrimaryCard if no cards remain
           const remaining = await prisma.card.count({ where: { primaryCardId: enId } }).catch(() => 1);
           if (remaining === 0) await prisma.primaryCard.delete({ where: { id: enId } }).catch(() => null);
           cachedUpdates = null; cachedAmbiguous = null; cacheBuilding = false;
@@ -1342,7 +1311,7 @@ const server = createServer((req, res) => {
     return;
   }
 
-  if (p === '/local-img') {
+    if (p === '/local-img') {
     const imgPath = u.searchParams.get('p');
     if (!imgPath) { res.writeHead(400); res.end(); return; }
     const full = imgPath.startsWith('/') || imgPath.match(/^[A-Za-z]:/)

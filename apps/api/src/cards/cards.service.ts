@@ -946,6 +946,7 @@ export class CardsService {
         rarity: true,
         collectorNumber: true,
         imageUrl: true,
+        text: true,
         regionalExpansion: {
           select: {
             code: true,

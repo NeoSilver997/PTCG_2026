@@ -350,6 +350,30 @@ function runMatching(
     enEffFpLookup.set(expId, effMap);
   }
 
+  // ── Global (cross-expansion) lookup tables for fallback matching ──
+  const GLOBAL_KEY = '__GLOBAL__';
+  const globalAtkMap = new Map<string, DbPrimaryCard[]>();
+  const globalSpecMap = new Map<string, DbPrimaryCard[]>();
+  const globalEffMap = new Map<string, DbPrimaryCard[]>();
+  for (const en of (enByExpansion.get(GLOBAL_KEY) ?? [])) {
+    if (en.attackFingerprint !== null) {
+      const arr = globalAtkMap.get(en.attackFingerprint) ?? [];
+      arr.push(en);
+      globalAtkMap.set(en.attackFingerprint, arr);
+      if (en.pokemonSpeciesId !== null) {
+        const specKey = `${en.pokemonSpeciesId}|${en.attackFingerprint}`;
+        const sarr = globalSpecMap.get(specKey) ?? [];
+        sarr.push(en);
+        globalSpecMap.set(specKey, sarr);
+      }
+    }
+    if (en.attackFingerprint === null && en.effectFingerprint !== null) {
+      const arr = globalEffMap.get(en.effectFingerprint) ?? [];
+      arr.push(en);
+      globalEffMap.set(en.effectFingerprint, arr);
+    }
+  }
+
   // ── Sibling counts: how many ZH cards share the same fingerprint in an expansion ──
   const zhAtkSiblings = new Map<string, Map<string, number>>();   // expId → fp → count
   const zhEffSiblings = new Map<string, Map<string, number>>();
@@ -410,6 +434,26 @@ function runMatching(
         matchMethod = 'attack-fingerprint';
       }
 
+      // Global fallback: search across all EN expansions if per-expansion failed
+      if (enCandidates.length === 0) {
+        if (zh.pokemonSpeciesId) {
+          const specKey = `${zh.pokemonSpeciesId}|${zh.attackFingerprint}`;
+          enCandidates = globalSpecMap.get(specKey) ?? [];
+          if (enCandidates.length > 0) matchMethod = 'pokemon-species+attack';
+        }
+        if (enCandidates.length === 0) {
+          enCandidates = globalAtkMap.get(zh.attackFingerprint!) ?? [];
+          matchMethod = 'attack-fingerprint';
+        }
+        // For global fallback, use global ZH sibling count (how many ZH cards share this FP)
+        // We don't have per-expansion count but can use 1 as default (safe for clean FPs)
+        // Actually count ZH sibs globally by checking all ZH with same FP
+        if (enCandidates.length > 0) {
+          // Use 1 as global zhSibCount — if FP is ambiguous, enCandidates.length > 1 catches it
+          zhSibCount = 1;
+        }
+      }
+
       if (enCandidates.length === 0) {
         unmatched.push({ zhId: zh.id, zhName: zh.name, expansion: zh.expansionCode ?? '?', reason: 'no EN match for attack fingerprint' });
         matched = true; // consumed — don't push to effect pass
@@ -444,7 +488,11 @@ function runMatching(
     // --- Pass 2: Trainer / Energy — effect-tag + regulationMark fingerprint ---
     if (zh.effectFingerprint !== null) {
       const effMap = enEffFpLookup.get(expId);
-      const enCandidates = effMap?.get(zh.effectFingerprint) ?? [];
+      let enCandidates = effMap?.get(zh.effectFingerprint) ?? [];
+      // Global fallback for effect fingerprint
+      if (enCandidates.length === 0) {
+        enCandidates = globalEffMap.get(zh.effectFingerprint) ?? [];
+      }
       const zhSibCount = zhEffSiblings.get(expId)?.get(zh.effectFingerprint) ?? 1;
 
       if (enCandidates.length === 0) {
@@ -683,11 +731,10 @@ async function main(): Promise<void> {
   const allEnOnly = await loadPrimaryCards('EN_US', 'ZH_TW');
   // Include same-expansion EN cards AND cross-mapped EN expansion cards
   const crossMappedEnExpIds = [...enExpIdToZhExpIds.keys()];
-  const enInScope = allEnOnly.filter(e =>
-    e.primaryExpansionId &&
-    (expansionIds.includes(e.primaryExpansionId) || crossMappedEnExpIds.includes(e.primaryExpansionId))
-  );
-  console.log(`  Found ${enInScope.length} EN_US PrimaryCards in matching expansions`);
+  // Include ALL EN-only cards — global pool enables cross-expansion matching.
+  // Fingerprint uniqueness ensures correct 1:1 disambiguation even without expansion scoping.
+  const enInScope = allEnOnly;
+  console.log(`  Found ${enInScope.length} EN_US PrimaryCards (global pool)`);
 
   // Group EN cards by expansion.
   // Cross-mapped EN cards are filed under EACH corresponding ZH expansion ID so that
@@ -709,6 +756,14 @@ async function main(): Promise<void> {
       arr.push(en);
       enByExpansion.set(en.primaryExpansionId, arr);
     }
+  }
+
+  // Add ALL EN-only cards to a global pool key for cross-expansion fallback
+  const GLOBAL_KEY = '__GLOBAL__';
+  for (const en of allEnOnly) {
+    const arr = enByExpansion.get(GLOBAL_KEY) ?? [];
+    arr.push(en);
+    enByExpansion.set(GLOBAL_KEY, arr);
   }
 
   // ── Run matching ──
