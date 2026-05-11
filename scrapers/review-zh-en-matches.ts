@@ -42,14 +42,14 @@ const WORKSPACE_ROOT = path.resolve(__dirname, '..');
 const ZH_TO_EN_CODE: Record<string, string> = {
   'M1S': 'ME01', 'M1L': 'ME01',
   'M2':  'ME02', 'MBD': 'ME02', 'MBG': 'ME02',
-  'M2A': 'ME2.5', 'MC': 'ME2.5',
+  'M2A': 'ME2', 'MC': 'ME2',
   'M3':  'ME03',
   'SV11B': 'ZSV10', 'SV11W': 'RSV10',
   'SV9A': 'SV10', 'SVOD': 'SV10', 'SVOM': 'SV10',
   'SV9': 'SV09', 'SVM': 'SV09',
-  'SV8': 'SV08', 'SV8A': 'SV8.5',
+  'SV8': 'SV08', 'SV8A': 'SV8',
   'SV7': 'SV07',
-  'SV6': 'SV06', 'SV6A': 'SV6.5',
+  'SV6': 'SV06', 'SV6A': 'SV6',
   'SV5A': 'SV05', 'SV5K': 'SV05',
 };
 
@@ -63,6 +63,16 @@ function computeAttackFingerprint(attacks: any, hp: number | null, types: string
     damage: String(a.damage ?? ''),
   }));
   return `HP:${hp ?? '?'}|T:${[...(types ?? [])].sort().join(',')}|${JSON.stringify(normalized)}`;
+}
+
+function maxAttackDamage(attacks: any): number {
+  if (!attacks || !Array.isArray(attacks) || attacks.length === 0) return 0;
+  let max = 0;
+  for (const a of attacks) {
+    const d = parseInt(String(a.damage ?? '0').replace(/[^0-9]/g, ''), 10) || 0;
+    if (d > max) max = d;
+  }
+  return max;
 }
 
 function computeEffectFingerprint(
@@ -950,6 +960,516 @@ fetch('/api/matches')
 </body>
 </html>`;
 
+
+// ── Pair Page (/pair) ─────────────────────────────────────────────────────
+const PAIR_PAGE_HTML = `<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ZH↔EN Pair Builder</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0d1117;color:#c9d1d9;font-family:system-ui,sans-serif;font-size:13px;padding:10px}
+h1{font-size:17px;margin-bottom:8px;color:#e6edf3}
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 10px;background:#161b22;border-radius:8px;border:1px solid #30363d;margin-bottom:10px}
+select,input{background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:6px;font-size:12px}
+.btn{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px}
+.btn:hover{background:#30363d}.btn.active{background:#1f6feb;border-color:#388bfd;color:#fff}
+.btn-load{background:#1f6feb;border-color:#388bfd;color:#fff;font-weight:600}
+.btn-load:hover{background:#388bfd}
+.stats{font-size:11px;color:#8b949e;display:flex;gap:10px;margin-left:auto}
+.stat-g{color:#3fb950}.stat-y{color:#e3b341}
+.columns{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.col-header{font-size:12px;color:#8b949e;padding:4px 6px;background:#161b22;border-radius:6px;margin-bottom:6px;display:flex;justify-content:space-between}
+.col-header span{color:#e6edf3;font-weight:600}
+.card-list{display:flex;flex-direction:column;gap:6px;min-height:60px}
+.card-row{display:flex;gap:8px;align-items:flex-start;padding:8px;background:#161b22;border:2px solid #30363d;border-radius:8px;cursor:grab;transition:border-color .15s,opacity .15s;position:relative}
+.card-row:hover{border-color:#58a6ff}
+.card-row.dragging{opacity:.4;border-style:dashed}
+.card-row.drag-over{border-color:#3fb950;background:#0d2118}
+.card-row.linked{border-color:#3fb950;opacity:.6;cursor:default}
+.card-row.unmatched{opacity:.5}
+.fp-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px}
+.card-img{width:56px;height:78px;object-fit:contain;border-radius:4px;background:#0d1117;flex-shrink:0}
+.card-img-ph{width:56px;height:78px;background:#0d1117;border:1px dashed #30363d;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#484f58;font-size:9px;text-align:center;flex-shrink:0}
+.card-info{flex:1;min-width:0}
+.card-name{font-weight:600;color:#e6edf3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px}
+.card-meta{font-size:10px;color:#8b949e;margin-top:1px}
+.card-fp{font-size:9px;color:#6e7681;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-tags{font-size:9px;color:#6e7681;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-linked-badge{position:absolute;top:4px;right:4px;font-size:10px;color:#3fb950}
+.card-hide-btn{position:absolute;top:4px;left:4px;font-size:11px;color:#6e7681;background:none;border:none;cursor:pointer;padding:0 3px;line-height:1;opacity:0}
+.card-row:hover .card-hide-btn{opacity:1}
+.card-row.hidden-card{opacity:.35;border-style:dashed;border-color:#484f58}
+.stat-h{color:#6e7681;cursor:pointer;text-decoration:underline dotted}
+.src-link{color:#58a6ff;font-size:9px;opacity:.7;text-decoration:none;display:inline-block;margin-top:2px}
+.src-link:hover{opacity:1}
+.section-title{font-size:11px;color:#8b949e;padding:6px 0 4px;border-top:1px solid #21262d;margin-top:8px;cursor:pointer;display:flex;justify-content:space-between}
+.section-title:hover{color:#c9d1d9}
+.linked-section{margin-top:4px}
+/* Modal */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center}
+.modal-bg.open{display:flex}
+.modal{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:20px;max-width:500px;width:90%;max-height:90vh;overflow-y:auto}
+.modal h2{font-size:15px;margin-bottom:14px;color:#e6edf3}
+.modal-pair{display:flex;gap:12px;margin-bottom:16px}
+.modal-card{flex:1;background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px;text-align:center}
+.modal-card img{width:80px;height:112px;object-fit:contain;border-radius:4px;margin-bottom:6px}
+.modal-card .mc-name{font-weight:600;font-size:12px;color:#e6edf3}
+.modal-card .mc-meta{font-size:10px;color:#8b949e;margin-top:2px}
+.modal-arrow{display:flex;align-items:center;color:#58a6ff;font-size:20px;flex-shrink:0}
+.modal-fp-match{text-align:center;font-size:11px;margin-bottom:12px;padding:6px;border-radius:6px}
+.modal-fp-match.match{background:#0d2118;color:#3fb950}
+.modal-fp-match.no-match{background:#2d1b00;color:#e3b341}
+.modal-actions{display:flex;gap:8px}
+.btn-cancel{flex:1;background:#21262d;border:1px solid #30363d;color:#8b949e;padding:8px;border-radius:6px;cursor:pointer;font-size:13px}
+.btn-cancel:hover{background:#30363d}
+.btn-confirm{flex:2;background:#238636;border:1px solid #2ea043;color:#fff;padding:8px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600}
+.btn-confirm:hover{background:#2ea043}
+#toast{position:fixed;bottom:16px;right:16px;background:#238636;color:#fff;padding:8px 14px;border-radius:8px;display:none;font-size:13px;z-index:9999}
+#toast.err{background:#da3633}
+#loading{color:#8b949e;padding:20px;text-align:center}
+</style>
+</head>
+<body>
+<h1>ZH ↔ EN Pair Builder</h1>
+<div class="toolbar">
+  <label style="font-size:12px;color:#8b949e">ZH:
+    <select id="sel-zh" onchange="onZhChange(this.value)"><option value="">— select —</option></select>
+  </label>
+  <label style="font-size:12px;color:#8b949e">EN:
+    <select id="sel-en"><option value="">— select —</option></select>
+  </label>
+  <button class="btn btn-load" onclick="loadCards()">Load</button>
+  <button class="btn" id="f-all"    onclick="setFilter('all')"    >All</button>
+  <button class="btn" id="f-fp"     onclick="setFilter('fp')"     >Pokemon FP</button>
+  <button class="btn" id="f-tag"    onclick="setFilter('tag')"    >Trainer tag</button>
+  <button class="btn" id="f-linked" onclick="setFilter('linked')" >Linked</button>
+  <select id="f-supertype" onchange="setSupertype(this.value)" style="font-size:12px;background:#161b22;color:#c9d1d9;border:1px solid #30363d;border-radius:4px;padding:2px 6px">
+    <option value="">All types</option>
+    <option value="POKEMON">&#x1f7e2; Pokemon</option>
+    <option value="TRAINER">&#x1f7e6; Trainer</option>
+    <option value="ENERGY">&#x26a1; Energy</option>
+  </select>
+  <select id="f-ptype" onchange="setPtype(this.value)" style="font-size:12px;background:#161b22;color:#c9d1d9;border:1px solid #30363d;border-radius:4px;padding:2px 6px">
+    <option value="">All elements</option>
+    <option value="FIRE">&#x1f525; Fire</option>
+    <option value="WATER">&#x1f4a7; Water</option>
+    <option value="GRASS">&#x1f33f; Grass</option>
+    <option value="LIGHTNING">&#x26a1; Lightning</option>
+    <option value="PSYCHIC">&#x1f52e; Psychic</option>
+    <option value="FIGHTING">&#x1f94a; Fighting</option>
+    <option value="DARKNESS">&#x1f311; Darkness</option>
+    <option value="METAL">&#x2699;&#xfe0f; Metal</option>
+    <option value="DRAGON">&#x1f409; Dragon</option>
+    <option value="COLORLESS">&#x2b55; Colorless</option>
+    <option value="FAIRY">&#x2728; Fairy</option>
+  </select>
+  <select id="f-reg" onchange="setRegMark(this.value)" style="font-size:12px;background:#161b22;color:#c9d1d9;border:1px solid #30363d;border-radius:4px;padding:2px 6px">
+    <option value="">All &#35215;&#26684;</option>
+    <option value="H">H</option>
+    <option value="I">I</option>
+    <option value="J">J</option>
+    <option value="G">G</option>
+    <option value="F">F</option>
+    <option value="E">E</option>
+    <option value="D">D</option>
+    <option value="C">C</option>
+    <option value="B">B</option>
+    <option value="A">A</option>
+    <option value="NONE">&#8212; no mark</option>
+  </select>
+  <select id="f-sort" onchange="setSortBy(this.value)" style="font-size:12px;background:#161b22;color:#c9d1d9;border:1px solid #30363d;border-radius:4px;padding:2px 6px">
+    <option value="">Sort: default</option>
+    <option value="hp">Sort: HP &#x2193;</option>
+    <option value="damage">Sort: damage &#x2193;</option>
+    <option value="tag">Sort: tag count &#x2193;</option>
+  </select>
+  <div class="stats">
+    <span class="stat-g" id="st-linked">0 linked</span>
+    <span class="stat-y" id="st-zh">0 ZH</span>
+    <span class="stat-y" id="st-en">0 EN</span>
+    <span class="stat-h" id="st-hidden" onclick="toggleShowHidden()"></span>
+</div>
+<div id="loading" style="display:none">Loading...</div>
+<div id="main" style="display:none">
+  <div class="columns">
+    <div>
+      <div class="col-header"><span>ZH Unlinked</span><span id="zh-count"></span></div>
+      <div class="card-list" id="zh-list"></div>
+    </div>
+    <div>
+      <div class="col-header"><span>EN Unlinked</span><span id="en-count"></span></div>
+      <div class="card-list" id="en-list"></div>
+    </div>
+  </div>
+  <div class="linked-section">
+    <div class="section-title" onclick="toggleLinked()"><span id="linked-hdr">Linked pairs (0)</span><span id="linked-tog">▶</span></div>
+    <div id="linked-list" style="display:none"></div>
+  </div>
+</div>
+
+<!-- Confirmation modal -->
+<div class="modal-bg" id="modal">
+  <div class="modal">
+    <h2>Confirm Link</h2>
+    <div class="modal-pair">
+      <div class="modal-card" id="mc-zh"></div>
+      <div class="modal-arrow">↔</div>
+      <div class="modal-card" id="mc-en"></div>
+    </div>
+    <div class="modal-fp-match" id="mc-fp-status"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-confirm" id="mc-btn" onclick="confirmLink()">Link</button>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+var g = {
+  zh: [], en: [], linked: [],
+  fpMap: {},        // fp -> color (hex)
+  pending: null,    // { zhCard, enCard }
+  filter: 'all',
+  linkedOpen: false,
+  hidden: new Set(),   // pcIds hidden by user
+  showHidden: false,
+  supertype: '',        // 'POKEMON'|'TRAINER'|'ENERGY'|''
+  ptype: '',            // PokemonType filter
+  regMark: '',          // regulationMark filter
+  sortBy: '',           // 'hp'|'damage'|'tag'|''
+};
+
+var FP_COLORS = ['#1f4e6e','#1e3a5f','#2d4a1e','#4a1e2d','#2d2a1e','#1e2d4a','#3a1e4a','#1e4a3a'];
+var fpColorIdx = 0;
+var fpColorCache = {};
+
+function fpColor(fp) {
+  if (!fp) return '#21262d';
+  if (!fpColorCache[fp]) { fpColorCache[fp] = FP_COLORS[fpColorIdx++ % FP_COLORS.length]; }
+  return fpColorCache[fp];
+}
+
+function esc(s) { return s==null?'':String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function imgSrc(url) { if(!url) return ''; return url.indexOf('http')===0?url:'/local-img?p='+encodeURIComponent(url); }
+
+function showToast(msg,err){
+  var t=document.getElementById('toast');
+  t.textContent=msg; t.className=err?'err':''; t.style.display='block';
+  clearTimeout(t._tid); t._tid=setTimeout(function(){t.style.display='none';},3000);
+}
+
+function cardSearchUrl(name,exp,src){ return src||('https://www.google.com/search?q='+encodeURIComponent('pokemon card '+(name||'')+' '+(exp||''))+'&tbm=isch'); }
+
+function imgErr(el) { el.style.display='none'; if(el.nextSibling) el.nextSibling.style.display='flex'; }
+
+function imgHtml(url,id,w,h){
+  var label=esc(id||'no img');
+  if(!url) return '<div class="card-img-ph" style="width:'+w+'px;height:'+h+'px">'+label+'</div>';
+  return '<img class="card-img" style="width:'+w+'px;height:'+h+'px" src="'+esc(imgSrc(url))+'" loading="lazy" alt="" onerror="imgErr(this)">'
+    +'<div class="card-img-ph" style="width:'+w+'px;height:'+h+'px;display:none">'+label+'</div>';
+}
+
+function cardHtml(c, side) {
+  var fp = c.attackFp || c.effectFp || '';
+  var color = fp ? fpColor(fp) : '#21262d';
+  var linked = c.linkedEnId || c.linkedZhId;
+  var hidden = !linked && g.hidden.has(c.pcId);
+  var cls = 'card-row' + (linked?' linked':'') + (hidden?' hidden-card':'');
+  var drag = linked ? '' : ' draggable="true" data-side="'+esc(side)+'" data-pcid="'+esc(c.pcId)+'" data-webid="'+esc(c.webCardId)+'" ondragstart="onDragStart(event,this)" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event,this)"';
+  var meta = [];
+  if (c.hp) meta.push('HP'+c.hp);
+  if (c.maxDamage) meta.push('ATK'+c.maxDamage);
+  if (c.types && c.types.length) meta.push(c.types.join('/'));
+  if (c.rarity) meta.push(c.rarity);
+  if (c.expCode) meta.push(c.expCode+(c.cardNumber?'#'+c.cardNumber:''));
+  var fpShort = fp ? fp.substring(0,60)+(fp.length>60?'…':'') : '';
+  var tags = c.effectTags && c.effectTags.length ? c.effectTags.slice(0,4).join(' · ') : '';
+  return '<div class="'+cls+'" id="pr-'+esc(c.pcId)+'"'+drag+'>'
+    +'<button class="card-hide-btn" data-pcid="'+esc(c.pcId)+'" onclick="hideCard(event,this.dataset.pcid)">&#x2715;</button>'
+    +'<div class="fp-dot" style="background:'+color+'" title="'+esc(fp)+'"></div>'
+    +imgHtml(c.imageUrl, c.webCardId, 56, 78)
+    +'<div class="card-info">'
+      +'<div class="card-name">'+esc(c.name)+'</div>'
+      +'<div class="card-meta">'+esc(meta.join(' · '))+'</div>'
+      +(fpShort?'<div class="card-fp">'+esc(fpShort)+'</div>':'')
+      +(tags?'<div class="card-tags">tags: '+esc(tags)+'</div>':'')
+      +'<a class="src-link" href="'+esc(cardSearchUrl(c.name,c.expCode,c.sourceUrl))+'" target="_blank">🔍 ref</a>'
+    +'</div>'
+    +(linked?'<span class="card-linked-badge">✓</span>':'')
+    +'</div>';
+}
+
+function linkedPairHtml(p) {
+  var meta = [];
+  if (p.hp) meta.push('HP'+p.hp);
+  if (p.types && p.types.length) meta.push(p.types.join('/'));
+  if (p.rarity) meta.push(p.rarity);
+  return '<div class="card-row linked" style="margin-bottom:4px">'
+    +'<div class="fp-dot" style="background:#3fb950"></div>'
+    +imgHtml(p.zhImageUrl, p.zhWebCardId, 40, 56)
+    +imgHtml(p.enImageUrl, p.enWebCardId, 40, 56)
+    +'<div class="card-info">'
+      +'<div class="card-name">'+esc(p.zhName)+' ↔ '+esc(p.enName)+'</div>'
+      +'<div class="card-meta">'+esc(meta.join(' · '))+' | '+esc(p.zhExpCode)+'→'+esc(p.enExpCode)+'</div>'
+    +'</div><span class="card-linked-badge">✓</span></div>';
+}
+
+function applyFilter(list) {
+  var f = g.filter;
+  var showH = g.showHidden;
+  var unlinked = list.filter(function(c){ return !c.linkedEnId && !c.linkedZhId && (showH || !g.hidden.has(c.pcId)); });
+  if (f === 'linked') return list.filter(function(c){ return c.linkedEnId || c.linkedZhId; });
+  var result = unlinked;
+  if (f === 'fp') result = result.filter(function(c){ return c.attackFp; });
+  else if (f === 'tag') result = result.filter(function(c){ return c.effectFp && !c.attackFp; });
+  if (g.supertype) result = result.filter(function(c){ return c.supertype === g.supertype; });
+  if (g.ptype) result = result.filter(function(c){ return c.types && c.types.indexOf(g.ptype) !== -1; });
+  if (g.regMark === 'NONE') result = result.filter(function(c){ return !c.regulationMark; });
+  else if (g.regMark) result = result.filter(function(c){ return c.regulationMark === g.regMark; });
+  return result;
+}
+
+function setSupertype(v) { g.supertype = v; render(); }
+function setPtype(v) { g.ptype = v; render(); }
+function setRegMark(v) { g.regMark = v; render(); }
+function setSortBy(v) { g.sortBy = v; render(); }
+
+function applySort(list) {
+  if (!g.sortBy) return list;
+  var s = g.sortBy;
+  return list.slice().sort(function(a, b) {
+    if (s === 'hp') return (b.hp || 0) - (a.hp || 0);
+    if (s === 'damage') return (b.maxDamage || 0) - (a.maxDamage || 0);
+    if (s === 'tag') return (b.effectTags ? b.effectTags.length : 0) - (a.effectTags ? a.effectTags.length : 0);
+    return 0;
+  });
+}
+
+function hideCard(e, pcId) {
+  e.stopPropagation(); e.preventDefault();
+  if (g.hidden.has(pcId)) g.hidden.delete(pcId); else g.hidden.add(pcId);
+  render();
+}
+
+function toggleShowHidden() {
+  g.showHidden = !g.showHidden;
+  render();
+}
+
+function render() {
+  var zhShow = g.filter === 'linked' ? g.zh.filter(function(c){return c.linkedEnId;}) : applyFilter(g.zh);
+  var enShow = g.filter === 'linked' ? g.en.filter(function(c){return c.linkedZhId;}) : applyFilter(g.en);
+  zhShow = applySort(zhShow);
+  enShow = applySort(enShow);
+
+  document.getElementById('zh-list').innerHTML = zhShow.map(function(c){return cardHtml(c,'zh');}).join('') || '<div style="color:#6e7681;padding:12px;text-align:center">None</div>';
+  document.getElementById('en-list').innerHTML = enShow.map(function(c){return cardHtml(c,'en');}).join('') || '<div style="color:#6e7681;padding:12px;text-align:center">None</div>';
+  document.getElementById('zh-count').textContent = zhShow.length;
+  document.getElementById('en-count').textContent = enShow.length;
+
+  // Stats
+  var linkedZh = g.zh.filter(function(c){return c.linkedEnId;}).length;
+  var hiddenCount = g.hidden.size;
+  document.getElementById('st-linked').textContent = linkedZh + ' linked';
+  document.getElementById('st-zh').textContent = g.zh.filter(function(c){return !c.linkedEnId;}).length + ' ZH unlinked';
+  document.getElementById('st-en').textContent = g.en.filter(function(c){return !c.linkedZhId;}).length + ' EN unlinked';
+  var hidEl = document.getElementById('st-hidden');
+  if (hidEl) hidEl.textContent = hiddenCount ? (g.showHidden ? 'hide hidden ('+hiddenCount+')' : 'show hidden ('+hiddenCount+')') : '';
+
+  // Linked section
+  document.getElementById('linked-hdr').textContent = 'Linked pairs (' + g.linked.length + ')';
+  if (g.linkedOpen) {
+    document.getElementById('linked-list').innerHTML = g.linked.map(linkedPairHtml).join('');
+  }
+}
+
+function setFilter(f) {
+  g.filter = f;
+  ['all','fp','tag','linked'].forEach(function(id){
+    var el = document.getElementById('f-'+id);
+    if (el) el.classList.toggle('active', id===f);
+  });
+  render();
+}
+
+function toggleLinked() {
+  g.linkedOpen = !g.linkedOpen;
+  document.getElementById('linked-tog').textContent = g.linkedOpen ? '▼' : '▶';
+  document.getElementById('linked-list').style.display = g.linkedOpen ? '' : 'none';
+  if (g.linkedOpen) document.getElementById('linked-list').innerHTML = g.linked.map(linkedPairHtml).join('');
+}
+
+// ── Drag-and-drop ──
+var dragState = null;
+
+function onDragStart(e, el) {
+  dragState = { side: el.dataset.side, pcId: el.dataset.pcid, webCardId: el.dataset.webid };
+  e.dataTransfer.effectAllowed = 'link';
+}
+function onDragOver(e) { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }
+function onDragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
+function onDrop(e, el) {
+  e.preventDefault(); e.currentTarget.classList.remove('drag-over');
+  if (!dragState) return;
+  var targetSide = el.dataset.side; var targetPcId = el.dataset.pcid; var targetWebCardId = el.dataset.webid;
+  if (dragState.side === targetSide) { dragState=null; return; }  // same side = no-op
+  var zhWebId = dragState.side === 'zh' ? dragState.webCardId : targetWebCardId;
+  var enWebId  = dragState.side === 'en' ? dragState.webCardId : targetWebCardId;
+  var zhPcId  = dragState.side === 'zh' ? dragState.pcId : targetPcId;
+  var enPcId  = dragState.side === 'en' ? dragState.pcId : targetPcId;
+  dragState = null;
+  openModal(zhWebId, enWebId, zhPcId, enPcId);
+}
+
+function findCard(list, pcId) { return list.find(function(c){return c.pcId===pcId;})||null; }
+
+function openModal(zhWebId, enWebId, zhPcId, enPcId) {
+  var zh = findCard(g.zh, zhPcId);
+  var en = findCard(g.en, enPcId);
+  if (!zh || !en) return;
+  g.pending = { zhWebId: zhWebId, enWebId: enWebId };
+
+  var fpMatch = zh.attackFp && en.attackFp && zh.attackFp === en.attackFp;
+  var tagMatch = zh.effectFp && en.effectFp && zh.effectFp === en.effectFp;
+
+  document.getElementById('mc-zh').innerHTML =
+    imgHtml(zh.imageUrl, zh.webCardId, 80, 112)
+    + '<div class="mc-name">'+esc(zh.name)+'</div>'
+    + '<div class="mc-meta">'+esc(zh.expCode)+'<br>'+esc(zh.webCardId)+'</div>';
+  document.getElementById('mc-en').innerHTML =
+    imgHtml(en.imageUrl, en.webCardId, 80, 112)
+    + '<div class="mc-name">'+esc(en.name)+'</div>'
+    + '<div class="mc-meta">'+esc(en.expCode)+'<br>'+esc(en.webCardId)+'</div>';
+
+  var fpEl = document.getElementById('mc-fp-status');
+  if (fpMatch) {
+    fpEl.className='modal-fp-match match'; fpEl.textContent='✓ Attack fingerprint matches';
+  } else if (tagMatch) {
+    fpEl.className='modal-fp-match match'; fpEl.textContent='✓ Trainer effect tags match';
+  } else {
+    fpEl.className='modal-fp-match no-match'; fpEl.textContent='⚠ Fingerprints do NOT match — verify manually';
+  }
+  document.getElementById('modal').classList.add('open');
+  var btn = document.getElementById('mc-btn');
+  btn.disabled=false; btn.textContent='Link';
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+  g.pending = null;
+}
+
+function confirmLink() {
+  if (!g.pending) return;
+  var zh = g.pending.zhWebId, en = g.pending.enWebId;
+  var btn = document.getElementById('mc-btn');
+  btn.disabled=true; btn.textContent='Linking...';
+  fetch('/api/link-by-webid',{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ zhWebId: zh, enWebId: en })
+  }).then(function(r){return r.json();})
+    .then(function(data){
+      if(data.error) throw new Error(data.error);
+      btn.disabled=false; btn.textContent='Link';
+      showToast('✓ Linked: '+zh+' ↔ '+en);
+      closeModal();
+      // Mark both as linked locally
+      var zhC = g.zh.find(function(c){return c.webCardId===zh;});
+      var enC = g.en.find(function(c){return c.webCardId===en;});
+      if(zhC) zhC.linkedEnId = enC ? enC.pcId : en;
+      if(enC) enC.linkedZhId = zhC ? zhC.pcId : zh;
+      if(zhC && enC) g.linked.unshift({
+        zhName:zhC.name, enName:enC.name, zhExpCode:zhC.expCode, enExpCode:enC.expCode,
+        zhImageUrl:zhC.imageUrl, enImageUrl:enC.imageUrl,
+        zhWebCardId:zh, enWebCardId:en,
+        hp:zhC.hp, types:zhC.types, rarity:zhC.rarity,
+      });
+      // Auto-open linked section to show new pair
+      g.linkedOpen = true;
+      document.getElementById('linked-tog').textContent = '\u25bc';
+      document.getElementById('linked-list').style.display = '';
+      render();
+    }).catch(function(err){
+      showToast('Error: '+err.message, true);
+      btn.disabled=false; btn.textContent='Link';
+    });
+}
+
+// ── Expansion selectors ──
+var ZH_TO_EN = __ZH_TO_EN_JSON__;
+
+// All EN codes stored for rebuilding dropdown
+var ALL_EN_CODES = [];
+
+function onZhChange(zhCode) {
+  var sel = document.getElementById('sel-en');
+  if (!zhCode || zhCode === 'ALL') {
+    // Show all EN options
+    sel.innerHTML = '<option value="">Any</option>';
+    ALL_EN_CODES.forEach(function(c){ sel.innerHTML += '<option value="'+esc(c)+'">'+esc(c)+'</option>'; });
+    return;
+  }
+  var enCode = ZH_TO_EN[zhCode] || '';
+  // Rebuild EN dropdown: only the mapped expansion + Any
+  sel.innerHTML = '<option value="">Any</option>';
+  if (enCode) sel.innerHTML += '<option value="'+esc(enCode)+'" selected>'+esc(enCode)+'</option>';
+  else ALL_EN_CODES.forEach(function(c){ sel.innerHTML += '<option value="'+esc(c)+'">'+esc(c)+'</option>'; });
+}
+
+function loadCards() {
+  var zh = document.getElementById('sel-zh').value;
+  var en = document.getElementById('sel-en').value;
+  if (!zh) { showToast('Select a ZH expansion', true); return; }
+  // For ALL mode force no EN filter
+  if (zh === 'ALL') en = '';
+  document.getElementById('loading').style.display='';
+  document.getElementById('main').style.display='none';
+  fpColorCache = {}; fpColorIdx = 0; g.fp = {};
+  fetch('/api/expansion-cards?zh='+encodeURIComponent(zh)+(en?'&en='+encodeURIComponent(en):''))
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if(data.error) throw new Error(data.error);
+      g.zh = data.zhCards; g.en = data.enCards; g.linked = data.linked; g.pending=null;
+      // Pre-assign FP colors so matching cards share same color across both columns
+      var allCards = g.zh.concat(g.en);
+      allCards.forEach(function(c){
+        var fp = c.attackFp || c.effectFp;
+        if (fp) fpColor(fp);
+      });
+      document.getElementById('loading').style.display='none';
+      document.getElementById('main').style.display='';
+      setFilter('all');
+    }).catch(function(err){
+      document.getElementById('loading').textContent = 'Error: '+err.message;
+    });
+}
+
+// Populate expansion selectors on page load
+fetch('/api/expansions')
+  .then(function(r){return r.json();})
+  .then(function(data){
+    var zhSel = document.getElementById('sel-zh');
+    var enSel = document.getElementById('sel-en');
+    ALL_EN_CODES = data.en.sort();
+    enSel.innerHTML = '<option value="">Any</option>';
+    // ZH dropdown: All Unlinked first, then per-expansion
+    zhSel.innerHTML = '<option value="">\u2014 select \u2014</option><option value="ALL">\u2605 All unlinked</option>';
+    data.zh.sort().forEach(function(c){
+      zhSel.innerHTML += '<option value="'+esc(c)+'">'+esc(c)+'</option>';
+    });
+    ALL_EN_CODES.forEach(function(c){
+      enSel.innerHTML += '<option value="'+esc(c)+'">'+esc(c)+'</option>';
+    });
+  });
+</script>
+</body>
+</html>`;
+
+
 // ─────────────────────────────────────────────────────────────
 // HTTP Server
 // ─────────────────────────────────────────────────────────────
@@ -1007,6 +1527,13 @@ select{background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px
 </head>
 <body>
 <h1>ZH&#8594;EN Linkage</h1>
+<div class="direct-link-panel" style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:10px 12px;margin-bottom:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+  <span style="color:#8b949e;font-size:12px;white-space:nowrap">Direct link:</span>
+  <input id="dl-zh" placeholder="ZH webCardId (e.g. hk12387)" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:6px;font-size:12px;width:200px">
+  <input id="dl-en" placeholder="EN webCardId (e.g. en16815)" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:6px;font-size:12px;width:200px">
+  <button onclick="directLink()" style="background:#238636;border:1px solid #2ea043;color:#fff;padding:5px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">Link</button>
+  <span id="dl-status" style="font-size:12px;color:#8b949e"></span>
+</div>
 <div class="toolbar">
   <label>Expansion: <select id="exp-filter" onchange="filterByExp(this.value)"><option value="">All</option></select></label>
   <div class="stats">
@@ -1104,6 +1631,28 @@ function applyCard(cardId) {
     }).catch(function(err) {
       showToast('Error: ' + err.message, true);
       if (btn) { btn.disabled = false; btn.textContent = 'Link'; }
+    });
+}
+
+function directLink() {
+  var zh = document.getElementById('dl-zh').value.trim();
+  var en = document.getElementById('dl-en').value.trim();
+  var st = document.getElementById('dl-status');
+  if (!zh || !en) { st.style.color='#e3b341'; st.textContent='Enter both IDs'; return; }
+  st.style.color='#8b949e'; st.textContent='Linking...';
+  fetch('/api/link-by-webid', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ zhWebId: zh, enWebId: en })
+  }).then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.error) throw new Error(data.error);
+      st.style.color='#3fb950';
+      st.textContent = '\u2713 Linked: ' + (data.zhName||zh) + ' \u2194 ' + (data.enName||en);
+      document.getElementById('dl-zh').value = '';
+      document.getElementById('dl-en').value = '';
+    }).catch(function(err) {
+      st.style.color='#da3633'; st.textContent = 'Error: ' + err.message;
     });
 }
 
@@ -1289,9 +1838,229 @@ const server = createServer((req, res) => {
     return;
   }
 
+  if (p === '/pair' || p === '/pair/') {
+    // Inject ZH_TO_EN_CODE as JSON for the client-side JS
+    const pairHtml = PAIR_PAGE_HTML.replace('__ZH_TO_EN_JSON__', JSON.stringify(ZH_TO_EN_CODE));
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(pairHtml);
+    return;
+  }
+
   if (p === '/link' || p === '/link/') {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(LINK_PAGE_HTML);
+    return;
+  }
+
+  if (p === '/api/expansions' && req.method === 'GET') {
+    prisma.$queryRawUnsafe<any[]>(`
+      SELECT DISTINCT pe.code, 'ZH' as lang
+      FROM primary_expansions pe
+      WHERE EXISTS (
+        SELECT 1 FROM primary_cards pc2
+        JOIN cards c ON c."primaryCardId" = pc2.id AND c.language = 'ZH_TW'
+        WHERE pc2."primaryExpansionId" = pe.id
+      )
+      UNION
+      SELECT DISTINCT pe.code, 'EN' as lang
+      FROM primary_expansions pe
+      WHERE EXISTS (
+        SELECT 1 FROM primary_cards pc2
+        JOIN cards c ON c."primaryCardId" = pc2.id AND c.language = 'EN_US'
+        WHERE pc2."primaryExpansionId" = pe.id
+      )
+      ORDER BY code
+    `).then((rows: any[]) => {
+      const zh = rows.filter((r: any) => r.lang === 'ZH').map((r: any) => r.code);
+      const en = rows.filter((r: any) => r.lang === 'EN').map((r: any) => r.code);
+      sendJson(res, { zh, en });
+    }).catch((e: any) => sendJson(res, { error: String(e) }, 500));
+    return;
+  }
+
+  if (p === '/api/expansion-cards' && req.method === 'GET') {
+    const zhCode = u.searchParams.get('zh')?.toUpperCase() ?? '';
+    const enCode = u.searchParams.get('en')?.toUpperCase() ?? '';
+    if (!zhCode) { sendJson(res, { error: 'zh param required' }, 400); return; }
+
+    (async () => {
+      const ALL_MODE = zhCode === 'ALL';
+
+      // Load ZH primaryCards
+      const zhRows = ALL_MODE
+        ? await prisma.$queryRawUnsafe<any[]>(`
+            SELECT pc.id, pc.name, pc."cardNumber", pc."pokemonSpeciesId",
+                   pc."effectTags", pc."specialEffectTags", pe.code as "expCode"
+            FROM primary_cards pc
+            JOIN primary_expansions pe ON pe.id = pc."primaryExpansionId"
+            WHERE EXISTS (SELECT 1 FROM cards c WHERE c."primaryCardId" = pc.id AND c.language = 'ZH_TW')
+              AND NOT EXISTS (SELECT 1 FROM cards c WHERE c."primaryCardId" = pc.id AND c.language = 'EN_US')
+            ORDER BY pe.code, LENGTH(pc."cardNumber"), pc."cardNumber"
+          `)
+        : await prisma.$queryRawUnsafe<any[]>(`
+            SELECT pc.id, pc.name, pc."cardNumber", pc."pokemonSpeciesId",
+                   pc."effectTags", pc."specialEffectTags", pe.code as "expCode"
+            FROM primary_cards pc
+            JOIN primary_expansions pe ON pe.id = pc."primaryExpansionId" AND pe.code = $1
+            ORDER BY LENGTH(pc."cardNumber"), pc."cardNumber"
+          `, zhCode);
+
+      // Load EN primaryCards
+      const enRows = ALL_MODE
+        ? await prisma.$queryRawUnsafe<any[]>(`
+            SELECT pc.id, pc.name, pc."cardNumber", pc."pokemonSpeciesId",
+                   pc."effectTags", pc."specialEffectTags", pe.code as "expCode"
+            FROM primary_cards pc
+            JOIN primary_expansions pe ON pe.id = pc."primaryExpansionId"
+            WHERE EXISTS (SELECT 1 FROM cards c WHERE c."primaryCardId" = pc.id AND c.language = 'EN_US')
+              AND NOT EXISTS (SELECT 1 FROM cards c WHERE c."primaryCardId" = pc.id AND c.language = 'ZH_TW')
+            ORDER BY pe.code, LENGTH(pc."cardNumber"), pc."cardNumber"
+          `)
+        : enCode ? await prisma.$queryRawUnsafe<any[]>(`
+            SELECT pc.id, pc.name, pc."cardNumber", pc."pokemonSpeciesId",
+                   pc."effectTags", pc."specialEffectTags", pe.code as "expCode"
+            FROM primary_cards pc
+            JOIN primary_expansions pe ON pe.id = pc."primaryExpansionId" AND pe.code = $1
+            ORDER BY LENGTH(pc."cardNumber"), pc."cardNumber"
+          `, enCode) : [];
+
+      const allPcIds = [...zhRows, ...enRows].map((r: any) => r.id);
+      if (allPcIds.length === 0) { sendJson(res, { zhCards: [], enCards: [], linked: [] }); return; }
+
+      // Load cards for all primaryCards
+      const rawCards = await prisma.card.findMany({
+        where: { primaryCardId: { in: allPcIds } },
+        select: {
+          id: true, primaryCardId: true, webCardId: true, language: true, name: true,
+          variantType: true, rarity: true, regulationMark: true, subtypes: true,
+          attacks: true, hp: true, types: true, supertype: true, imageUrl: true, sourceUrl: true,
+        },
+      }) as any[];
+
+      // Index cards by primaryCardId, prefer NORMAL variant
+      const cardsByPc = new Map<string, any>();
+      for (const c of rawCards) {
+        const existing = cardsByPc.get(c.primaryCardId);
+        if (!existing || c.variantType === 'NORMAL') cardsByPc.set(c.primaryCardId, c);
+      }
+
+      // For each ZH primaryCard: pick ZH representative card
+      // For each EN primaryCard: pick EN representative card
+      // Also detect if a ZH primaryCard ALSO has EN card (already linked) and vice versa
+      const linkedPairs: any[] = [];
+      const zhCards: any[] = [];
+      const enCards: any[] = [];
+
+      const repCard = (pcId: string, lang: string) => {
+        const all = rawCards.filter((c: any) => c.primaryCardId === pcId && c.language === lang);
+        return all.find((c: any) => c.variantType === 'NORMAL') ?? all[0] ?? null;
+      };
+
+      // Check which ZH primaryCards have EN cards (already linked)
+      const zhLinkedPcIds = new Set<string>();
+      const enLinkedPcIds = new Set<string>();
+
+      for (const pc of zhRows) {
+        const hasZh = rawCards.some((c: any) => c.primaryCardId === pc.id && c.language === 'ZH_TW');
+        const hasEn = rawCards.some((c: any) => c.primaryCardId === pc.id && c.language === 'EN_US');
+        if (hasZh && hasEn) zhLinkedPcIds.add(pc.id);
+      }
+      for (const pc of enRows) {
+        const hasEn = rawCards.some((c: any) => c.primaryCardId === pc.id && c.language === 'EN_US');
+        const hasZh = rawCards.some((c: any) => c.primaryCardId === pc.id && c.language === 'ZH_TW');
+        if (hasEn && hasZh) enLinkedPcIds.add(pc.id);
+      }
+
+      for (const pc of zhRows) {
+        const zh = repCard(pc.id, 'ZH_TW');
+        if (!zh) continue;
+        const atkFp = computeAttackFingerprint(zh.attacks, zh.hp, zh.types);
+        const efxFp = computeEffectFingerprint(
+          pc.effectTags ?? [], pc.specialEffectTags ?? [],
+          zh.supertype ?? null, zh.subtypes?.[0] ?? null, zh.regulationMark ?? null,
+        );
+        const isLinked = zhLinkedPcIds.has(pc.id);
+        const card: any = {
+          pcId: pc.id, name: pc.name, cardNumber: pc.cardNumber, expCode: pc.expCode,
+          webCardId: zh.webCardId, imageUrl: zh.imageUrl, sourceUrl: zh.sourceUrl,
+          hp: zh.hp, types: zh.types, rarity: zh.rarity, regulationMark: zh.regulationMark,
+          supertype: zh.supertype, subtypes: zh.subtypes,
+          attackFp: atkFp, effectFp: efxFp,
+          effectTags: pc.effectTags ?? [],
+          maxDamage: maxAttackDamage(zh.attacks),
+          linkedEnId: isLinked ? pc.id : null,
+        };
+        if (isLinked) {
+          const en = repCard(pc.id, 'EN_US');
+          linkedPairs.push({
+            zhPcId: pc.id, zhName: pc.name, zhWebCardId: zh.webCardId, zhImageUrl: zh.imageUrl,
+            zhExpCode: pc.expCode,
+            enName: en?.name ?? pc.name, enWebCardId: en?.webCardId ?? '', enImageUrl: en?.imageUrl ?? null,
+            enExpCode: enCode || pc.expCode,
+            hp: zh.hp, types: zh.types, rarity: zh.rarity,
+          });
+        } else {
+          zhCards.push(card);
+        }
+      }
+
+      for (const pc of enRows) {
+        if (enLinkedPcIds.has(pc.id)) continue; // already counted in linked via ZH side
+        const en = repCard(pc.id, 'EN_US');
+        if (!en) continue;
+        const atkFp = computeAttackFingerprint(en.attacks, en.hp, en.types);
+        const efxFp = computeEffectFingerprint(
+          pc.effectTags ?? [], pc.specialEffectTags ?? [],
+          en.supertype ?? null, en.subtypes?.[0] ?? null, en.regulationMark ?? null,
+        );
+        enCards.push({
+          pcId: pc.id, name: pc.name, cardNumber: pc.cardNumber, expCode: pc.expCode,
+          webCardId: en.webCardId, imageUrl: en.imageUrl, sourceUrl: en.sourceUrl,
+          hp: en.hp, types: en.types, rarity: en.rarity, regulationMark: en.regulationMark,
+          supertype: en.supertype, subtypes: en.subtypes,
+          attackFp: atkFp, effectFp: efxFp,
+          effectTags: pc.effectTags ?? [],
+          maxDamage: maxAttackDamage(en.attacks),
+          linkedZhId: null,
+        });
+      }
+
+      sendJson(res, { zhCards, enCards, linked: linkedPairs });
+    })().catch((e: any) => sendJson(res, { error: String(e) }, 500));
+    return;
+  }
+
+  if (p === '/api/link-by-webid' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk.toString(); });
+    req.on('end', async () => {
+      try {
+        const { zhWebId, enWebId } = JSON.parse(body) as { zhWebId: string; enWebId: string };
+        if (!zhWebId || !enWebId) { sendJson(res, { error: 'zhWebId and enWebId required' }, 400); return; }
+        // Look up both cards
+        const cards = await prisma.card.findMany({
+          where: { webCardId: { in: [zhWebId, enWebId] } },
+          select: { id: true, primaryCardId: true, webCardId: true, language: true, name: true },
+        });
+        const zhCard = cards.find(c => c.webCardId === zhWebId);
+        const enCard = cards.find(c => c.webCardId === enWebId);
+        if (!zhCard) { sendJson(res, { error: `Card not found: ${zhWebId}` }, 404); return; }
+        if (!enCard) { sendJson(res, { error: `Card not found: ${enWebId}` }, 404); return; }
+        if (zhCard.primaryCardId === enCard.primaryCardId) {
+          sendJson(res, { ok: true, alreadyLinked: true, zhName: zhCard.name, enName: enCard.name });
+          return;
+        }
+        const zhPcId = zhCard.primaryCardId;
+        const enPcId = enCard.primaryCardId;
+        await prisma.card.updateMany({ where: { primaryCardId: enPcId }, data: { primaryCardId: zhPcId } });
+        const remaining = await prisma.card.count({ where: { primaryCardId: enPcId } }).catch(() => 1);
+        if (remaining === 0) await prisma.primaryCard.delete({ where: { id: enPcId } }).catch(() => null);
+        cachedUpdates = null; cachedAmbiguous = null; cacheBuilding = false;
+        sendJson(res, { ok: true, zhName: zhCard.name, enName: enCard.name });
+      } catch (e) {
+        sendJson(res, { error: String(e) }, 500);
+      }
+    });
     return;
   }
 
@@ -1337,6 +2106,7 @@ async function main() {
     console.log('='.repeat(50));
     console.log('ZH→EN Card Review Server');
     console.log(`Open:  http://localhost:${PORT}`);
+    console.log(`Pair:  http://localhost:${PORT}/pair`);
     if (FILTER_EXP) console.log(`Filter: ${FILTER_EXP}`);
     console.log('Press Ctrl+C to stop');
     console.log('='.repeat(50));
