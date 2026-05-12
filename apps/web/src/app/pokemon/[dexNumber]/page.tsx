@@ -28,6 +28,7 @@ interface CardItem {
     skillsSignature?: string | null;
     primaryExpansion?: { code: string; nameEn: string; releaseDate?: string | null } | null;
   };
+  regulationMark?: string | null;
   regionalExpansion?: {
     code: string;
     name: string;
@@ -405,12 +406,20 @@ export default function PokemonDetailPage({
     });
   }, [zhCardsData, enCardsData, jaCardsData, species, excludedNamesByLang]);
 
-  // ── Rarity filter ──
+  // ── Filters, sort & image size ──
   const [rarityFilter, setRarityFilter] = useState<string>('');
+  const [regulationFilter, setRegulationFilter] = useState<string>('');
+  const [sortBy, setSortBy] = useState<'release' | 'regulation' | 'hp'>('regulation');
+  const [sortDesc, setSortDesc] = useState(true);
+  const [imgSize, setImgSize] = useState<'S' | 'M' | 'L'>('M');
 
   const filteredCards = useMemo(
-    () => (rarityFilter ? allCards.filter((c) => c.rarity === rarityFilter) : allCards),
-    [allCards, rarityFilter],
+    () => allCards.filter((c) => {
+      if (rarityFilter && c.rarity !== rarityFilter) return false;
+      if (regulationFilter && (c.regulationMark ?? '') !== regulationFilter) return false;
+      return true;
+    }),
+    [allCards, rarityFilter, regulationFilter],
   );
 
   // ── Group by primaryCardId (= one "version" of the card) ──
@@ -425,6 +434,7 @@ export default function PokemonDetailPage({
     cardNumber: string | null;
     releaseDate: string | null;
     skillsSignature: string | null;
+    regulationMark: string | null;
   }
 
   const cardsByPrimaryCard = useMemo((): PrimaryCardGroup[] => {
@@ -459,19 +469,24 @@ export default function PokemonDetailPage({
           cardNumber: rep?.primaryCard?.cardNumber ?? null,
           releaseDate,
           skillsSignature: rep?.primaryCard?.skillsSignature ?? null,
+          regulationMark: rep?.regulationMark ?? null,
         };
       })
-      // Sort groups: newest expansion first, then alphabetical by name
       .sort((a, b) => {
-        if (a.releaseDate && b.releaseDate) {
-          const diff = new Date(b.releaseDate).getTime() - new Date(a.releaseDate).getTime();
-          if (diff !== 0) return diff;
+        let diff = 0;
+        if (sortBy === 'release') {
+          if (a.releaseDate && b.releaseDate) diff = new Date(a.releaseDate).getTime() - new Date(b.releaseDate).getTime();
+          else if (a.releaseDate) diff = 1;
+          else if (b.releaseDate) diff = -1;
+        } else if (sortBy === 'regulation') {
+          diff = (a.regulationMark ?? '').localeCompare(b.regulationMark ?? '');
+        } else if (sortBy === 'hp') {
+          diff = (a.hp ?? 0) - (b.hp ?? 0);
         }
-        if (a.releaseDate && !b.releaseDate) return -1;
-        if (!a.releaseDate && b.releaseDate) return 1;
+        if (diff !== 0) return sortDesc ? -diff : diff;
         return (a.expCode ?? '').localeCompare(b.expCode ?? '');
       });
-  }, [filteredCards]);
+  }, [filteredCards, sortBy, sortDesc]);
 
   const handleCardClick = (card: CardItem) => {
     router.push(`/cards/${card.webCardId}`);
@@ -522,20 +537,19 @@ export default function PokemonDetailPage({
           返回圖鑑
         </Link>
 
-        {/* Header */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mb-4">
+        {/* Header: left = species info, right = evolution chain */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-3">
           <div className="flex items-start gap-4">
-            {/* Portrait image */}
-            <div className="w-24 h-32 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 border border-gray-200 relative group">
+            {/* Portrait (compact) */}
+            <div className="w-16 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 border border-gray-200 relative group" style={{ height: 88 }}>
               {headerImage ? (
                 <img src={headerImage} alt={species?.nameZhHant ?? dexNumber} className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center gap-1">
-                  <span className="text-3xl opacity-20">⚪</span>
-                  <span className="font-mono text-xs text-gray-400">#{dexNumber}</span>
+                  <span className="text-2xl opacity-20">⚪</span>
+                  <span className="font-mono text-[10px] text-gray-400">#{dexNumber}</span>
                 </div>
               )}
-              {/* Reset to species default */}
               {selectedImage && (
                 <button
                   onClick={() => setSelectedImage(null)}
@@ -546,67 +560,66 @@ export default function PokemonDetailPage({
                 </button>
               )}
             </div>
+
+            {/* Species info */}
             <div className="min-w-0 flex-1">
-              {/* Dex number badge */}
-              <div className="bg-blue-50 rounded-lg px-3 py-1.5 font-mono text-blue-700 font-bold text-base inline-block mb-2">
-                #{dexNumber}
-              </div>
-              {species ? (
-                <>
-                  <div className="flex items-center flex-wrap gap-2">
-                    <h1 className="text-2xl font-bold text-gray-900">{species.nameZhHant}</h1>
+              <div className="flex items-center gap-2 flex-wrap mb-1">
+                <span className="bg-blue-50 rounded px-2 py-0.5 font-mono text-blue-700 font-bold text-sm">#{dexNumber}</span>
+                {species ? (
+                  <>
+                    <h1 className="text-xl font-bold text-gray-900">{species.nameZhHant}</h1>
                     {species.evolutionStage && STAGE_LABEL[species.evolutionStage] && (
-                      <span className={`text-xs font-bold px-2 py-1 rounded border ${STAGE_LABEL[species.evolutionStage].color}`}>
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded border ${STAGE_LABEL[species.evolutionStage].color}`}>
                         {STAGE_LABEL[species.evolutionStage].label}
                       </span>
                     )}
-                  </div>
-                  {species.form && (
-                    <div className="text-sm text-purple-600 mt-0.5">{species.form}</div>
-                  )}
-                  <div className="flex flex-wrap gap-3 mt-1.5 text-sm text-gray-500">
-                    <span>{species.nameEn}</span>
-                    <span className="text-gray-300">|</span>
-                    <span>{species.nameJa}</span>
-                    <span className="text-gray-300">|</span>
-                    <span className="text-gray-400">{species.nameZhHans}</span>
-                  </div>
-                </>
-              ) : (
-                <h1 className="text-2xl font-bold text-gray-900">圖鑑 #{dexNumber}</h1>
-              )}
-              <div className="mt-2 text-sm text-gray-500">
-                共 {allCards.length} 張卡牌
-                {species && (
-                  <span className="ml-3">
+                    {species.form && <span className="text-xs text-purple-600">{species.form}</span>}
+                  </>
+                ) : (
+                  <h1 className="text-xl font-bold text-gray-900">圖鑑 #{dexNumber}</h1>
+                )}
+              </div>
+              {species && (
+                <div className="flex flex-wrap gap-2 text-xs text-gray-500">
+                  <span>{species.nameEn}</span>
+                  <span className="text-gray-300">|</span>
+                  <span>{species.nameJa}</span>
+                  <span className="text-gray-300">|</span>
+                  <span className="text-gray-400">{species.nameZhHans}</span>
+                  <span className="text-gray-300">|</span>
+                  <span>
                     {species.cardCounts['ZH_TW'] ? `🇹🇼 ${species.cardCounts['ZH_TW']} ` : ''}
                     {species.cardCounts['EN_US'] ? `🇺🇸 ${species.cardCounts['EN_US']} ` : ''}
                     {species.cardCounts['JA_JP'] ? `🇯🇵 ${species.cardCounts['JA_JP']}` : ''}
                   </span>
-                )}
-              </div>
+                </div>
+              )}
             </div>
+
+            {/* Evolution chain — right half, only when chain exists */}
+            {evolutionChain.length > 1 && (
+              <>
+                <div className="w-px bg-gray-200 self-stretch mx-1" />
+                <div className="flex-1 min-w-0 max-w-sm">
+                  <div className="text-[10px] font-semibold text-gray-400 mb-1.5">進化鏈</div>
+                  <div className="flex items-center gap-1 overflow-x-auto pb-1">
+                    {evolutionChain.map((s, i) => (
+                      <div key={s.id} className="flex items-center gap-0.5 flex-shrink-0">
+                        {i > 0 && <span className="text-gray-300 text-base">→</span>}
+                        <ChainThumb s={s} isCurrent={s.id === species?.id} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
-        {/* Evolution chain */}
-        {evolutionChain.length > 1 && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
-            <h2 className="text-sm font-semibold text-gray-500 mb-3">進化鏈</h2>
-            <div className="flex items-center gap-1 overflow-x-auto pb-1">
-              {evolutionChain.map((s, i) => (
-                <div key={s.id} className="flex items-center gap-1 flex-shrink-0">
-                  {i > 0 && <span className="text-gray-300 text-lg">→</span>}
-                  <ChainThumb s={s} isCurrent={s.id === species?.id} />
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── Rarity filter + card count ── */}
-        <div className="flex items-center gap-3 mb-3 flex-wrap">
-          <span className="text-sm text-gray-500">共 {filteredCards.length} 張</span>
+        {/* ── Filters + sort + image size ── */}
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          <span className="text-sm text-gray-500 mr-1">共 {filteredCards.length} 張</span>
+          {/* Rarity filter */}
           <select
             value={rarityFilter}
             onChange={(e) => setRarityFilter(e.target.value)}
@@ -617,9 +630,55 @@ export default function PokemonDetailPage({
               <option key={r} value={r}>{RARITY_SHORT[r]} – {r.replace(/_/g, ' ')}</option>
             ))}
           </select>
-          {rarityFilter && (
-            <button onClick={() => setRarityFilter('')} className="text-xs text-gray-400 hover:text-gray-700">✕ 清除</button>
+          {/* Regulation mark filter */}
+          <select
+            value={regulationFilter}
+            onChange={(e) => setRegulationFilter(e.target.value)}
+            className="text-xs border border-gray-300 rounded px-2 py-1 bg-white text-gray-700"
+          >
+            <option value="">全部規格標記</option>
+            {['J', 'I', 'H', 'G', 'F', 'E', 'D', 'C', 'B', 'A'].map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
+          {/* Sort by */}
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as 'release' | 'regulation' | 'hp')}
+            className="text-xs border border-gray-300 rounded px-2 py-1 bg-white text-gray-700"
+          >
+            <option value="release">發行日期</option>
+            <option value="regulation">規格標記</option>
+            <option value="hp">HP</option>
+          </select>
+          <button
+            onClick={() => setSortDesc((v) => !v)}
+            className="text-xs border border-gray-300 rounded px-2 py-1 bg-white text-gray-700 hover:bg-gray-50"
+            title={sortDesc ? '降序' : '升序'}
+          >
+            {sortDesc ? '↓' : '↑'}
+          </button>
+          {/* Clear filters */}
+          {(rarityFilter || regulationFilter) && (
+            <button
+              onClick={() => { setRarityFilter(''); setRegulationFilter(''); }}
+              className="text-xs text-gray-400 hover:text-gray-700"
+            >
+              ✕ 清除篩選
+            </button>
           )}
+          {/* Image size toggle */}
+          <div className="ml-auto flex items-center gap-1">
+            {(['S', 'M', 'L'] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setImgSize(s)}
+                className={`text-xs px-2 py-1 rounded border font-mono ${imgSize === s ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* ── Pending merge confirmation ── */}
@@ -711,6 +770,12 @@ export default function PokemonDetailPage({
                       {group.expCode}{group.cardNumber ? ` #${group.cardNumber}` : ''}
                     </span>
                   )}
+                  {/* Regulation mark */}
+                  {group.regulationMark && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 shrink-0">
+                      {group.regulationMark}
+                    </span>
+                  )}
                   {/* Release date */}
                   {group.releaseDate && (
                     <span className="text-[10px] text-gray-400 shrink-0">
@@ -736,7 +801,7 @@ export default function PokemonDetailPage({
                       key={card.webCardId}
                       onClick={() => handleCardClick(card)}
                       className="relative cursor-pointer group/card"
-                      style={{ width: 88 }}
+                      style={{ width: imgSize === 'S' ? 83 : imgSize === 'L' ? 156 : 114 }}
                       onMouseMove={(e) => {
                         if (card.attacks?.length || card.abilities?.length) {
                           setTooltip({ card, x: e.clientX, y: e.clientY });
