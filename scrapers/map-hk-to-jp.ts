@@ -7,6 +7,11 @@
  *   Primary key:  expansionCode + collectorNumber (most sets share identical collector IDs)
  *   Cross-check:  pokedexNumber must match when both cards are Pokémon
  *
+ *   Partial expansions (mini-deck sets like MBD, MBG, SVOM, SVOD):
+ *     Pokémon  → collector-number match + supertype guard (confirmed per-expansion)
+ *     Trainer/Energy → name-based match via ZH_TO_JP_PARTIAL translation table
+ *       (collector numbers are offset because HK has exclusive cards JP lacks)
+ *
  * Actions:
  *   1. Dry-run (default): Report matches/mismatches/unmatched — no DB changes
  *   2. Apply  (--apply):  Update HK card.primaryCardId → JP card's PrimaryCard
@@ -91,6 +96,43 @@ function loadJsonFiles(dir: string, prefix: string): SourceCard[] {
 }
 
 // ─────────────────────────────────────────────
+// ZH_TW → JA_JP trainer/energy name translation
+// Used for name-based matching in partial-coverage expansions (MBD, MBG, SVOM, SVOD…)
+// where collector-number offsets from HK-exclusive cards make direct mapping unreliable.
+// Add new entries here whenever a new mini-deck expansion is scraped.
+// ─────────────────────────────────────────────
+const ZH_TO_JP_PARTIAL: Record<string, string> = {
+  // Items
+  '好友寶芬': 'なかよしポフィン',
+  '高級球':   'ハイパーボール',
+  '神奇糖果': 'ふしぎなアメ',
+  '寶可夢交替': 'ポケモンいれかえ',
+  '超級信號': 'メガシグナル',
+  '夜間擔架': '夜のタンカ',
+  '頂尖捕捉器': 'プライムキャッチャー',
+  '奇跡修正檔': 'ワンダーパッチ',
+  '氣球':     'ふうせん',
+  '厲害釣竿': 'すごいつりざお',
+  '不公印章': 'アンフェアスタンプ',
+  '緊急滑板': '緊急ボード',
+  // Tools
+  '龐克頭盔': 'パンクメット',
+  '英雄護甲': 'ヒーローマント',
+  // Supporters
+  '艾莉絲的鬥志': 'アイリスの闘志',
+  '老大的指令':   'ボスの指令',
+  '莉莉艾的決意': 'リーリエの決心',
+  '博士的研究':   '博士の研究',
+  '奇樹':         'ネモ',
+  '阿克羅瑪的執著': 'ナンジャモ',
+  '派帕':         'ナンジャモ',
+  // Stadiums
+  '神秘花園': 'ミステリーガーデン',
+  '石之洞窟': 'いしのどうくつ',
+  '尖釘鎮道館': 'スパイクタウンジム',
+};
+
+// ─────────────────────────────────────────────
 // 2. Main logic
 // ─────────────────────────────────────────────
 
@@ -165,6 +207,12 @@ async function main() {
 
   const jpSrcByWebId = new Map<string, SourceCard>();
   for (const c of jpCards) jpSrcByWebId.set(c.webCardId, c);
+
+  // JP name → first webCardId — used for name-based trainer matching in partial expansions
+  const jpNameToWebId = new Map<string, string>();
+  for (const c of jpCards) {
+    if (!jpNameToWebId.has(c.name)) jpNameToWebId.set(c.name, c.webCardId);
+  }
 
   // ── Expansions with known HK/JP collector-number offsets ──
   // These sets have different card counts between HK and JP (HK is a subset
@@ -246,8 +294,40 @@ async function main() {
         skippedNon100++;
         continue;
       }
-      // Partial-coverage expansion: fall through to matching below,
-      // but results are collected in partialExpUpdates and require confirmation.
+      // For partial expansions (mini decks), Trainer/Energy collector numbers are
+      // offset due to HK-exclusive cards not present in JP.
+      // Use name-based matching (ZH_TO_JP_PARTIAL table) instead of collector number.
+      if (hkSrc.supertype !== 'POKEMON') {
+        const jpName = ZH_TO_JP_PARTIAL[hkSrc.name];
+        if (jpName) {
+          const jpWebId = jpNameToWebId.get(jpName);
+          const jpDbCard = jpWebId ? jpDbByWebId.get(jpWebId) : undefined;
+          if (jpDbCard) {
+            if (dbHKCard.primaryCardId === jpDbCard.primaryCardId) {
+              alreadyLinked++;
+            } else {
+              const record: UpdateRecord = {
+                hkCardDbId:      dbHKCard.id,
+                hkWebCardId:     dbHKCard.webCardId,
+                jpWebCardId:     jpDbCard.webCardId,
+                jpCardDbId:      jpDbCard.id,
+                jpPrimaryCardId: jpDbCard.primaryCardId,
+                syncFields:      {},
+              };
+              const arr = partialExpUpdates.get(hkSrc.expansionCode) ?? [];
+              arr.push(record);
+              partialExpUpdates.set(hkSrc.expansionCode, arr);
+            }
+          } else {
+            skippedNon100++; // known translation but JP card not in DB yet
+          }
+        } else {
+          skippedNon100++; // HK-exclusive card or unknown translation — leave untouched
+        }
+        continue;
+      }
+      // Partial-coverage Pokemon: fall through to collector-number matching below,
+      // results are collected in partialExpUpdates and require per-expansion confirmation.
     }
 
     const variant = dbHKCard.variantType || 'NORMAL';
@@ -259,7 +339,7 @@ async function main() {
 
     if (!jpSrc) {
       if (isPartial) {
-        // No JP counterpart found — expected for variant-only HK cards (e.g. M4 084–120 are SR reprints)
+        // No JP counterpart found — expected for HK-exclusive cards
         skippedNon100++;
       } else {
         unmatchedHK++;
@@ -476,6 +556,7 @@ async function main() {
   let applied = 0;
   let fieldsSynced = 0;
   const orphanedPrimaryCardIds = new Set<string>();
+  const CHUNK = 200;
 
   if (!APPLY_EXPANSION) {
   // Collect HK primaryCardIds before update (for orphan cleanup)
@@ -503,7 +584,6 @@ async function main() {
   console.log(`\n✅ Linked ${applied} HK cards to JP PrimaryCards`);
   console.log(`✏️  Synced JP fields on ${fieldsSynced} HK cards`);
   } // end !APPLY_EXPANSION block
-  const CHUNK = 200;
 
   // ── Partial expansions: ask per-expansion before applying ──
   if (partialExpUpdates.size > 0) {

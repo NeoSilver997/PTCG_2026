@@ -1048,6 +1048,8 @@ select,input{background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4
   <button class="btn" id="f-fp"     onclick="setFilter('fp')"     >Pokemon FP</button>
   <button class="btn" id="f-tag"    onclick="setFilter('tag')"    >Trainer tag</button>
   <button class="btn" id="f-linked" onclick="setFilter('linked')" >Linked</button>
+  <button class="btn" id="btn-zh-linked" onclick="toggleZhLinked()" title="Show already-linked ZH cards in the left column">ZH: +Linked</button>
+  <button class="btn" id="btn-hide-old-reg" onclick="toggleHideOldReg()" title="Hide cards with regulation marks A-G">Hide A-G</button>
   <select id="f-supertype" onchange="setSupertype(this.value)" style="font-size:12px;background:#161b22;color:#c9d1d9;border:1px solid #30363d;border-radius:4px;padding:2px 6px">
     <option value="">All types</option>
     <option value="POKEMON">&#x1f7e2; Pokemon</option>
@@ -1109,7 +1111,7 @@ select,input{background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4
 <div id="main" style="display:none">
   <div class="columns">
     <div>
-      <div class="col-header"><span>ZH Unlinked</span><span id="zh-count"></span></div>
+      <div class="col-header"><span id="zh-col-title">ZH Unlinked</span><span id="zh-count"></span></div>
       <div class="card-list" id="zh-list"></div>
     </div>
     <div>
@@ -1150,6 +1152,8 @@ var g = {
   linkedOpen: false,
   hidden: new Set(),   // pcIds hidden by user
   showHidden: false,
+  zhShowLinked: false,  // show linked ZH cards in the ZH column
+  hideOldReg: false,    // hide A-G regulation marks
   supertype: '',        // 'POKEMON'|'TRAINER'|'ENERGY'|''
   ptype: '',            // PokemonType filter
   subtype: '',          // Trainer/Energy subtype filter
@@ -1232,12 +1236,19 @@ function linkedPairHtml(p) {
     +'</div><span class="card-linked-badge">✓</span></div>';
 }
 
-function applyFilter(list) {
+function applyFilter(list, isZhSide) {
   var f = g.filter;
   var showH = g.showHidden;
-  var unlinked = list.filter(function(c){ return !c.linkedEnId && !c.linkedZhId && (showH || !g.hidden.has(c.pcId)); });
+  var OLD_REGS = ['A','B','C','D','E','F','G'];
+  // For ZH side: optionally include linked cards
+  var base;
+  if (isZhSide && g.zhShowLinked) {
+    base = list.filter(function(c){ return (showH || !g.hidden.has(c.pcId)); });
+  } else {
+    base = list.filter(function(c){ return !c.linkedEnId && !c.linkedZhId && (showH || !g.hidden.has(c.pcId)); });
+  }
   if (f === 'linked') return list.filter(function(c){ return c.linkedEnId || c.linkedZhId; });
-  var result = unlinked;
+  var result = base;
   if (f === 'fp') result = result.filter(function(c){ return c.attackFp; });
   else if (f === 'tag') result = result.filter(function(c){ return c.effectFp && !c.attackFp; });
   if (g.supertype) result = result.filter(function(c){ return c.supertype === g.supertype; });
@@ -1245,6 +1256,7 @@ function applyFilter(list) {
   if (g.subtype) result = result.filter(function(c){ return c.subtypes && c.subtypes.indexOf(g.subtype) !== -1; });
   if (g.regMark === 'NONE') result = result.filter(function(c){ return !c.regulationMark; });
   else if (g.regMark) result = result.filter(function(c){ return c.regulationMark === g.regMark; });
+  if (g.hideOldReg) result = result.filter(function(c){ return !c.regulationMark || OLD_REGS.indexOf(c.regulationMark) === -1; });
   return result;
 }
 
@@ -1253,6 +1265,18 @@ function setPtype(v) { g.ptype = v; render(); }
 function setSubtype(v) { g.subtype = v; render(); }
 function setRegMark(v) { g.regMark = v; render(); }
 function setSortBy(v) { g.sortBy = v; render(); }
+function toggleZhLinked() {
+  g.zhShowLinked = !g.zhShowLinked;
+  var btn = document.getElementById('btn-zh-linked');
+  if (btn) btn.classList.toggle('active', g.zhShowLinked);
+  render();
+}
+function toggleHideOldReg() {
+  g.hideOldReg = !g.hideOldReg;
+  var btn = document.getElementById('btn-hide-old-reg');
+  if (btn) btn.classList.toggle('active', g.hideOldReg);
+  render();
+}
 
 function remapExpansion() {
   var zh = document.getElementById('sel-zh').value;
@@ -1320,10 +1344,13 @@ function toggleShowHidden() {
 }
 
 function render() {
-  var zhShow = g.filter === 'linked' ? g.zh.filter(function(c){return c.linkedEnId;}) : applyFilter(g.zh);
-  var enShow = g.filter === 'linked' ? g.en.filter(function(c){return c.linkedZhId;}) : applyFilter(g.en);
+  var zhShow = g.filter === 'linked' ? g.zh.filter(function(c){return c.linkedEnId;}) : applyFilter(g.zh, true);
+  var enShow = g.filter === 'linked' ? g.en.filter(function(c){return c.linkedZhId;}) : applyFilter(g.en, false);
   zhShow = applySort(zhShow);
   enShow = applySort(enShow);
+
+  var zhColEl = document.getElementById('zh-col-title');
+  if (zhColEl) zhColEl.textContent = g.zhShowLinked ? 'ZH All' : 'ZH Unlinked';
 
   document.getElementById('zh-list').innerHTML = zhShow.map(function(c){return cardHtml(c,'zh');}).join('') || '<div style="color:#6e7681;padding:12px;text-align:center">None</div>';
   document.getElementById('en-list').innerHTML = enShow.map(function(c){return cardHtml(c,'en');}).join('') || '<div style="color:#6e7681;padding:12px;text-align:center">None</div>';
@@ -2170,6 +2197,7 @@ const server = createServer((req, res) => {
           cwd: WORKSPACE_ROOT,
           encoding: 'utf-8',
           timeout: 180000,
+          stdio: ['ignore', 'pipe', 'pipe'],
         });
         cachedUpdates = null; cachedAmbiguous = null; cacheBuilding = false;
         const output = (result.stdout || '') + (result.stderr || '');
@@ -2220,5 +2248,9 @@ async function main() {
   getMatches().catch(console.error);
 }
 
-main().catch(async e => { console.error(e); await prisma.$disconnect(); process.exit(1); });
-process.on('SIGINT', async () => { console.log('\nStopping...'); await prisma.$disconnect(); process.exit(0); });
+process.on('uncaughtException', (e) => { console.error('[uncaughtException]', e); });
+process.on('unhandledRejection', (reason) => { console.error('[unhandledRejection]', reason); });
+// Keep the event loop alive so Node doesn't exit after all Prisma queries settle
+const _keepAlive = setInterval(() => {}, 1 << 30);
+main().catch(async e => { console.error('[main error]', e); await prisma.$disconnect(); process.exit(1); });
+process.on('SIGINT', async () => { console.log('\nStopping...'); clearInterval(_keepAlive); await prisma.$disconnect(); process.exit(0); });

@@ -19,8 +19,13 @@ interface CardItem {
   language: string;
   variantType: string;
   evolutionStage: string | null;
+  primaryCardId?: string | null;
+  attacks?: Array<{ name?: string; cost?: string[]; damage?: string; effect?: string; text?: string }> | null;
+  abilities?: Array<{ name?: string; text?: string; description?: string }> | null;
   primaryCard?: {
+    id?: string | null;
     cardNumber?: string | null;
+    skillsSignature?: string | null;
     primaryExpansion?: { code: string; nameEn: string; releaseDate?: string | null } | null;
   };
   regionalExpansion?: {
@@ -400,24 +405,100 @@ export default function PokemonDetailPage({
     });
   }, [zhCardsData, enCardsData, jaCardsData, species, excludedNamesByLang]);
 
-  // Group cards by primary type
-  const cardsByType = useMemo(() => {
-    const groups = new Map<string, CardItem[]>();
-    for (const card of allCards) {
-      const type = card.types?.[0] ?? 'COLORLESS';
-      if (!groups.has(type)) groups.set(type, []);
-      groups.get(type)!.push(card);
+  // ── Rarity filter ──
+  const [rarityFilter, setRarityFilter] = useState<string>('');
+
+  const filteredCards = useMemo(
+    () => (rarityFilter ? allCards.filter((c) => c.rarity === rarityFilter) : allCards),
+    [allCards, rarityFilter],
+  );
+
+  // ── Group by primaryCardId (= one "version" of the card) ──
+  interface PrimaryCardGroup {
+    key: string;              // primaryCardId or webCardId fallback
+    cards: CardItem[];        // all language/variant cards in this group
+    // Representative metadata (from first ZH_TW card, fallback to first)
+    displayName: string;
+    hp: number | null;
+    types: string[] | null;
+    expCode: string | null;
+    cardNumber: string | null;
+    releaseDate: string | null;
+    skillsSignature: string | null;
+  }
+
+  const cardsByPrimaryCard = useMemo((): PrimaryCardGroup[] => {
+    const groupMap = new Map<string, CardItem[]>();
+    for (const card of filteredCards) {
+      const key = card.primaryCardId ?? card.webCardId;
+      if (!groupMap.has(key)) groupMap.set(key, []);
+      groupMap.get(key)!.push(card);
     }
-    // Sort groups by TYPE_ORDER
-    return Array.from(groups.entries()).sort(
-      ([a], [b]) =>
-        (TYPE_ORDER.indexOf(a) === -1 ? 99 : TYPE_ORDER.indexOf(a)) -
-        (TYPE_ORDER.indexOf(b) === -1 ? 99 : TYPE_ORDER.indexOf(b)),
-    );
-  }, [allCards]);
+    return Array.from(groupMap.entries())
+      .map(([key, cards]) => {
+        // Sort variants: ZH_TW first, then EN, then JP
+        const sorted = cards.sort(
+          (a, b) => (LANG_ORDER[a.language] ?? 9) - (LANG_ORDER[b.language] ?? 9),
+        );
+        const rep = sorted.find((c) => c.language === 'ZH_TW') ?? sorted[0];
+        const expCode =
+          rep?.regionalExpansion?.primaryExpansion?.code ??
+          rep?.primaryCard?.primaryExpansion?.code ??
+          null;
+        const releaseDate =
+          rep?.primaryCard?.primaryExpansion?.releaseDate ??
+          rep?.regionalExpansion?.primaryExpansion?.releaseDate ??
+          null;
+        return {
+          key,
+          cards: sorted,
+          displayName: rep?.name ?? '',
+          hp: rep?.hp ?? null,
+          types: rep?.types ?? null,
+          expCode,
+          cardNumber: rep?.primaryCard?.cardNumber ?? null,
+          releaseDate,
+          skillsSignature: rep?.primaryCard?.skillsSignature ?? null,
+        };
+      })
+      // Sort groups: newest expansion first, then alphabetical by name
+      .sort((a, b) => {
+        if (a.releaseDate && b.releaseDate) {
+          const diff = new Date(b.releaseDate).getTime() - new Date(a.releaseDate).getTime();
+          if (diff !== 0) return diff;
+        }
+        if (a.releaseDate && !b.releaseDate) return -1;
+        if (!a.releaseDate && b.releaseDate) return 1;
+        return (a.expCode ?? '').localeCompare(b.expCode ?? '');
+      });
+  }, [filteredCards]);
 
   const handleCardClick = (card: CardItem) => {
     router.push(`/cards/${card.webCardId}`);
+  };
+
+  // ── Skill tooltip ──
+  const [tooltip, setTooltip] = useState<{ card: CardItem; x: number; y: number } | null>(null);
+
+  // ── Drag-and-drop merge state ──
+  const [dragSource, setDragSource] = useState<string | null>(null);       // primaryCardId being dragged
+  const [dropTarget, setDropTarget] = useState<string | null>(null);       // hovered target
+  const [pendingMerge, setPendingMerge] = useState<{ sourceId: string; targetId: string } | null>(null);
+  const [mergeLoading, setMergeLoading] = useState(false);
+
+  const handleMergeConfirm = async () => {
+    if (!pendingMerge) return;
+    setMergeLoading(true);
+    try {
+      await apiClient.post('/cards/primary-cards/merge', pendingMerge);
+      setPendingMerge(null);
+      // Refresh card data by invalidating queries
+      window.location.reload();
+    } catch (e: any) {
+      alert('Merge failed: ' + (e?.response?.data?.message ?? e?.message ?? String(e)));
+    } finally {
+      setMergeLoading(false);
+    }
   };
 
   // --- Selected display image (header portrait) ---
@@ -523,103 +604,198 @@ export default function PokemonDetailPage({
           </div>
         )}
 
+        {/* ── Rarity filter + card count ── */}
+        <div className="flex items-center gap-3 mb-3 flex-wrap">
+          <span className="text-sm text-gray-500">共 {filteredCards.length} 張</span>
+          <select
+            value={rarityFilter}
+            onChange={(e) => setRarityFilter(e.target.value)}
+            className="text-xs border border-gray-300 rounded px-2 py-1 bg-white text-gray-700"
+          >
+            <option value="">全部稀有度</option>
+            {Object.keys(RARITY_SHORT).map((r) => (
+              <option key={r} value={r}>{RARITY_SHORT[r]} – {r.replace(/_/g, ' ')}</option>
+            ))}
+          </select>
+          {rarityFilter && (
+            <button onClick={() => setRarityFilter('')} className="text-xs text-gray-400 hover:text-gray-700">✕ 清除</button>
+          )}
+        </div>
+
+        {/* ── Pending merge confirmation ── */}
+        {pendingMerge && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full mx-4">
+              <h3 className="text-lg font-bold mb-2">合併卡片？</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                將這兩張卡牌標記為同一張主卡牌（合併語言版本）。此操作不可撤銷。
+              </p>
+              <div className="flex gap-3 justify-end">
+                <button onClick={() => setPendingMerge(null)} className="px-4 py-2 text-sm rounded border border-gray-300 hover:bg-gray-50">取消</button>
+                <button onClick={handleMergeConfirm} disabled={mergeLoading} className="px-4 py-2 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
+                  {mergeLoading ? '合併中...' : '確認合併'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Skill tooltip overlay ── */}
+        {tooltip && (
+          <div
+            className="fixed z-40 pointer-events-none bg-gray-900 text-white text-xs rounded-lg shadow-xl p-3 max-w-xs"
+            style={{ left: Math.min(tooltip.x + 12, window.innerWidth - 240), top: tooltip.y + 12 }}
+          >
+            {tooltip.card.abilities && tooltip.card.abilities.length > 0 && tooltip.card.abilities.map((a, i) => (
+              <div key={i} className="mb-2 last:mb-0">
+                {a.name && <div className="font-semibold text-purple-300">{a.name}</div>}
+                <div className="text-gray-200 leading-tight">{a.text ?? a.description}</div>
+              </div>
+            ))}
+            {tooltip.card.attacks && tooltip.card.attacks.length > 0 && tooltip.card.attacks.map((atk, i) => (
+              <div key={i} className="mb-2 last:mb-0">
+                <div className="flex items-center gap-1">
+                  {atk.name && <span className="font-semibold text-yellow-300">{atk.name}</span>}
+                  {atk.damage && <span className="ml-auto font-bold text-red-300">{atk.damage}</span>}
+                </div>
+                {(atk.effect || atk.text) && (
+                  <div className="text-gray-200 leading-tight mt-0.5">{atk.effect ?? atk.text}</div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Cards grid */}
         {isLoading ? (
           <div className="text-center py-16 text-gray-500">載入中...</div>
-        ) : allCards.length === 0 ? (
+        ) : filteredCards.length === 0 ? (
           <div className="text-center py-16 text-gray-400">
             <p className="text-lg">尚無此寶可夢的卡牌資料</p>
             <p className="text-sm mt-1">資料庫中找不到相關卡牌</p>
           </div>
         ) : (
-          <div className="space-y-6">
-            {cardsByType.map(([type, cards]) => (
-              <div key={type}>
-                <div className="flex items-center gap-2 mb-3">
-                  <span className={`px-2.5 py-1 rounded-lg text-sm font-bold ${TYPE_COLORS[type] ?? 'bg-gray-300 text-gray-700'}`}>
-                    {TYPE_LABEL[type] ?? type}
-                  </span>
-                  <span className="text-sm text-gray-400">{cards.length} 張</span>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-4">
-            {cards.map((card) => (
+          <div className="space-y-3">
+            {cardsByPrimaryCard.map((group) => (
               <div
-                key={card.webCardId}
-                onClick={() => handleCardClick(card)}
-                className="bg-white rounded-lg border border-gray-200 hover:border-blue-400 hover:shadow-lg transition-all cursor-pointer overflow-hidden group"
+                key={group.key}
+                className={`bg-white rounded-xl border transition-all ${
+                  dropTarget === group.key ? 'border-blue-400 shadow-md ring-2 ring-blue-200' : 'border-gray-200'
+                }`}
+                onDragOver={(e) => { e.preventDefault(); setDropTarget(group.key); }}
+                onDragLeave={() => setDropTarget(null)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDropTarget(null);
+                  if (dragSource && dragSource !== group.key) {
+                    setPendingMerge({ sourceId: dragSource, targetId: group.key });
+                  }
+                  setDragSource(null);
+                }}
               >
-                {/* Card image */}
-                <div className="aspect-[2.5/3.5] bg-gray-100 relative">
-                  {card.imageUrl ? (
-                    <img
-                      src={card.imageUrl}
-                      alt={card.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 gap-1">
-                      <span className="text-3xl opacity-20">⚪</span>
-                      <span className="text-[9px] text-gray-400">{card.name}</span>
-                    </div>
+                {/* Group header */}
+                <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
+                  {/* Type badges */}
+                  {(group.types ?? []).map((t) => (
+                    <span key={t} className={`px-2 py-0.5 rounded text-[10px] font-bold ${TYPE_COLORS[t] ?? 'bg-gray-300 text-gray-700'}`}>
+                      {TYPE_LABEL[t] ?? t}
+                    </span>
+                  ))}
+                  {/* HP */}
+                  {group.hp && <span className="text-xs font-bold text-red-600">HP{group.hp}</span>}
+                  {/* Card name */}
+                  <span className="text-sm font-semibold text-gray-800 truncate flex-1">{group.displayName}</span>
+                  {/* Expansion */}
+                  {group.expCode && (
+                    <span className="text-[10px] text-gray-400 font-mono shrink-0">
+                      {group.expCode}{group.cardNumber ? ` #${group.cardNumber}` : ''}
+                    </span>
                   )}
-                  {/* Select as header image button */}
-                  {card.imageUrl && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setSelectedImage(card.imageUrl); }}
-                      className={`absolute bottom-1.5 left-1.5 rounded px-1.5 py-0.5 text-[9px] font-bold transition-all ${
-                        selectedImage === card.imageUrl
-                          ? 'bg-blue-500 text-white opacity-100'
-                          : 'bg-black/50 text-white opacity-0 group-hover:opacity-100'
-                      }`}
-                      title="設為代表圖片"
-                    >
-                      {selectedImage === card.imageUrl ? '✓' : '設圖'}
-                    </button>
+                  {/* Release date */}
+                  {group.releaseDate && (
+                    <span className="text-[10px] text-gray-400 shrink-0">
+                      {new Date(group.releaseDate).toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit' })}
+                    </span>
                   )}
-                  {/* Rarity badge */}
-                  {card.rarity && (
-                    <div className="absolute top-1.5 right-1.5">
-                      <span
-                        className={`${RARITY_COLORS[card.rarity] ?? 'bg-gray-400'} text-white text-[10px] font-bold px-1.5 py-0.5 rounded`}
-                      >
-                        {RARITY_SHORT[card.rarity] ?? card.rarity.split('_')[0]}
-                      </span>
-                    </div>
-                  )}
-                  {/* Lang flag */}
-                  <div className="absolute top-1.5 left-1.5 text-sm leading-none">
-                    {LANG_FLAG[card.language] ?? ''}
-                  </div>
+                  {/* Drag handle */}
+                  <span
+                    draggable
+                    title="拖曳以合併主卡牌"
+                    onDragStart={() => setDragSource(group.key)}
+                    onDragEnd={() => { setDragSource(null); setDropTarget(null); }}
+                    className="ml-1 cursor-grab text-gray-300 hover:text-gray-500 select-none shrink-0"
+                  >
+                    ⠿
+                  </span>
                 </div>
 
-                {/* Card info */}
-                <div className="p-2.5">
-                  <div className="font-semibold text-xs text-gray-900 truncate" title={card.name}>
-                    {card.name}
-                  </div>
-                  <div className="flex items-center justify-between mt-1">
-                    {card.hp && (
-                      <span className="text-[10px] font-bold text-red-600">HP {card.hp}</span>
-                    )}
-                    {card.types && card.types.length > 0 && (
-                      <div
-                        className={`w-4 h-4 rounded-full text-[8px] font-bold flex items-center justify-center ${TYPE_COLORS[card.types[0]] ?? 'bg-gray-300 text-gray-700'}`}
-                      >
-                        {card.types[0][0]}
+                {/* Language variant cards */}
+                <div className="flex flex-wrap gap-3 p-3">
+                  {group.cards.map((card) => (
+                    <div
+                      key={card.webCardId}
+                      onClick={() => handleCardClick(card)}
+                      className="relative cursor-pointer group/card"
+                      style={{ width: 88 }}
+                      onMouseMove={(e) => {
+                        if (card.attacks?.length || card.abilities?.length) {
+                          setTooltip({ card, x: e.clientX, y: e.clientY });
+                        }
+                      }}
+                      onMouseLeave={() => setTooltip(null)}
+                    >
+                      {/* Card image */}
+                      <div className="aspect-[2.5/3.5] bg-gray-100 rounded-lg overflow-hidden relative border border-gray-200 hover:border-blue-400 hover:shadow-md transition-all">
+                        {card.imageUrl ? (
+                          <img
+                            src={card.imageUrl}
+                            alt={card.name}
+                            className="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-200"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 gap-1">
+                            <span className="text-2xl opacity-20">⚪</span>
+                            <span className="text-[8px] text-gray-400">{card.name}</span>
+                          </div>
+                        )}
+                        {/* Select as header image */}
+                        {card.imageUrl && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setSelectedImage(card.imageUrl); }}
+                            className={`absolute bottom-1 left-1 rounded px-1 py-0.5 text-[8px] font-bold transition-all ${
+                              selectedImage === card.imageUrl
+                                ? 'bg-blue-500 text-white opacity-100'
+                                : 'bg-black/50 text-white opacity-0 group-hover/card:opacity-100'
+                            }`}
+                            title="設為代表圖片"
+                          >
+                            {selectedImage === card.imageUrl ? '✓' : '設'}
+                          </button>
+                        )}
+                        {/* Rarity badge */}
+                        {card.rarity && (
+                          <div className="absolute top-1 right-1">
+                            <span className={`${RARITY_COLORS[card.rarity] ?? 'bg-gray-400'} text-white text-[9px] font-bold px-1 py-0.5 rounded`}>
+                              {RARITY_SHORT[card.rarity] ?? card.rarity.split('_')[0]}
+                            </span>
+                          </div>
+                        )}
+                        {/* Lang flag */}
+                        <div className="absolute top-1 left-1 text-xs leading-none">
+                          {LANG_FLAG[card.language] ?? ''}
+                        </div>
+                        {/* Skill tooltip indicator */}
+                        {(card.attacks?.length || card.abilities?.length) && (
+                          <div className="absolute bottom-1 right-1 w-3 h-3 rounded-full bg-yellow-400/80 opacity-0 group-hover/card:opacity-100 transition-opacity" title="有招式資料" />
+                        )}
                       </div>
-                    )}
-                  </div>
-                  {/* Expansion info */}
-                  <div className="mt-1 text-[10px] text-gray-400 truncate">
-                    {card.regionalExpansion?.primaryExpansion?.code ??
-                      card.primaryCard?.primaryExpansion?.code ??
-                      ''}
-                    {card.primaryCard?.cardNumber ? ` #${card.primaryCard.cardNumber}` : ''}
-                  </div>
-                </div>
-              </div>
-            ))}
+                      {/* Variant type label */}
+                      {card.variantType && card.variantType !== 'NORMAL' && (
+                        <div className="text-[8px] text-center text-gray-400 mt-0.5 truncate">{card.variantType}</div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             ))}

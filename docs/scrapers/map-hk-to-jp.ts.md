@@ -1,8 +1,8 @@
 # map-hk-to-jp.ts — Documentation
 
 **Source file:** `scrapers/map-hk-to-jp.ts`
-**Last modified:** `2026-05-05 22:38`
-**MD5:** `B80C2F315811444FCBA8DD227555293D`
+**Last modified:** `2026-05-12 18:32`
+**MD5:** `4501AD233949D515DCE23A313D078437`
 **Summarised by model:** `Claude Sonnet 4.6`
 
 Maps Hong Kong (`ZH_TW`) cards in the database to their Japanese (`JA_JP`) counterparts by linking them to the same `PrimaryCard` record.
@@ -82,7 +82,9 @@ For each HK card in the database the script:
 1. Looks up the card in the HK JSON source (`hkSrcByWebId`). If not found → `notInJsonHK`.
 2. **Routes by expansion coverage:**
    - If the expansion is in `OFFSET_EXPANSIONS` (`SVK`, `SVHK`) → skip entirely (`skippedNon100`). Handled by dedicated fix scripts.
-   - If the expansion is **not** in `fullMatchExpansions` (partial coverage) → still attempts matching, but results are stored in `partialExpUpdates` (a separate per-expansion queue requiring manual confirmation). Requires **supertype** to also match (collector-number alone is not safe for partial sets).
+   - If the expansion is **not** in `fullMatchExpansions` (partial coverage) → different strategy depending on card type:
+     - **Pokémon cards**: collector-number match + supertype guard; results stored in `partialExpUpdates` (requires per-expansion confirmation)
+     - **Trainer/Energy cards**: **name-based matching** via `ZH_TO_JP_PARTIAL` translation table (collector numbers are offset because HK mini-deck sets include exclusive cards absent from JP). Matched results are also stored in `partialExpUpdates`; unknown names (HK-exclusive cards) are skipped (`skippedNon100`)
    - If the expansion is in `fullMatchExpansions` (100% coverage) → results go into the normal `updates` queue.
 3. Attempts an **exact** variant match (`jpLookup`), then falls back to **any** variant (`jpLookupAny`). If neither matches → `unmatchedHK` (or `skippedNon100` for partial expansions).
 4. **Pokédex cross-check** (Pokémon cards only): if both cards have a `pokedexNumber` and they differ, logs a `pokedexMismatch` warning but **still proceeds** — HK dex data is known to be unreliable.

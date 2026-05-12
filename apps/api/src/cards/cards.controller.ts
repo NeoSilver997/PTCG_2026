@@ -188,4 +188,16 @@ export class CardsController {
   ): Promise<any> {
     return await this.cardsService.updateCard(webCardId, dto);
   }
+
+  @Post('primary-cards/merge')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Merge two PrimaryCards: move all cards from source to target, delete source' })
+  @ApiResponse({ status: 200, description: 'Merge successful' })
+  @ApiResponse({ status: 400, description: 'Invalid request / same IDs' })
+  @ApiResponse({ status: 404, description: 'PrimaryCard not found' })
+  async mergePrimaryCards(
+    @Body() body: { sourceId: string; targetId: string },
+  ): Promise<any> {
+    return await this.cardsService.mergePrimaryCards(body.sourceId, body.targetId);
+  }
 }

@@ -1083,6 +1083,44 @@ export class CardsService {
   }
 
   // ---------------------------------------------------------------------------
+  // Merge PrimaryCards
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Merge two PrimaryCards: re-link all cards from sourceId to targetId, then
+   * delete the now-orphaned source PrimaryCard. Used by the drag-and-drop UI.
+   */
+  async mergePrimaryCards(sourceId: string, targetId: string): Promise<{ merged: number }> {
+    if (!sourceId || !targetId) throw new BadRequestException('sourceId and targetId are required');
+    if (sourceId === targetId) throw new BadRequestException('sourceId and targetId must be different');
+
+    const [source, target] = await Promise.all([
+      this.prisma.primaryCard.findUnique({ where: { id: sourceId } }),
+      this.prisma.primaryCard.findUnique({ where: { id: targetId } }),
+    ]);
+    if (!source) throw new NotFoundException(`PrimaryCard ${sourceId} not found`);
+    if (!target) throw new NotFoundException(`PrimaryCard ${targetId} not found`);
+
+    const result = await this.prisma.card.updateMany({
+      where: { primaryCardId: sourceId },
+      data: { primaryCardId: targetId },
+    });
+
+    // Also re-link CardRelation rows
+    await this.prisma.cardRelation.updateMany({ where: { fromCardId: sourceId }, data: { fromCardId: targetId } });
+    await this.prisma.cardRelation.updateMany({ where: { toCardId: sourceId }, data: { toCardId: targetId } });
+
+    // Delete the orphan PrimaryCard (cascade handles DeckCardRole etc.)
+    try {
+      await this.prisma.primaryCard.delete({ where: { id: sourceId } });
+    } catch {
+      // Non-fatal if other references exist
+    }
+
+    return { merged: result.count };
+  }
+
+  // ---------------------------------------------------------------------------
   // Card Relations
   // ---------------------------------------------------------------------------
 

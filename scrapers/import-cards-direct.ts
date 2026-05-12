@@ -381,10 +381,13 @@ async function importCardOptimized(prisma: PrismaClient, card: any) {
   }
 
   // 5. Upsert Card using webCardId as unique key
+  // NOTE: primaryCardId is intentionally excluded from the update block.
+  // On create, we assign the card to the PrimaryCard derived from this import.
+  // Cross-language links (e.g. HK → JP) established by map-hk-to-jp.ts are
+  // preserved on re-import — they are only overwritten by that mapping script.
   await prisma.card.upsert({
     where: { webCardId: card.webCardId },
     update: {
-      primaryCardId: primaryCard.id,
       regionalExpansionId: regionalExpansion.id,
       name: card.name,
       supertype,
