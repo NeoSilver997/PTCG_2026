@@ -380,11 +380,13 @@ async function importCardOptimized(prisma: PrismaClient, card: any) {
     text = null; // Clear text field for trainer cards
   }
 
-  // 5. Upsert Card using webCardId as unique key
-  // NOTE: primaryCardId is intentionally excluded from the update block.
-  // On create, we assign the card to the PrimaryCard derived from this import.
-  // Cross-language links (e.g. HK → JP) established by map-hk-to-jp.ts are
-  // preserved on re-import — they are only overwritten by that mapping script.
+  // 5. Skip if card already exists — default mode is "new cards only"
+  const existing = await prisma.card.findUnique({ where: { webCardId: card.webCardId }, select: { webCardId: true } });
+  if (existing) {
+    return null; // Already in DB — skip without touching it
+  }
+
+  // Create new card
   await prisma.card.upsert({
     where: { webCardId: card.webCardId },
     update: {
@@ -488,11 +490,20 @@ async function main() {
   const prisma = new PrismaClient();
 
   const args = process.argv.slice(2);
-  const baseDir = args[0] || path.join(__dirname, '../data/cards');
-  const region = args[1]; // Optional: 'japan', 'english', 'hongkong', 'china', or undefined for all
 
-  console.log(`\n📂 Base directory: ${baseDir}`);
-  console.log(`🌍 Region filter: ${region || 'all'}\n`);
+  // Support --file <absolute-path> for single-file import
+  const fileArgIdx = args.indexOf('--file');
+  const singleFile = fileArgIdx !== -1 ? args[fileArgIdx + 1] : null;
+
+  const baseDir = singleFile ? path.dirname(singleFile) : (args[0] || path.join(__dirname, '../data/cards'));
+  const region = singleFile ? null : args[1]; // Optional: 'japan', 'english', 'hongkong', 'china', or undefined for all
+
+  if (singleFile) {
+    console.log(`\n📄 Single file mode: ${singleFile}`);
+  } else {
+    console.log(`\n📂 Base directory: ${baseDir}`);
+    console.log(`🌍 Region filter: ${region || 'all'}\n`);
+  }
 
   const regions = region ? [region] : ['japan', 'english', 'hongkong', 'china'];
   let totalFiles = 0;
@@ -506,6 +517,26 @@ async function main() {
   const allCards: any[] = [];
   const fileCardCounts: { [key: string]: number } = {};
 
+  if (singleFile) {
+    // Single-file mode
+    if (!fs.existsSync(singleFile)) {
+      console.error(`✗ File not found: ${singleFile}`);
+      await prisma.$disconnect();
+      return;
+    }
+    try {
+      const cards: JapaneseCard[] = JSON.parse(fs.readFileSync(singleFile, 'utf-8'));
+      const validCards = cards.filter(card => card.name !== 'カード検索');
+      allCards.push(...validCards);
+      fileCardCounts[path.basename(singleFile)] = validCards.length;
+      totalFiles++;
+      console.log(`  Loaded ${validCards.length} cards from ${path.basename(singleFile)}`);
+    } catch (error) {
+      console.error(`✗ Error reading file: ${error.message}`);
+      await prisma.$disconnect();
+      return;
+    }
+  } else {
   for (const regionName of regions) {
     const regionDir = path.join(baseDir, regionName);
     if (!fs.existsSync(regionDir)) {
@@ -553,6 +584,7 @@ async function main() {
       }
     }
   }
+  } // end single-file else
 
   console.log(`\n📊 Collected ${allCards.length} total cards from ${totalFiles} files`);
 
@@ -592,7 +624,7 @@ async function main() {
     totalSkipped += result.skipped;
     processedCards += batch.length;
 
-    console.log(`✓ Batch ${batchIndex + 1}: ${result.success} success, ${result.failed} failed${result.skipped > 0 ? `, ${result.skipped} skipped` : ''}`);
+    console.log(`✓ Batch ${batchIndex + 1}: ${result.success} success, ${result.failed} failed${result.skipped > 0 ? `, ${result.skipped} skipped (existing)` : ''}`);
   }
 
   const endTime = Date.now();
@@ -606,7 +638,7 @@ async function main() {
   console.log(`Successfully imported: ${totalSuccess}`);
   console.log(`Failed: ${totalFailed}`);
   if (totalSkipped > 0) {
-    console.log(`Skipped (placeholders): ${totalSkipped}`);
+    console.log(`Skipped (already exist): ${totalSkipped}`);
   }
   console.log(`Total time: ${duration.toFixed(2)}s`);
   console.log(`Performance: ${cardsPerSecond.toFixed(1)} cards/second`);

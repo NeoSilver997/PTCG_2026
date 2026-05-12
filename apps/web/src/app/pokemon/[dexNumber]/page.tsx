@@ -382,6 +382,12 @@ export default function PokemonDetailPage({
         if (normalizedCardName.endsWith(normalizedTarget)) return true;
         if (normalizedCardName.startsWith(`${normalizedTarget} `)) return true;
         if (normalizedCardName.startsWith(`${normalizedTarget}ex`)) return true;
+        // Character cards: "莉佳的霸王花ex" / "リーリエのフシギバナex" — trainer's name + 的/の + pokemon
+        if (normalizedCardName.includes(`的${normalizedTarget}`) || normalizedCardName.includes(`の${normalizedTarget}`)) return true;
+        // HK angle-bracket format: "<大吾的>巨金怪ex" — >{target} after closing bracket
+        if (normalizedCardName.includes(`>${normalizedTarget}`)) return true;
+        // English character cards: "Erika's Vileplume ex" — Trainer's [Pokemon]
+        if (normalizedCardName.includes(`'s ${normalizedTarget}`)) return true;
         if (hasMegaMarker && compactCardName.includes(compactTarget)) return true;
         if (compactCardName.startsWith(`m${compactTarget}`) && compactCardName.endsWith('ex')) return true;
         return false;
@@ -406,12 +412,17 @@ export default function PokemonDetailPage({
     });
   }, [zhCardsData, enCardsData, jaCardsData, species, excludedNamesByLang]);
 
-  // ── Filters, sort & image size ──
-  const [rarityFilter, setRarityFilter] = useState<string>('');
-  const [regulationFilter, setRegulationFilter] = useState<string>('');
-  const [sortBy, setSortBy] = useState<'release' | 'regulation' | 'hp'>('regulation');
-  const [sortDesc, setSortDesc] = useState(true);
-  const [imgSize, setImgSize] = useState<'S' | 'M' | 'L'>('M');
+  // ── Filters, sort & image size (persisted in sessionStorage to survive merge reload) ──
+  const FILTER_KEY = `pokemon-filters-${dexNumber}`;
+  const _storedFilters = useMemo(() => {
+    try { return JSON.parse(sessionStorage.getItem(FILTER_KEY) ?? 'null'); } catch { return null; }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const [rarityFilter, setRarityFilter] = useState<string>(_storedFilters?.rarityFilter ?? '');
+  const [regulationFilter, setRegulationFilter] = useState<string>(_storedFilters?.regulationFilter ?? '');
+  const [sortBy, setSortBy] = useState<'release' | 'regulation' | 'hp'>(_storedFilters?.sortBy ?? 'regulation');
+  const [sortDesc, setSortDesc] = useState<boolean>(_storedFilters?.sortDesc ?? true);
+  const [imgSize, setImgSize] = useState<'S' | 'M' | 'L'>(_storedFilters?.imgSize ?? 'M');
 
   const filteredCards = useMemo(
     () => allCards.filter((c) => {
@@ -507,7 +518,8 @@ export default function PokemonDetailPage({
     try {
       await apiClient.post('/cards/primary-cards/merge', pendingMerge);
       setPendingMerge(null);
-      // Refresh card data by invalidating queries
+      // Persist current filters so they survive the reload
+      try { sessionStorage.setItem(FILTER_KEY, JSON.stringify({ rarityFilter, regulationFilter, sortBy, sortDesc, imgSize })); } catch {}
       window.location.reload();
     } catch (e: any) {
       alert('Merge failed: ' + (e?.response?.data?.message ?? e?.message ?? String(e)));
