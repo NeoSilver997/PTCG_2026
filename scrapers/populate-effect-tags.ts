@@ -313,6 +313,8 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     (has('discard all') && has('Energy from')) ||
     // EN: discard a Special Energy from each of opponent's Pokémon (Giacomo)
     (has('Discard') && has('Special Energy') && has("opponent's Pok\u00e9mon", "opponent's")) ||
+    // EN: "Discard 1 Energy card attached to that Pokémon" (Super Potion, Kiawe, etc.)
+    (has('Discard') && has('Energy') && (has('attached to that', 'attached to 1 of', 'attached to this', 'attached to your'))) ||
     // EN: put attached Energy into opponent's hand / deck (Team Yell Grunt)
     (has('Energy attached') && (has('into their hand') || has('into their deck') || has("opponent's deck")))
   ) {
@@ -401,7 +403,11 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     (has('HPを回復') || (has('回復') && has('HP', 'ダメカン'))) ||
     has('ダメカンをとり除く', 'ダメカンを取り除く', 'HPが回復') ||
     // EN
-    /[Hh]eal \d+ damage|[Hh]eal from this|[Hh]eal all damage/.test(effect)
+    /[Hh]eal \d+ damage|[Hh]eal from this|[Hh]eal all damage/.test(effect) ||
+    // EN: "Restore N HP" / "restore N HP to" — alternate healing wording
+    /[Rr]estore \d+ HP/.test(effect) ||
+    // EN: "remove N damage counters" style (older sets)
+    /remove \d+ damage counters?/i.test(effect)
   ) {
     primary.add('回復效果');
   }
@@ -1214,7 +1220,9 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
   if (
     (has('手牌') && has('丟棄')) ||
     (has('手札') && has('トラッシュ')) ||
-    // EN
+    // EN: "Discard your hand" (Prof Research, Iris's Fighting Spirit, AZ, etc.)
+    has('Discard your hand', 'discard your hand') ||
+    // EN: "Discard N cards from your hand" / "Discard a card from your hand"
     (has('Discard') && has('from your hand', 'cards from your hand', 'a card from your hand'))
   ) {
     primary.add('手牌丟棄');

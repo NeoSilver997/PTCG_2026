@@ -2253,4 +2253,15 @@ process.on('unhandledRejection', (reason) => { console.error('[unhandledRejectio
 // Keep the event loop alive so Node doesn't exit after all Prisma queries settle
 const _keepAlive = setInterval(() => {}, 1 << 30);
 main().catch(async e => { console.error('[main error]', e); await prisma.$disconnect(); process.exit(1); });
-process.on('SIGINT', async () => { console.log('\nStopping...'); clearInterval(_keepAlive); await prisma.$disconnect(); process.exit(0); });
+let _sigintCount = 0;
+process.on('SIGINT', async () => {
+  _sigintCount++;
+  if (_sigintCount < 2) {
+    console.log('\n[Server: SIGINT received — press Ctrl+C again to stop]');
+    return;
+  }
+  console.log('\nStopping...');
+  clearInterval(_keepAlive);
+  try { await prisma.$disconnect(); } catch {}
+  process.exit(0);
+});

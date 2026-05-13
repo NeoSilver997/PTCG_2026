@@ -29,7 +29,8 @@
  *   npx tsx scrapers/map-zh-to-en.ts --expansion SV9         # limit to one expansion
  *
  * Field sync (EN → ZH/JP):
- *   rarity, regulationMark, variantType  — always overwritten on ZH card with EN value
+ *   rarity, variantType  — always overwritten on ZH card with EN value
+ *   regulationMark       — FILL ONLY when ZH is null (never overwrite existing value)
  *   artist, evolvesFrom, ruleBox, subtypes — fill only when ZH is null/empty
  * Field sync (ZH → EN):
  *   regulationMark — fill EN when EN is null/empty and ZH has a value
@@ -47,7 +48,7 @@ const ZH_TO_EN_CODE: Record<string, string> = {
   // Sun-Moon era mega bundles
   'M1S': 'ME01', 'M1L': 'ME01',
   'M2':  'ME02', 'MBD': 'ME02', 'MBG': 'ME02',
-  'M2A': 'ME2.5', 'MC': 'ME2.5',
+  'M2A': 'ME2',  'MC':  'ME2',
   'M3':  'ME03',
 
   // Scarlet & Violet — Black/White split sets
@@ -67,7 +68,7 @@ const ZH_TO_EN_CODE: Record<string, string> = {
   'SV7':  'SV07',
 
   // SV6 / SV6.5
-  'SV6':  'SV06', 'SV6A': 'SV6.5',
+  'SV6':  'SV06', 'SV6A': 'SV6',
 
   // SV5 bundle (EN SV05 includes SV5A + SV5K sub-sets)
   'SV5A': 'SV05', 'SV5K': 'SV05',
@@ -269,7 +270,7 @@ async function loadPrimaryCards(
 // Matching
 // ─────────────────────────────────────────────────────────────
 
-type MatchMethod = 'pokemon-species+attack' | 'attack-fingerprint' | 'effect-tag+regmark';
+type MatchMethod = 'pokemon-species+attack' | 'attack-fingerprint' | 'effect-tag+regmark' | 'special-tag+regmark' | 'subtype+regmark-1:1';
 
 interface UpdateRecord {
   zhPrimaryCardId: string;
@@ -315,6 +316,10 @@ function runMatching(
   const enSpeciesFpLookup = new Map<string, Map<string, DbPrimaryCard[]>>();
   // expansionId → Map<effectFingerprint, DbPrimaryCard[]>
   const enEffFpLookup = new Map<string, Map<string, DbPrimaryCard[]>>();
+  // Pass 3A: expansionId → Map<specialTags+subtype+reg key, DbPrimaryCard[]>
+  const enSpecialTagLookup = new Map<string, Map<string, DbPrimaryCard[]>>();
+  // Pass 3B: expansionId → Map<subtype+reg key, DbPrimaryCard[]>
+  const enSubtypeRegLookup = new Map<string, Map<string, DbPrimaryCard[]>>();
 
   for (const [expId, enList] of enByExpansion) {
     const atkMap = new Map<string, DbPrimaryCard[]>();
@@ -343,6 +348,30 @@ function runMatching(
         arr.push(en);
         effMap.set(en.effectFingerprint, arr);
       }
+
+      // Pass 3A: special-tag + subtype + regulationMark (no-attack cards only)
+      if (en.attackFingerprint === null) {
+        const specTags = [...(en.specialEffectTags ?? [])].sort().join(',');
+        const subtype = en.repSubtype ?? '';
+        const reg = en.repRegulationMark ?? '';
+        if (specTags) {
+          const key3a = `S:${specTags}|${subtype}|R:${reg}`;
+          const specTagMap = enSpecialTagLookup.get(expId) ?? new Map<string, DbPrimaryCard[]>();
+          const s3arr = specTagMap.get(key3a) ?? [];
+          s3arr.push(en);
+          specTagMap.set(key3a, s3arr);
+          enSpecialTagLookup.set(expId, specTagMap);
+        }
+        // Pass 3B: subtype + regulationMark (no-attack cards, 1:1 fallback)
+        if (subtype || reg) {
+          const key3b = `${subtype}|R:${reg}`;
+          const subtypeMap = enSubtypeRegLookup.get(expId) ?? new Map<string, DbPrimaryCard[]>();
+          const s3barr = subtypeMap.get(key3b) ?? [];
+          s3barr.push(en);
+          subtypeMap.set(key3b, s3barr);
+          enSubtypeRegLookup.set(expId, subtypeMap);
+        }
+      }
     }
 
     enAtkFpLookup.set(expId, atkMap);
@@ -355,6 +384,7 @@ function runMatching(
   const globalAtkMap = new Map<string, DbPrimaryCard[]>();
   const globalSpecMap = new Map<string, DbPrimaryCard[]>();
   const globalEffMap = new Map<string, DbPrimaryCard[]>();
+  const globalSpecialTagMap = new Map<string, DbPrimaryCard[]>(); // Pass 3A global
   for (const en of (enByExpansion.get(GLOBAL_KEY) ?? [])) {
     if (en.attackFingerprint !== null) {
       const arr = globalAtkMap.get(en.attackFingerprint) ?? [];
@@ -371,6 +401,18 @@ function runMatching(
       const arr = globalEffMap.get(en.effectFingerprint) ?? [];
       arr.push(en);
       globalEffMap.set(en.effectFingerprint, arr);
+    }
+    // Pass 3A global: specialEffectTags + subtype + reg
+    if (en.attackFingerprint === null) {
+      const specTags = [...(en.specialEffectTags ?? [])].sort().join(',');
+      const subtype = en.repSubtype ?? '';
+      const reg = en.repRegulationMark ?? '';
+      if (specTags) {
+        const key3a = `S:${specTags}|${subtype}|R:${reg}`;
+        const arr = globalSpecialTagMap.get(key3a) ?? [];
+        arr.push(en);
+        globalSpecialTagMap.set(key3a, arr);
+      }
     }
   }
 
@@ -434,20 +476,35 @@ function runMatching(
         matchMethod = 'attack-fingerprint';
       }
 
-      // Global fallback: search across all EN expansions if per-expansion failed
+      // Global fallback: search across all EN expansions if per-expansion failed.
+      // SAFETY: Only use species+attack global fallback (not bare attack FP) to avoid
+      // matching reprinted Pokémon with identical attacks from completely different eras.
+      // Additionally filter by regulation mark proximity (≤2 letters apart) to prevent
+      // cross-era merges (e.g. ZH reg:E matching EN reg:I from a different generation).
       if (enCandidates.length === 0) {
         if (zh.pokemonSpeciesId) {
           const specKey = `${zh.pokemonSpeciesId}|${zh.attackFingerprint}`;
-          enCandidates = globalSpecMap.get(specKey) ?? [];
-          if (enCandidates.length > 0) matchMethod = 'pokemon-species+attack';
+          const globalSpecCandidates = globalSpecMap.get(specKey) ?? [];
+          if (globalSpecCandidates.length > 0) {
+            // Filter by regulation mark proximity to prevent cross-era merges
+            const REG_ORDER = ['A','B','C','D','E','F','G','H','I','J'];
+            const zhReg = zh.repRegulationMark ?? zh.cards[0]?.regulationMark ?? null;
+            const zhRegIdx = zhReg ? REG_ORDER.indexOf(zhReg) : -1;
+            enCandidates = globalSpecCandidates.filter(en => {
+              const enReg = en.repRegulationMark ?? en.cards[0]?.regulationMark ?? null;
+              if (zhRegIdx < 0 || !enReg) return true; // can't compare, allow
+              const enRegIdx = REG_ORDER.indexOf(enReg);
+              if (enRegIdx < 0) return true;
+              return Math.abs(zhRegIdx - enRegIdx) <= 2; // within 2 regulation marks = same era
+            });
+            if (enCandidates.length > 0) matchMethod = 'pokemon-species+attack';
+          }
         }
-        if (enCandidates.length === 0) {
-          enCandidates = globalAtkMap.get(zh.attackFingerprint!) ?? [];
-          matchMethod = 'attack-fingerprint';
-        }
-        // For global fallback, use global ZH sibling count (how many ZH cards share this FP)
-        // We don't have per-expansion count but can use 1 as default (safe for clean FPs)
-        // Actually count ZH sibs globally by checking all ZH with same FP
+        // NOTE: globalAtkMap (bare attack fingerprint) fallback intentionally REMOVED.
+        // It caused cross-era merges by matching reprinted Pokémon with identical attacks
+        // from different generations (e.g. S8/Huntail reg:E matched to SV-era EN reg:I).
+        // Use species+attack fallback above, or add expansion code mappings to ZH_TO_EN_CODE.
+
         if (enCandidates.length > 0) {
           // Use 1 as global zhSibCount — if FP is ambiguous, enCandidates.length > 1 catches it
           zhSibCount = 1;
@@ -496,19 +553,21 @@ function runMatching(
       const zhSibCount = zhEffSiblings.get(expId)?.get(zh.effectFingerprint) ?? 1;
 
       if (enCandidates.length === 0) {
-        unmatched.push({ zhId: zh.id, zhName: zh.name, expansion: zh.expansionCode ?? '?', reason: 'no EN effect-tag match' });
+        // Fall through to Pass 3 — don't push unmatched yet
       } else if (enCandidates.length > 1) {
         ambiguous.push({
           zhName: zh.name, expansion: zh.expansionCode ?? '?',
           fp: zh.effectFingerprint,
           enCandidates: enCandidates.map(e => e.name),
         });
+        matched = true;
       } else if (zhSibCount > 1) {
         ambiguous.push({
           zhName: zh.name, expansion: zh.expansionCode ?? '?',
           fp: zh.effectFingerprint,
           enCandidates: [`${enCandidates[0].name} (1 EN but ${zhSibCount} ZH share same effect fingerprint)`],
         });
+        matched = true;
       } else {
         const enPC = enCandidates[0];
         updates.push({
@@ -516,11 +575,98 @@ function runMatching(
           zhCards: zh.cards, enPrimaryCard: enPC, enCard: enPC.cards[0] ?? null,
           matchMethod: 'effect-tag+regmark',
         });
+        matched = true;
       }
+    }
+
+    if (matched) continue;
+
+    // --- Pass 3: Trainer / Energy fallback matching ---
+    // Handles cards where effectTags differ between ZH and EN due to keyword analysis gaps,
+    // or cards with no distinctive effectTags but unique specialEffectTags or subtype/reg.
+
+    // Pass 3A: specialEffectTags + subtype + regulationMark
+    {
+      const specTags = [...(zh.specialEffectTags ?? [])].sort().join(',');
+      const subtype = zh.repSubtype ?? '';
+      const reg = zh.repRegulationMark ?? '';
+      if (specTags) {
+        const key3a = `S:${specTags}|${subtype}|R:${reg}`;
+        const specTagMap = enSpecialTagLookup.get(expId);
+        let enCandidates3a = specTagMap?.get(key3a) ?? [];
+        // Global fallback
+        if (enCandidates3a.length === 0) {
+          enCandidates3a = globalSpecialTagMap.get(key3a) ?? [];
+        }
+
+        if (enCandidates3a.length === 1) {
+          const enPC = enCandidates3a[0];
+          updates.push({
+            zhPrimaryCardId: zh.id, zhPrimaryCardName: zh.name, zhCardNumber: zh.cardNumber,
+            zhCards: zh.cards, enPrimaryCard: enPC, enCard: enPC.cards[0] ?? null,
+            matchMethod: 'special-tag+regmark',
+          });
+          matched = true;
+        } else if (enCandidates3a.length > 1) {
+          ambiguous.push({
+            zhName: zh.name, expansion: zh.expansionCode ?? '?',
+            fp: key3a,
+            enCandidates: enCandidates3a.map(e => e.name),
+          });
+          matched = true;
+        }
+      }
+    }
+
+    if (matched) continue;
+
+    // Pass 3B: subtype + regulationMark — only when exactly 1 ZH and 1 EN candidate in expansion
+    {
+      const subtype = zh.repSubtype ?? '';
+      const reg = zh.repRegulationMark ?? '';
+      if (subtype && reg) {
+        const key3b = `${subtype}|R:${reg}`;
+        const subtypeMap = enSubtypeRegLookup.get(expId);
+        const enCandidates3b = subtypeMap?.get(key3b) ?? [];
+
+        // Count how many ZH cards share this subtype+reg key in this expansion
+        const zhSiblings3b = zhCards.filter(z =>
+          z.primaryExpansionId === expId &&
+          z.attackFingerprint === null &&
+          (z.repSubtype ?? '') === subtype &&
+          (z.repRegulationMark ?? '') === reg
+        ).length;
+
+        if (enCandidates3b.length === 1 && zhSiblings3b === 1) {
+          // Unique 1:1 match — safe to link
+          const enPC = enCandidates3b[0];
+          updates.push({
+            zhPrimaryCardId: zh.id, zhPrimaryCardName: zh.name, zhCardNumber: zh.cardNumber,
+            zhCards: zh.cards, enPrimaryCard: enPC, enCard: enPC.cards[0] ?? null,
+            matchMethod: 'subtype+regmark-1:1',
+          });
+          matched = true;
+        } else if (enCandidates3b.length > 1 || (enCandidates3b.length === 1 && zhSiblings3b > 1)) {
+          // Multiple candidates or multiple ZH sibs — ambiguous
+          ambiguous.push({
+            zhName: zh.name, expansion: zh.expansionCode ?? '?',
+            fp: key3b,
+            enCandidates: enCandidates3b.map(e => e.name),
+          });
+          matched = true;
+        }
+      }
+    }
+
+    if (matched) continue;
+
+    // If we reach here, nothing worked — record unmatched
+    if (zh.effectFingerprint !== null) {
+      unmatched.push({ zhId: zh.id, zhName: zh.name, expansion: zh.expansionCode ?? '?', reason: 'no EN effect-tag match' });
     } else {
       unmatched.push({ zhId: zh.id, zhName: zh.name, expansion: zh.expansionCode ?? '?', reason: 'no attacks and no distinctive effect tags' });
     }
-  }
+  } // end for zh of zhCards
 
   return { updates, ambiguous, unmatched };
 }
@@ -600,10 +746,12 @@ async function applyUpdates(updates: UpdateRecord[]): Promise<void> {
       if (enCard) {
         for (const zhCard of u.zhCards) {
           const zhSync: Record<string, unknown> = {};
-          // EN is authoritative for rarity, variantType, regulationMark
+          // EN is authoritative for rarity and variantType — always overwrite on ZH
           if (enCard.rarity && zhCard.rarity !== enCard.rarity)           zhSync.rarity = enCard.rarity;
           if (enCard.variantType && zhCard.variantType !== enCard.variantType) zhSync.variantType = enCard.variantType;
-          if (enCard.regulationMark && zhCard.regulationMark !== enCard.regulationMark) zhSync.regulationMark = enCard.regulationMark;
+          // regulationMark: only FILL when ZH is null — never overwrite an existing value.
+          // Overwriting caused cross-era corruption (EN reg:I wrongly pushed to ZH reg:E cards).
+          if (enCard.regulationMark && !zhCard.regulationMark) zhSync.regulationMark = enCard.regulationMark;
           // Fill nulls on ZH
           if (!zhCard.artist     && enCard.artist)     zhSync.artist     = enCard.artist;
           if (!zhCard.evolvesFrom && enCard.evolvesFrom) zhSync.evolvesFrom = enCard.evolvesFrom;
@@ -773,6 +921,8 @@ async function main(): Promise<void> {
   const speciesMatches = updates.filter(u => u.matchMethod === 'pokemon-species+attack');
   const atkFpMatches   = updates.filter(u => u.matchMethod === 'attack-fingerprint');
   const effFpMatches   = updates.filter(u => u.matchMethod === 'effect-tag+regmark');
+  const specTagMatches = updates.filter(u => u.matchMethod === 'special-tag+regmark');
+  const subtypeMatches = updates.filter(u => u.matchMethod === 'subtype+regmark-1:1');
 
   // ── Report ──
   console.log('\n' + '='.repeat(60));
@@ -782,6 +932,8 @@ async function main(): Promise<void> {
   console.log(`  ✅ Species+attack matches (1:1):   ${speciesMatches.length}`);
   console.log(`  ✅ Attack-fp matches (1:1):         ${atkFpMatches.length}`);
   console.log(`  ✅ Effect-tag+regmark matches (1:1):${effFpMatches.length}`);
+  console.log(`  ✅ Special-tag+regmark (Pass 3A):   ${specTagMatches.length}`);
+  console.log(`  ✅ Subtype+regmark 1:1 (Pass 3B):   ${subtypeMatches.length}`);
   console.log(`  ⚠️  Ambiguous:                      ${ambiguous.length}`);
   console.log(`  ❌ Unmatched:                       ${unmatched.length}`);
 
