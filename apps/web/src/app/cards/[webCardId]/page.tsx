@@ -1015,13 +1015,13 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                 same: !!(leftBlocks[i] && rightBlocks[i] && leftBlocks[i].text === rightBlocks[i].text),
               }));
 
-              const renderBlock = (b: typeof leftBlocks[0] | null, highlight: boolean) => {
+              const renderBlock = (b: typeof leftBlocks[0] | null) => {
                 if (!b) return <div className="text-xs text-gray-300 italic">—</div>;
                 return (
                   <div>
                     {b.name && (
                       <div className={`text-xs font-semibold mb-0.5 ${
-                        b.type === 'ability' ? (highlight ? 'text-blue-700' : 'text-emerald-700') : 'text-gray-700'
+                        b.type === 'ability' ? 'text-blue-700' : 'text-gray-700'
                       }`}>
                         {b.type === 'ability' ? '★ ' : ''}{b.name}
                         {(b as any).damage && <span className="ml-2 font-bold text-red-600">{(b as any).damage}</span>}
@@ -1029,7 +1029,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                     )}
                     {b.text && (
                       <p className="text-sm text-gray-800">
-                        {highlight ? <HighlightedText text={b.text} rules={effectKeywords} /> : <span className="whitespace-pre-wrap">{b.text}</span>}
+                        <HighlightedText text={b.text} rules={effectKeywords} />
                       </p>
                     )}
                   </div>
@@ -1081,8 +1081,8 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
                         ) : (
                           /* Different: show side by side */
                           <div className="grid grid-cols-2 gap-4 divide-x divide-gray-100">
-                            <div>{renderBlock(pair.left, true)}</div>
-                            <div className="pl-4">{renderBlock(pair.right, false)}</div>
+                            <div>{renderBlock(pair.left)}</div>
+                            <div className="pl-4">{renderBlock(pair.right)}</div>
                           </div>
                         )}
                       </div>

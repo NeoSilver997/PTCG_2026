@@ -108,6 +108,17 @@ export class CardsController {
     return await this.cardsService.getEffectTags();
   }
 
+  @Get('trainers/browser')
+  @ApiOperation({ summary: 'Get trainer cards for grouped trainer browser UI' })
+  @ApiResponse({ status: 200, description: 'Trainer cards with primary-card metadata for client-side grouping' })
+  async getTrainerBrowser(
+    @Query('subtype') subtype?: string,
+    @Query('regulationMark') regulationMark?: string,
+    @Query('effectTag') effectTag?: string,
+  ) {
+    return await this.cardsService.getTrainerBrowser({ subtype, regulationMark, effectTag });
+  }
+
   @Get('admin/missing-effects')
   @ApiOperation({ summary: 'Get PrimaryCards missing effectTags or tier, with sample cards' })
   @ApiResponse({ status: 200, description: 'Missing effects stats and samples' })
@@ -199,5 +210,15 @@ export class CardsController {
     @Body() body: { sourceId: string; targetId: string },
   ): Promise<any> {
     return await this.cardsService.mergePrimaryCards(body.sourceId, body.targetId);
+  }
+
+  @Post('primary-cards/unlink-card/:cardId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Unlink a card variant from its PrimaryCard into a new standalone PrimaryCard' })
+  @ApiResponse({ status: 200, description: 'Card unlinked successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid request' })
+  @ApiResponse({ status: 404, description: 'Card not found' })
+  async unlinkCardFromPrimary(@Param('cardId') cardId: string): Promise<any> {
+    return await this.cardsService.unlinkCardFromPrimary(cardId);
   }
 }

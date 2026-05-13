@@ -124,6 +124,12 @@ const STAGE_LABEL: Record<string, { label: string; color: string }> = {
   RESTORED: { label: '化石',   color: 'bg-amber-100 text-amber-700 border-amber-300' },
 };
 
+function getCardGridClass(viewPerRow: 3 | 6 | 12): string {
+  if (viewPerRow === 3) return 'grid-cols-3';
+  if (viewPerRow === 12) return 'grid-cols-3 md:grid-cols-6 xl:grid-cols-12';
+  return 'grid-cols-3 md:grid-cols-4 xl:grid-cols-6';
+}
+
 // Build the chain starting from the root species through evolvesFrom links
 function buildChainFor(target: SpeciesSummary, all: SpeciesSummary[]): SpeciesSummary[] {
   // Build lookups by all name fields so evolvesFrom works regardless of stored language
@@ -412,7 +418,7 @@ export default function PokemonDetailPage({
     });
   }, [zhCardsData, enCardsData, jaCardsData, species, excludedNamesByLang]);
 
-  // ── Filters, sort & image size (persisted in sessionStorage to survive merge reload) ──
+  // ── Filters, sort & card grid view (persisted in sessionStorage to survive merge reload) ──
   const FILTER_KEY = `pokemon-filters-${dexNumber}`;
   const _storedFilters = useMemo(() => {
     try { return JSON.parse(sessionStorage.getItem(FILTER_KEY) ?? 'null'); } catch { return null; }
@@ -422,7 +428,7 @@ export default function PokemonDetailPage({
   const [regulationFilter, setRegulationFilter] = useState<string>(_storedFilters?.regulationFilter ?? '');
   const [sortBy, setSortBy] = useState<'release' | 'regulation' | 'hp'>(_storedFilters?.sortBy ?? 'regulation');
   const [sortDesc, setSortDesc] = useState<boolean>(_storedFilters?.sortDesc ?? true);
-  const [imgSize, setImgSize] = useState<'S' | 'M' | 'L'>(_storedFilters?.imgSize ?? 'M');
+  const [viewPerRow, setViewPerRow] = useState<3 | 6 | 12>(_storedFilters?.viewPerRow ?? 6);
 
   const filteredCards = useMemo(
     () => allCards.filter((c) => {
@@ -496,8 +502,8 @@ export default function PokemonDetailPage({
           diff = (a.hp ?? 0) - (b.hp ?? 0);
           if (diff === 0) {
             // Attack fingerprint: join all attack names and damages
-            const atkA = (a.cards[0]?.skillsSignature ?? a.cards[0]?.attacks?.map(atk => `${atk.name ?? ''}:${atk.damage ?? ''}`).join('|') ?? '').toLowerCase();
-            const atkB = (b.cards[0]?.skillsSignature ?? b.cards[0]?.attacks?.map(atk => `${atk.name ?? ''}:${atk.damage ?? ''}`).join('|') ?? '').toLowerCase();
+            const atkA = (a.skillsSignature ?? a.cards[0]?.attacks?.map(atk => `${atk.name ?? ''}:${atk.damage ?? ''}`).join('|') ?? '').toLowerCase();
+            const atkB = (b.skillsSignature ?? b.cards[0]?.attacks?.map(atk => `${atk.name ?? ''}:${atk.damage ?? ''}`).join('|') ?? '').toLowerCase();
             diff = atkA.localeCompare(atkB);
           }
           if (diff === 0) {
@@ -532,7 +538,7 @@ export default function PokemonDetailPage({
       await apiClient.post('/cards/primary-cards/merge', pendingMerge);
       setPendingMerge(null);
       // Persist current filters so they survive the reload
-      try { sessionStorage.setItem(FILTER_KEY, JSON.stringify({ rarityFilter, regulationFilter, sortBy, sortDesc, imgSize })); } catch {}
+      try { sessionStorage.setItem(FILTER_KEY, JSON.stringify({ rarityFilter, regulationFilter, sortBy, sortDesc, viewPerRow })); } catch {}
       window.location.reload();
     } catch (e: any) {
       alert('Merge failed: ' + (e?.response?.data?.message ?? e?.message ?? String(e)));
@@ -692,15 +698,15 @@ export default function PokemonDetailPage({
               ✕ 清除篩選
             </button>
           )}
-          {/* Image size toggle */}
+          {/* Cards-per-row toggle */}
           <div className="ml-auto flex items-center gap-1">
-            {(['S', 'M', 'L'] as const).map((s) => (
+            {([3, 6, 12] as const).map((count) => (
               <button
-                key={s}
-                onClick={() => setImgSize(s)}
-                className={`text-xs px-2 py-1 rounded border font-mono ${imgSize === s ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}
+                key={count}
+                onClick={() => setViewPerRow(count)}
+                className={`text-xs px-2 py-1 rounded border font-mono ${viewPerRow === count ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}
               >
-                {s}
+                {count}
               </button>
             ))}
           </div>
@@ -820,13 +826,12 @@ export default function PokemonDetailPage({
                 </div>
 
                 {/* Language variant cards */}
-                <div className="flex flex-wrap gap-3 p-3">
+                <div className={`grid gap-3 p-3 ${getCardGridClass(viewPerRow)}`}>
                   {group.cards.map((card) => (
                     <div
                       key={card.webCardId}
                       onClick={() => handleCardClick(card)}
-                      className="relative cursor-pointer group/card"
-                      style={{ width: imgSize === 'S' ? 83 : imgSize === 'L' ? 156 : 114 }}
+                      className="relative cursor-pointer group/card min-w-0"
                       onMouseMove={(e) => {
                         if (card.attacks?.length || card.abilities?.length) {
                           setTooltip({ card, x: e.clientX, y: e.clientY });

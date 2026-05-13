@@ -1,8 +1,8 @@
 # populate-effect-tags.ts — Documentation
 
 **Source file:** `scrapers/populate-effect-tags.ts`
-**Last modified:** `2026-05-13 15:48`
-**MD5:** `8FF9209EF6A8AA07EC341D7BCAC890A4`
+**Last modified:** `2026-05-13 16:58`
+**MD5:** `1E4FE2D1670D922B162C69D18F325DFE`
 **Summarised by model:** `GPT-5.3-Codex`
 
 ---
@@ -24,6 +24,8 @@ Reads every `PrimaryCard` from the database, locates its best language variant (
 - Added explicit `牌庫重洗` detection for ZH/JA/EN shuffle-deck wording (`重洗牌庫`, `山札に戻して切る`, `shuffle your deck`).
 - Added reveal/show-to-opponent detection as `情報收集` for ZH/JA/EN wording (`給對手看過後`, `相手に見せる`, `show/reveal ... to your opponent`).
 - Expanded Tool boilerplate detection with Chinese template strings so generic tool rule text is filtered as non-effect content more reliably.
+- Added conservative missing-text fallback for `Professor's Research` name variants (`手牌丟棄`, `抽卡×7`) when all language variants lack usable effect text.
+- Fixed alternate-language fallback guard typo (`其他效果`) and separated entrypoint modes so normal tag runs no longer auto-trigger CSV export.
 
 ## Usage
 
@@ -33,6 +35,9 @@ npx tsx scrapers/populate-effect-tags.ts
 
 # Apply mode — writes effectTags, effectScore, cardTier to DB
 npx tsx scrapers/populate-effect-tags.ts --apply
+
+# CSV export mode (pokemon.csv + trainer.csv)
+npx tsx scrapers/populate-effect-tags.ts --export-csv
 ```
 
 ---

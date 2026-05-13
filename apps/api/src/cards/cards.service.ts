@@ -1120,6 +1120,79 @@ export class CardsService {
     return { merged: result.count };
   }
 
+  /**
+   * Unlink one card variant from its current PrimaryCard and place it into a
+   * new standalone PrimaryCard so the UI can split incorrect groups.
+   */
+  async unlinkCardFromPrimary(cardId: string): Promise<{ cardId: string; oldPrimaryCardId: string; newPrimaryCardId: string }> {
+    if (!cardId) throw new BadRequestException('cardId is required');
+
+    const card = await this.prisma.card.findUnique({
+      where: { id: cardId },
+      include: {
+        primaryCard: {
+          select: {
+            id: true,
+            name: true,
+            skillsSignature: true,
+            cardNumber: true,
+            primaryExpansionId: true,
+            pokemonSpeciesId: true,
+            effectTags: true,
+            specialEffectTags: true,
+            effectScore: true,
+            cardTier: true,
+            maxDrawCount: true,
+            maxDamage: true,
+          },
+        },
+      },
+    });
+
+    if (!card) throw new NotFoundException(`Card ${cardId} not found`);
+
+    const primaryCardId = card.primaryCardId;
+    if (!primaryCardId) throw new BadRequestException('Card has no primaryCardId');
+
+    const siblingCount = await this.prisma.card.count({ where: { primaryCardId } });
+    if (siblingCount <= 1) {
+      throw new BadRequestException('This group only has one card and cannot be unlinked further');
+    }
+
+    const sourcePrimary = card.primaryCard;
+    if (!sourcePrimary) throw new NotFoundException(`PrimaryCard ${primaryCardId} not found`);
+
+    const uniqueSignature = `${sourcePrimary.skillsSignature}__UNLINK__${card.webCardId}`;
+
+    const newPrimary = await this.prisma.primaryCard.create({
+      data: {
+        name: card.name || sourcePrimary.name,
+        skillsSignature: uniqueSignature,
+        cardNumber: sourcePrimary.cardNumber,
+        primaryExpansionId: sourcePrimary.primaryExpansionId,
+        pokemonSpeciesId: sourcePrimary.pokemonSpeciesId,
+        effectTags: sourcePrimary.effectTags,
+        specialEffectTags: sourcePrimary.specialEffectTags,
+        effectScore: sourcePrimary.effectScore,
+        cardTier: sourcePrimary.cardTier,
+        maxDrawCount: sourcePrimary.maxDrawCount,
+        maxDamage: sourcePrimary.maxDamage,
+      },
+      select: { id: true },
+    });
+
+    await this.prisma.card.update({
+      where: { id: cardId },
+      data: { primaryCardId: newPrimary.id },
+    });
+
+    return {
+      cardId,
+      oldPrimaryCardId: primaryCardId,
+      newPrimaryCardId: newPrimary.id,
+    };
+  }
+
   // ---------------------------------------------------------------------------
   // Card Relations
   // ---------------------------------------------------------------------------
@@ -1602,6 +1675,114 @@ export class CardsService {
       ...normalRows.map(r => ({ tag: r.tag, count: Number(r.count), isSpecial: false })),
       ...specialRows.map(r => ({ tag: r.tag, count: Number(r.count), isSpecial: true })),
     ];
+  }
+
+  async getTrainerBrowser(params: {
+    subtype?: string;
+    regulationMark?: string;
+    effectTag?: string;
+  }): Promise<{
+    data: any[];
+  }> {
+    const { subtype, regulationMark, effectTag } = params;
+
+    const marks = (regulationMark || '')
+      .split(',')
+      .map((mark) => mark.trim())
+      .filter(Boolean);
+
+    const matchWhere: any = {
+      supertype: 'TRAINER',
+    };
+
+    if (subtype) {
+      matchWhere.subtypes = { has: subtype };
+    }
+
+    if (marks.length === 1) {
+      matchWhere.regulationMark = marks[0];
+    } else if (marks.length > 1) {
+      matchWhere.regulationMark = { in: marks };
+    }
+
+    if (effectTag) {
+      matchWhere.OR = [
+        { primaryCard: { effectTags: { has: effectTag } } },
+        { primaryCard: { specialEffectTags: { has: effectTag } } },
+      ];
+    }
+
+    const matchedCards = await this.prisma.card.findMany({
+      where: matchWhere,
+      select: { primaryCardId: true },
+    });
+
+    const primaryCardIds = [...new Set(matchedCards.map((card) => card.primaryCardId).filter(Boolean))];
+
+    if (primaryCardIds.length === 0) {
+      return { data: [] };
+    }
+
+    const cards = await this.prisma.card.findMany({
+      where: {
+        supertype: 'TRAINER',
+        primaryCardId: { in: primaryCardIds },
+      },
+      select: {
+        id: true,
+        webCardId: true,
+        name: true,
+        language: true,
+        variantType: true,
+        imageUrl: true,
+        rarity: true,
+        text: true,
+        abilities: true,
+        subtypes: true,
+        regulationMark: true,
+        primaryCardId: true,
+        primaryCard: {
+          select: {
+            id: true,
+            name: true,
+            cardNumber: true,
+            skillsSignature: true,
+            effectTags: true,
+            specialEffectTags: true,
+            effectScore: true,
+            cardTier: true,
+            primaryExpansion: {
+              select: {
+                code: true,
+                nameEn: true,
+                releaseDate: true,
+              },
+            },
+          },
+        },
+        regionalExpansion: {
+          select: {
+            code: true,
+            name: true,
+            region: true,
+            primaryExpansion: {
+              select: {
+                code: true,
+                nameEn: true,
+                releaseDate: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: [
+        { primaryCardId: 'asc' },
+        { language: 'asc' },
+        { webCardId: 'asc' },
+      ],
+    });
+
+    return { data: cards };
   }
 
   async getSpeciesSummary(): Promise<any[]> {
