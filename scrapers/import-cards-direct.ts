@@ -147,6 +147,26 @@ interface JapaneseCard {
   variantType?: string;
   evolvesFrom?: string;
   evolvesTo?: string;
+  effectText?: string;
+  text?: string;
+  description?: string;
+  effect?: string;
+  ruleBox?: string;
+  weaknesses?: { type: string; value: string }[] | null;
+  resistances?: { type: string; value: string }[] | null;
+  rulesText?: string[];
+}
+
+function firstNonEmptyText(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed.length > 0) {
+        return trimmed;
+      }
+    }
+  }
+  return null;
 }
 
 function generateSkillsSignature(card: any): string {
@@ -225,7 +245,11 @@ async function batchUpsertExpansions(prisma: PrismaClient, cards: any[]) {
 }
 
 // Optimized card import function (assumes expansions already exist)
-async function importCardOptimized(prisma: PrismaClient, card: any) {
+async function importCardOptimized(
+  prisma: any,
+  card: any,
+  options: { repairMissingText?: boolean } = {},
+) {
   // Skip "カード検索" (Card Search) placeholder cards
   if (card.name === 'カード検索') {
     return null;
@@ -370,19 +394,61 @@ async function importCardOptimized(prisma: PrismaClient, card: any) {
   };
   const language = card.language ? (languageMap[card.language] || LanguageCode.JA_JP) : LanguageCode.JA_JP;
 
-  // Handle trainer card effects - store effectText in abilities as JSON array
-  let abilities = card.abilities || null;
-  let text = card.effectText || card.text || null;
+  // Normalize effect text from multiple scraper field names
+  const normalizedText = firstNonEmptyText(
+    card.effectText,
+    card.text,
+    card.description,
+    card.effect,
+  );
 
-  if (supertype === Supertype.TRAINER && card.effectText) {
-    // For trainer cards, store the effect text in abilities as a JSON array
-    abilities = [{ type: 'ABILITY', name: '', text: card.effectText }];
-    text = null; // Clear text field for trainer cards
+  // Handle trainer card effects - keep text and mirror to abilities when needed
+  let abilities = card.abilities || null;
+  let text = normalizedText;
+
+  if (supertype === Supertype.TRAINER && normalizedText) {
+    const hasAbilityText = Array.isArray(abilities) && abilities.some((a: any) => {
+      const abilityText = firstNonEmptyText(a?.text, a?.description);
+      return Boolean(abilityText);
+    });
+    if (!hasAbilityText) {
+      abilities = [{ type: 'ABILITY', name: '', text: normalizedText }];
+    }
   }
 
-  // 5. Skip if card already exists — default mode is "new cards only"
-  const existing = await prisma.card.findUnique({ where: { webCardId: card.webCardId }, select: { webCardId: true } });
+  // 5. Skip if card already exists, unless repair mode is enabled for missing text.
+  const existing = await prisma.card.findUnique({
+    where: { webCardId: card.webCardId },
+    select: { webCardId: true, text: true, abilities: true },
+  });
   if (existing) {
+    if (options.repairMissingText) {
+      const existingText = typeof existing.text === 'string' ? existing.text.trim() : '';
+      const shouldRepairText = existingText.length === 0 && Boolean(text);
+
+      const existingAbilities = Array.isArray(existing.abilities) ? existing.abilities as any[] : [];
+      const hasExistingAbilityText = existingAbilities.some((a: any) => {
+        const abilityText = firstNonEmptyText(a?.text, a?.description);
+        return Boolean(abilityText);
+      });
+      const shouldRepairTrainerAbilities =
+        supertype === Supertype.TRAINER && Boolean(text) && !hasExistingAbilityText;
+
+      if (shouldRepairText || shouldRepairTrainerAbilities) {
+        await prisma.card.update({
+          where: { webCardId: card.webCardId },
+          data: {
+            text: shouldRepairText ? text : existing.text,
+            abilities: shouldRepairTrainerAbilities
+              ? [{ type: 'ABILITY', name: '', text }]
+              : (existing.abilities as any),
+          },
+        });
+
+        return { repaired: true };
+      }
+    }
+
     return null; // Already in DB — skip without touching it
   }
 
@@ -406,7 +472,7 @@ async function importCardOptimized(prisma: PrismaClient, card: any) {
       resistances: card.resistance ? [card.resistance] : (card.resistances || null),
       retreatCost: card.retreatCost != null ? Number(card.retreatCost) : null,
       rules: card.rules || [],
-      text: card.effectText || card.text || null,
+      text: text,
       flavorText: card.flavorText || null,
       artist: card.artist || null,
       rarity,
@@ -449,13 +515,21 @@ async function importCardOptimized(prisma: PrismaClient, card: any) {
       collectorNumber: card.collectorNumber || null,
     },
   });
+
+  return { created: true };
 }
 
 // Process cards in batches with transactions for better performance
-async function importCardsBatch(prisma: PrismaClient, cards: any[], batchSize = 25) {
+async function importCardsBatch(
+  prisma: any,
+  cards: any[],
+  batchSize = 25,
+  options: { repairMissingText?: boolean } = {},
+) {
   let success = 0;
   let failed = 0;
   let skipped = 0;
+  let repaired = 0;
 
   for (let i = 0; i < cards.length; i += batchSize) {
     const batch = cards.slice(i, i + batchSize);
@@ -463,9 +537,11 @@ async function importCardsBatch(prisma: PrismaClient, cards: any[], batchSize = 
     await prisma.$transaction(async (tx) => {
       for (const card of batch) {
         try {
-          const result = await importCardOptimized(tx, card);
+          const result = await importCardOptimized(tx, card, options);
           if (result === null) {
             skipped++;
+          } else if (result.repaired) {
+            repaired++;
           } else {
             success++;
           }
@@ -481,7 +557,7 @@ async function importCardsBatch(prisma: PrismaClient, cards: any[], batchSize = 
     }
   }
 
-  return { success, failed, skipped };
+  return { success, failed, skipped, repaired };
 }
 
 async function main() {
@@ -490,13 +566,23 @@ async function main() {
   const prisma = new PrismaClient();
 
   const args = process.argv.slice(2);
+  const repairMissingText = args.includes('--repair-missing-text');
 
   // Support --file <absolute-path> for single-file import
   const fileArgIdx = args.indexOf('--file');
   const singleFile = fileArgIdx !== -1 ? args[fileArgIdx + 1] : null;
+  const positionalArgs = args.filter((arg: string, index: number) => {
+    if (arg === '--repair-missing-text' || arg === '--file') {
+      return false;
+    }
+    if (index > 0 && args[index - 1] === '--file') {
+      return false;
+    }
+    return true;
+  });
 
-  const baseDir = singleFile ? path.dirname(singleFile) : (args[0] || path.join(__dirname, '../data/cards'));
-  const region = singleFile ? null : args[1]; // Optional: 'japan', 'english', 'hongkong', 'china', or undefined for all
+  const baseDir = singleFile ? path.dirname(singleFile) : (positionalArgs[0] || path.join(__dirname, '../data/cards'));
+  const region = singleFile ? null : positionalArgs[1]; // Optional: 'japan', 'english', 'hongkong', 'china', or undefined for all
 
   if (singleFile) {
     console.log(`\n📄 Single file mode: ${singleFile}`);
@@ -504,12 +590,16 @@ async function main() {
     console.log(`\n📂 Base directory: ${baseDir}`);
     console.log(`🌍 Region filter: ${region || 'all'}\n`);
   }
+  if (repairMissingText) {
+    console.log('🛠️  Repair mode: enabled (backfill missing text on existing cards)\n');
+  }
 
   const regions = region ? [region] : ['japan', 'english', 'hongkong', 'china'];
   let totalFiles = 0;
   let totalSuccess = 0;
   let totalFailed = 0;
   let totalSkipped = 0;
+  let totalRepaired = 0;
 
   // Phase 1: Collect all cards and batch upsert expansions
   console.log('🚀 Phase 1: Collecting cards and preparing expansions...\n');
@@ -617,14 +707,15 @@ async function main() {
     console.log(`Batch ${batchIndex + 1}/${totalBatches}: Cards ${start + 1}-${end}`);
     console.log(`${'='.repeat(60)}`);
 
-    const result = await importCardsBatch(prisma, batch, batchSize);
+    const result = await importCardsBatch(prisma, batch, batchSize, { repairMissingText });
 
     totalSuccess += result.success;
     totalFailed += result.failed;
     totalSkipped += result.skipped;
+    totalRepaired += result.repaired;
     processedCards += batch.length;
 
-    console.log(`✓ Batch ${batchIndex + 1}: ${result.success} success, ${result.failed} failed${result.skipped > 0 ? `, ${result.skipped} skipped (existing)` : ''}`);
+    console.log(`✓ Batch ${batchIndex + 1}: ${result.success} success, ${result.failed} failed${result.repaired > 0 ? `, ${result.repaired} repaired` : ''}${result.skipped > 0 ? `, ${result.skipped} skipped (existing)` : ''}`);
   }
 
   const endTime = Date.now();
@@ -636,6 +727,9 @@ async function main() {
   console.log(`${'='.repeat(60)}`);
   console.log(`Files processed: ${totalFiles}`);
   console.log(`Successfully imported: ${totalSuccess}`);
+  if (totalRepaired > 0) {
+    console.log(`Repaired existing (missing text): ${totalRepaired}`);
+  }
   console.log(`Failed: ${totalFailed}`);
   if (totalSkipped > 0) {
     console.log(`Skipped (already exist): ${totalSkipped}`);

@@ -1,8 +1,8 @@
 # populate-effect-tags.ts — Documentation
 
 **Source file:** `scrapers/populate-effect-tags.ts`
-**Last modified:** `2026-05-13 16:58`
-**MD5:** `1E4FE2D1670D922B162C69D18F325DFE`
+**Last modified:** `2026-05-13 23:24`
+**MD5:** `D91CB891E48F3634A158781B60A25CAE`
 **Summarised by model:** `GPT-5.3-Codex`
 
 ---
@@ -26,6 +26,10 @@ Reads every `PrimaryCard` from the database, locates its best language variant (
 - Expanded Tool boilerplate detection with Chinese template strings so generic tool rule text is filtered as non-effect content more reliably.
 - Added conservative missing-text fallback for `Professor's Research` name variants (`手牌丟棄`, `抽卡×7`) when all language variants lack usable effect text.
 - Fixed alternate-language fallback guard typo (`其他效果`) and separated entrypoint modes so normal tag runs no longer auto-trigger CSV export.
+- Trainer CSV export now falls back to `abilities[].text/description`, `attacks[].effect/text`, and `rules[]` when `card.text` is empty (fixes entries like `Hero's Cape` / `英雄斗篷` where EN text was stored in `abilities`).
+- Trainer CSV export is deduplicated by `primaryCardId` so the same primary group is emitted only once.
+- CSV export language selection now uses deterministic best-variant picking per language (`ZH_TW`/`JA_JP`/`EN_US`) based on richest extracted text instead of first-match `.find(...)`, reducing empty EN text rows.
+- Pokemon CSV export is now deduplicated by `primaryCardId` to avoid duplicate rows from multiple variants in the same primary group.
 
 ## Usage
 

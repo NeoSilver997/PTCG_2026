@@ -1486,6 +1486,23 @@ const MANUAL_REMOVE_TAGS: Record<string, string[]> = {
   'ガラスのラッパ': ['棄牌搜索', '棄牌搜索×1', '棄牌搜索×2', '棄牌搜索×3'],
 };
 
+// Name-based fallback for cards whose effect text is missing across all variants.
+// Keep this intentionally narrow to avoid false positives.
+function getNameFallbackTags(cardName: string): { primary: string[]; special: string[]; maxDrawCount?: number } | null {
+  const normalized = (cardName || '').replace(/[\u2018\u2019]/g, "'");
+
+  // Professor's Research has a stable effect: discard your hand, then draw 7 cards.
+  if (/Professor'?s Research/i.test(normalized)) {
+    return {
+      primary: ['手牌丟棄', '抽卡×7'],
+      special: [],
+      maxDrawCount: 7,
+    };
+  }
+
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -1616,12 +1633,24 @@ async function main() {
             (altCard.abilities ?? []) as Ability[],
             altText,
           );
-          if (altPrimary.length > 1 || (altPrimary.length === 1 && altPrimary[0] !== '其他効果')) {
+          if (altPrimary.length > 1 || (altPrimary.length === 1 && altPrimary[0] !== '其他效果')) {
             primaryTags = altPrimary;
             specialTags = altSpecial;
             maxDrawCount = altDraw;
             maxDamage = altDmg;
             break;
+          }
+        }
+      }
+
+      // Final fallback for missing-text cards: use conservative name-based mapping.
+      if (primaryTags.length === 0) {
+        const fallback = getNameFallbackTags(pc.name);
+        if (fallback) {
+          primaryTags = fallback.primary;
+          specialTags = fallback.special;
+          if (typeof fallback.maxDrawCount === 'number') {
+            maxDrawCount = Math.max(maxDrawCount, fallback.maxDrawCount);
           }
         }
       }
@@ -1689,11 +1718,14 @@ async function main() {
   await prisma.$disconnect();
 }
 
-main().catch(e => {
-  console.error(e);
-  prisma.$disconnect();
-  process.exit(1);
-});
+async function runEntrypoint() {
+  const shouldExportCsv = process.argv.includes('--export-csv');
+  if (shouldExportCsv) {
+    await exportPokemonAndTrainerCards();
+    return;
+  }
+  await main();
+}
 
 async function exportPokemonAndTrainerCards() {
   const normalizeText = (value: string | null | undefined): string => (value || '').replace(/\r?\n/g, ' ').trim();
@@ -1721,6 +1753,55 @@ async function exportPokemonAndTrainerCards() {
     return fallbackText;
   };
 
+  const pickTrainerText = (
+    variant: { text: string | null; abilities?: any; attacks?: any; rules?: string[] | null } | undefined,
+  ): string => {
+    if (!variant) return '';
+
+    const directText = normalizeText(variant.text);
+    if (directText) return directText;
+
+    if (Array.isArray(variant.abilities)) {
+      const abilityText = variant.abilities
+        .map((a: any) => normalizeText(a?.description || a?.text || ''))
+        .filter((t: string) => t.length > 0)
+        .join(' | ');
+      if (abilityText) return abilityText;
+    }
+
+    if (Array.isArray(variant.attacks)) {
+      const attackText = variant.attacks
+        .map((a: any) => normalizeText(a?.effect || a?.text || ''))
+        .filter((t: string) => t.length > 0)
+        .join(' | ');
+      if (attackText) return attackText;
+    }
+
+    if (Array.isArray(variant.rules)) {
+      const rulesText = variant.rules
+        .map((rule: string) => normalizeText(rule))
+        .filter((t: string) => t.length > 0)
+        .join(' | ');
+      if (rulesText) return rulesText;
+    }
+
+    return '';
+  };
+
+  const pickBestVariant = <T extends { language: string }>(
+    variants: T[],
+    language: 'ZH_TW' | 'JA_JP' | 'EN_US',
+    extractText: (variant: T) => string,
+  ): T | undefined => {
+    const candidates = variants.filter(v => v.language === language);
+    if (candidates.length === 0) return undefined;
+
+    // Prefer the variant with the richest non-empty text payload.
+    return candidates
+      .map(v => ({ variant: v, text: extractText(v) }))
+      .sort((a, b) => b.text.length - a.text.length)[0].variant;
+  };
+
   // --- Pokémon cards ---
   const pokemonCards = await prisma.card.findMany({
     where: { supertype: 'POKEMON', language: 'ZH_TW' },
@@ -1738,8 +1819,34 @@ async function exportPokemonAndTrainerCards() {
       text: true,
     },
   });
+
+  const pokemonPrimaryIds = [...new Set(pokemonCards.map(c => c.primaryCardId))];
+  const pokemonVariants = await prisma.card.findMany({
+    where: {
+      primaryCardId: { in: pokemonPrimaryIds },
+      language: { in: ['ZH_TW', 'JA_JP', 'EN_US'] },
+    },
+    select: {
+      primaryCardId: true,
+      language: true,
+      text: true,
+      abilities: true,
+      attacks: true,
+    },
+  });
+  const pokemonVariantsByPrimary = new Map<string, typeof pokemonVariants>();
+  for (const variant of pokemonVariants) {
+    const existing = pokemonVariantsByPrimary.get(variant.primaryCardId) ?? [];
+    existing.push(variant);
+    pokemonVariantsByPrimary.set(variant.primaryCardId, existing);
+  }
+
   const pokemonRows = [];
+  const seenPokemonPrimary = new Set<string>();
   for (const card of pokemonCards) {
+    if (seenPokemonPrimary.has(card.primaryCardId)) {
+      continue;
+    }
     const dexNumber = card.primaryCard?.pokemonSpecies?.dexNumber || '';
     const hasAbility = Array.isArray(card.abilities) && card.abilities.length > 0;
     const hasAttack = Array.isArray(card.attacks) && card.attacks.length > 0;
@@ -1749,15 +1856,10 @@ async function exportPokemonAndTrainerCards() {
       continue;
     }
 
-    // Fetch language variants
-    const variants = await prisma.card.findMany({
-      where: { primaryCardId: card.primaryCardId, language: { in: ['ZH_TW', 'JA_JP', 'EN_US'] } },
-      select: { language: true, text: true, abilities: true, attacks: true },
-    });
-
-    const zhVariant = variants.find(v => v.language === 'ZH_TW');
-    const jaVariant = variants.find(v => v.language === 'JA_JP');
-    const enVariant = variants.find(v => v.language === 'EN_US');
+    const variants = pokemonVariantsByPrimary.get(card.primaryCardId) ?? [];
+    const zhVariant = pickBestVariant(variants, 'ZH_TW', v => pickPokemonText(v, fieldType));
+    const jaVariant = pickBestVariant(variants, 'JA_JP', v => pickPokemonText(v, fieldType));
+    const enVariant = pickBestVariant(variants, 'EN_US', v => pickPokemonText(v, fieldType));
 
     const chineseText = pickPokemonText(zhVariant, fieldType);
     const jpText = pickPokemonText(jaVariant, fieldType);
@@ -1765,6 +1867,7 @@ async function exportPokemonAndTrainerCards() {
 
     // Exclude rows without usable Chinese value and without any translated value.
     if (chineseText && (chineseText || jpText || engText)) {
+      seenPokemonPrimary.add(card.primaryCardId);
       pokemonRows.push([
         card.primaryCardId,
         card.name,
@@ -1795,19 +1898,44 @@ async function exportPokemonAndTrainerCards() {
       text: true,
     },
   });
+
+  const trainerPrimaryIds = [...new Set(trainerCards.map(c => c.primaryCardId))];
+  const trainerVariants = await prisma.card.findMany({
+    where: {
+      primaryCardId: { in: trainerPrimaryIds },
+      language: { in: ['ZH_TW', 'JA_JP', 'EN_US'] },
+    },
+    select: {
+      primaryCardId: true,
+      language: true,
+      text: true,
+      abilities: true,
+      attacks: true,
+      rules: true,
+    },
+  });
+  const trainerVariantsByPrimary = new Map<string, typeof trainerVariants>();
+  for (const variant of trainerVariants) {
+    const existing = trainerVariantsByPrimary.get(variant.primaryCardId) ?? [];
+    existing.push(variant);
+    trainerVariantsByPrimary.set(variant.primaryCardId, existing);
+  }
+
   const trainerRows = [];
+  const seenTrainerPrimary = new Set<string>();
   for (const card of trainerCards) {
+    if (seenTrainerPrimary.has(card.primaryCardId)) {
+      continue;
+    }
+
     const subtype = Array.isArray(card.subtypes) ? card.subtypes.join(';') : (card.subtypes || '');
-    // Fetch language variants
-    const variants = await prisma.card.findMany({
-      where: { primaryCardId: card.primaryCardId, language: { in: ['ZH_TW', 'JA_JP', 'EN_US'] } },
-      select: { language: true, text: true },
-    });
-    const chineseText = variants.find(v => v.language === 'ZH_TW')?.text || '';
-    const jpText = variants.find(v => v.language === 'JA_JP')?.text || '';
-    const engText = variants.find(v => v.language === 'EN_US')?.text || '';
+    const variants = trainerVariantsByPrimary.get(card.primaryCardId) ?? [];
+    const chineseText = pickTrainerText(pickBestVariant(variants, 'ZH_TW', pickTrainerText));
+    const jpText = pickTrainerText(pickBestVariant(variants, 'JA_JP', pickTrainerText));
+    const engText = pickTrainerText(pickBestVariant(variants, 'EN_US', pickTrainerText));
     // Only include if at least one text field is non-empty
     if ((chineseText || jpText || engText).trim() !== '') {
+      seenTrainerPrimary.add(card.primaryCardId);
       trainerRows.push([
         card.primaryCardId,
         card.name,
@@ -1820,7 +1948,7 @@ async function exportPokemonAndTrainerCards() {
     }
   }
   const trainerCsv = [
-    ['primary card id', 'tranier chinese name', 'subtype', '規格標記', 'chinese text', 'jp text', 'eng text'],
+    ['primary card id', 'trainer chinese name', 'subtype', '規格標記', 'chinese text', 'jp text', 'eng text'],
     ...trainerRows,
   ]
     .map(row => row.map(x => '"' + (x ?? '').toString().replace(/"/g, '""') + '"').join(',')).join('\n');
@@ -1829,7 +1957,7 @@ async function exportPokemonAndTrainerCards() {
   console.log('pokemon.csv and trainer.csv exported successfully!');
 }
 
-exportPokemonAndTrainerCards().catch(e => {
+runEntrypoint().catch(e => {
   console.error(e);
   prisma.$disconnect();
   process.exit(1);

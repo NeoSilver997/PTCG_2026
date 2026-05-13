@@ -1,9 +1,9 @@
 # import-cards-direct.ts — Documentation
 
 **Source file:** `scrapers/import-cards-direct.ts`
-**Last modified:** `2026-05-06 21:01`
-**MD5:** `FB7A11407A543DA6F4F6D1FC290DDA87`
-**Summarised by model:** `Claude Sonnet 4.6`
+**Last modified:** `2026-05-13 23:06`
+**MD5:** `5F384E8AF0519AA81C5B21C40DB71A42`
+**Summarised by model:** `GPT-5.3-Codex`
 
 Directly imports card data from JSON files into the database using Prisma Client. This script is the recommended method as it bypasses the API layer's DTO validation and allows direct manipulation of the database schema.
 
@@ -27,6 +27,8 @@ npx tsx scrapers/import-cards-direct.ts "../data/cards/japan"
 | Flag | Default | Description |
 |------|---------|-------------|
 | `[directory]` | `../data/cards` | The root directory containing region folders (e.g., `japan`, `english`). |
+| `--file <absolute-path>` | none | Imports exactly one JSON file. |
+| `--repair-missing-text` | disabled | For existing cards, backfills missing `text` (and Trainer `abilities` text) when source JSON contains effect text. |
 
 ---
 
@@ -51,6 +53,7 @@ For every card object found in the JSON files, the script performs extensive nor
 3. **Attribute Mapping**: Maps scraped text codes (e.g., JP rarity codes like `AR`, `SAR`) to the correct Prisma enums.
 4. **`collectorNumber`**: The raw scraper field (e.g., `"062/071"`) is passed through directly to `Card.collectorNumber`. The number-only portion (e.g., `"062"`) is separately extracted for `PrimaryCard.cardNumber` via `collectorNumber.split('/')[0]`.
 5. **Data Structure**: Builds a standardized `Card` object containing all necessary fields for the database.
+6. **Text Fallback Normalization**: Uses first non-empty value from `effectText`, `text`, `description`, or `effect` to prevent dropped effect text from scraper field-name differences.
 
 ### Step 4 — Database Upsert Logic
 
@@ -61,6 +64,8 @@ The script uses a transaction block (`prisma.$transaction`) to perform bulk upse
 3. **`PrimaryCard`**: Creates/updates the canonical card identity.
 4. **`Card`**: Creates/updates the language-specific variant record.
 5. **`CardVariant`**: (If applicable) Handles variant-specific data.
+
+When `--repair-missing-text` is enabled, existing cards are not blindly skipped. The script will update only cards where `text` is empty and a non-empty normalized source text is available. For Trainer cards, if no ability text exists, it also injects a minimal ability payload with the same effect text.
 
 ### Step 5 — Field Synchronization
 

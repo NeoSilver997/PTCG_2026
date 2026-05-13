@@ -244,6 +244,7 @@ export default function TrainersPage() {
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [dragSourceId, setDragSourceId] = useState<string | null>(null);
   const [pendingMerge, setPendingMerge] = useState<{ sourceId: string; targetId: string } | null>(null);
+  const [pendingUnlinkCardId, setPendingUnlinkCardId] = useState<string | null>(null);
   const [hiddenGroupIds, setHiddenGroupIds] = useState<string[]>([]);
   const [tempRemovedCardIds, setTempRemovedCardIds] = useState<string[]>([]);
   const [tagRequestCardIds, setTagRequestCardIds] = useState<string[]>([]);
@@ -401,10 +402,38 @@ export default function TrainersPage() {
 
   const unlinkCardMutation = useMutation({
     mutationFn: async (cardId: string) => {
-      await apiClient.post(`/cards/primary-cards/unlink-card/${cardId}`);
+      const response = await apiClient.post(`/cards/primary-cards/unlink-card/${cardId}`);
+      return response.data as { cardId: string; oldPrimaryCardId: string; newPrimaryCardId: string };
     },
-    onSuccess: () => {
+    onMutate: (cardId: string) => {
+      setPendingUnlinkCardId(cardId);
+    },
+    onSuccess: (result) => {
+      queryClient.setQueryData<{ data: TrainerBrowserCard[] } | undefined>(
+        ['trainer-browser', subtype, regulationMark],
+        (current) => {
+          if (!current) return current;
+
+          return {
+            ...current,
+            data: current.data.map((card) =>
+              card.id === result.cardId ? { ...card, primaryCardId: result.newPrimaryCardId } : card,
+            ),
+          };
+        },
+      );
       queryClient.invalidateQueries({ queryKey: ['trainer-browser'] });
+    },
+    onSettled: () => {
+      setPendingUnlinkCardId(null);
+    },
+    onError: (error: any, cardId: string) => {
+      if (error?.response?.status === 404) {
+        setTempRemovedCardIds((current) => (current.includes(cardId) ? current : [...current, cardId]));
+        alert('Unlink API is not available on this server yet. Card removed temporarily from this group view.');
+        return;
+      }
+      alert(`Unlink failed: ${error?.response?.data?.message ?? error?.message ?? 'Unknown error'}`);
     },
   });
 
@@ -864,7 +893,7 @@ export default function TrainersPage() {
                                     {group.cards.length > 1 && (
                                       <button
                                         type="button"
-                                        disabled={unlinkCardMutation.isPending}
+                                        disabled={pendingUnlinkCardId === card.id}
                                         onClick={() => handleUnlinkCard(card)}
                                         className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
                                       >
