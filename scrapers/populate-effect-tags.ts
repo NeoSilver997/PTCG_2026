@@ -12,8 +12,8 @@
  */
 
 import { PrismaClient } from '../packages/database/node_modules/.prisma/client';
-
 const prisma = new PrismaClient();
+import fs from 'fs';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -195,6 +195,24 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
   effect = effect.replace(/([^\x00-\x7F]) +([^\x00-\x7F])/g, '$1$2');
 
   const has = (...words: string[]) => words.some(w => effect.includes(w));
+
+  // Deck shuffle signal appears in many Trainer cards after search/recovery.
+  if (
+    (has('牌庫') && has('重洗', '洗牌')) ||
+    has('山札にもどして切', '山札に戻して切', '山札を切る', '山札をシャッフル') ||
+    has('Shuffle your deck', 'shuffle your deck', 'shuffle that deck', 'shuffle your library')
+  ) {
+    primary.add('牌庫重洗');
+  }
+
+  // Reveal/show-to-opponent is informational utility and should not fall into generic tags.
+  if (
+    has('給對手看過後', '公開給對手', '向對手展示', '給對手看') ||
+    has('相手に見せる', '相手に見せた', '相手に見せて') ||
+    has('Reveal it', 'reveal it', 'Reveal them', 'reveal them', 'show it to your opponent', 'show them to your opponent')
+  ) {
+    primary.add('情報收集');
+  }
 
   // --- Primary ---
   // Draw cards (ZH + JA)
@@ -791,9 +809,9 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     // EN: PokéStop — discard top 3, gain any Item cards revealed
     (has('discard') && has('from the top of their deck') && has('Item cards') && has('their hand')) ||
     // EN: Turffield Stadium — search deck for Evolution Pokémon to hand
-    (has('search their deck') && has('Pok\u00e9mon') && has('into their hand')) ||
+    (has('search their deck') && has('Pokémon') && has('into their hand')) ||
     // EN: Shopping Center — return a Tool to hand
-    (has('Pok\u00e9mon Tool') && has('put a Pok\u00e9mon Tool', 'may put') && has('into their hand'))
+    (has('Pokémon Tool') && has('put a Pok\u00e9mon Tool', 'may put') && has('into their hand'))
   ) {
     primary.add('場地增幅');
   }
@@ -1525,13 +1543,20 @@ async function main() {
       const TOOL_BOILERPLATE_PREFIXES = [
         'ポケモンのどうぐは、自分のポケモンにつけて使う。',
         '自分の番に何枚でも、自分のポケモンにつけられる。',
+        '寶可夢道具卡，附於自己的寶可夢使用。',
+        '1隻寶可夢只可附上1張寶可夢道具卡',
+      ];
+      const TOOL_BOILERPLATE_REGEX = [
+        /寶可夢道具卡.*附於自己的寶可夢使用/,
+        /1隻寶可夢只可附上1張寶可夢道具卡/,
       ];
       const isBoilerplateOnly = (text: string | null | undefined) => {
         if (!text) return true;
         // Copyright-only text: scraper captured legal boilerplate instead of card effect
         if (text.includes('©Pokémon') || text.includes('©Nintendo')) return true;
         // TOOL boilerplate: generic tool rules text without actual effect
-        return TOOL_BOILERPLATE_PREFIXES.some(p => text.includes(p) && text.length < p.length + 30);
+        if (TOOL_BOILERPLATE_PREFIXES.some(p => text.includes(p) && text.length < p.length + 60)) return true;
+        return TOOL_BOILERPLATE_REGEX.some(r => r.test(text) && text.length < 160);
       };
 
       // Pick best representative card per language:
@@ -1665,6 +1690,146 @@ async function main() {
 }
 
 main().catch(e => {
+  console.error(e);
+  prisma.$disconnect();
+  process.exit(1);
+});
+
+async function exportPokemonAndTrainerCards() {
+  const normalizeText = (value: string | null | undefined): string => (value || '').replace(/\r?\n/g, ' ').trim();
+
+  const pickPokemonText = (variant: { abilities: any; attacks: any; text: string | null } | undefined, fieldType: 'ability' | 'attack' | ''): string => {
+    if (!variant) return '';
+
+    if (fieldType === 'ability' && Array.isArray(variant.abilities)) {
+      const abilityText = variant.abilities
+        .map((a: any) => normalizeText(a?.description || a?.text || ''))
+        .filter((t: string) => t.length > 0)
+        .join(' | ');
+      if (abilityText) return abilityText;
+    }
+
+    if (fieldType === 'attack' && Array.isArray(variant.attacks)) {
+      const attackText = variant.attacks
+        .map((a: any) => normalizeText(a?.effect || a?.text || ''))
+        .filter((t: string) => t.length > 0)
+        .join(' | ');
+      if (attackText) return attackText;
+    }
+
+    const fallbackText = normalizeText(variant.text);
+    return fallbackText;
+  };
+
+  // --- Pokémon cards ---
+  const pokemonCards = await prisma.card.findMany({
+    where: { supertype: 'POKEMON', language: 'ZH_TW' },
+    select: {
+      primaryCardId: true,
+      name: true,
+      primaryCard: {
+        select: {
+          pokemonSpecies: { select: { dexNumber: true } },
+        },
+      },
+      abilities: true,
+      attacks: true,
+      regulationMark: true,
+      text: true,
+    },
+  });
+  const pokemonRows = [];
+  for (const card of pokemonCards) {
+    const dexNumber = card.primaryCard?.pokemonSpecies?.dexNumber || '';
+    const hasAbility = Array.isArray(card.abilities) && card.abilities.length > 0;
+    const hasAttack = Array.isArray(card.attacks) && card.attacks.length > 0;
+    const fieldType: 'ability' | 'attack' | '' = hasAbility ? 'ability' : hasAttack ? 'attack' : '';
+
+    if (!fieldType) {
+      continue;
+    }
+
+    // Fetch language variants
+    const variants = await prisma.card.findMany({
+      where: { primaryCardId: card.primaryCardId, language: { in: ['ZH_TW', 'JA_JP', 'EN_US'] } },
+      select: { language: true, text: true, abilities: true, attacks: true },
+    });
+
+    const zhVariant = variants.find(v => v.language === 'ZH_TW');
+    const jaVariant = variants.find(v => v.language === 'JA_JP');
+    const enVariant = variants.find(v => v.language === 'EN_US');
+
+    const chineseText = pickPokemonText(zhVariant, fieldType);
+    const jpText = pickPokemonText(jaVariant, fieldType);
+    const engText = pickPokemonText(enVariant, fieldType);
+
+    // Exclude rows without usable Chinese value and without any translated value.
+    if (chineseText && (chineseText || jpText || engText)) {
+      pokemonRows.push([
+        card.primaryCardId,
+        card.name,
+        dexNumber,
+        fieldType,
+        card.regulationMark,
+        chineseText,
+        jpText,
+        engText,
+      ]);
+    }
+  }
+  const pokemonCsv = [
+    ['primary card id', 'chinese name', 'pokedex id', 'field type', '規格標記', 'chinese text', 'jp text', 'eng text'],
+    ...pokemonRows,
+  ]
+    .map(row => row.map(x => '"' + (x ?? '').toString().replace(/"/g, '""') + '"').join(',')).join('\n');
+  fs.writeFileSync('pokemon.csv', pokemonCsv);
+
+  // --- Trainer cards ---
+  const trainerCards = await prisma.card.findMany({
+    where: { supertype: 'TRAINER', language: 'ZH_TW' },
+    select: {
+      primaryCardId: true,
+      name: true,
+      subtypes: true,
+      regulationMark: true,
+      text: true,
+    },
+  });
+  const trainerRows = [];
+  for (const card of trainerCards) {
+    const subtype = Array.isArray(card.subtypes) ? card.subtypes.join(';') : (card.subtypes || '');
+    // Fetch language variants
+    const variants = await prisma.card.findMany({
+      where: { primaryCardId: card.primaryCardId, language: { in: ['ZH_TW', 'JA_JP', 'EN_US'] } },
+      select: { language: true, text: true },
+    });
+    const chineseText = variants.find(v => v.language === 'ZH_TW')?.text || '';
+    const jpText = variants.find(v => v.language === 'JA_JP')?.text || '';
+    const engText = variants.find(v => v.language === 'EN_US')?.text || '';
+    // Only include if at least one text field is non-empty
+    if ((chineseText || jpText || engText).trim() !== '') {
+      trainerRows.push([
+        card.primaryCardId,
+        card.name,
+        subtype,
+        card.regulationMark,
+        (chineseText || '').replace(/\r?\n/g, ' '),
+        (jpText || '').replace(/\r?\n/g, ' '),
+        (engText || '').replace(/\r?\n/g, ' '),
+      ]);
+    }
+  }
+  const trainerCsv = [
+    ['primary card id', 'tranier chinese name', 'subtype', '規格標記', 'chinese text', 'jp text', 'eng text'],
+    ...trainerRows,
+  ]
+    .map(row => row.map(x => '"' + (x ?? '').toString().replace(/"/g, '""') + '"').join(',')).join('\n');
+  fs.writeFileSync('trainer.csv', trainerCsv);
+
+  console.log('pokemon.csv and trainer.csv exported successfully!');
+}
+
+exportPokemonAndTrainerCards().catch(e => {
   console.error(e);
   prisma.$disconnect();
   process.exit(1);

@@ -492,7 +492,20 @@ export default function PokemonDetailPage({
         } else if (sortBy === 'regulation') {
           diff = (a.regulationMark ?? '').localeCompare(b.regulationMark ?? '');
         } else if (sortBy === 'hp') {
+          // HP primary, then attack fingerprint, then type
           diff = (a.hp ?? 0) - (b.hp ?? 0);
+          if (diff === 0) {
+            // Attack fingerprint: join all attack names and damages
+            const atkA = (a.cards[0]?.skillsSignature ?? a.cards[0]?.attacks?.map(atk => `${atk.name ?? ''}:${atk.damage ?? ''}`).join('|') ?? '').toLowerCase();
+            const atkB = (b.cards[0]?.skillsSignature ?? b.cards[0]?.attacks?.map(atk => `${atk.name ?? ''}:${atk.damage ?? ''}`).join('|') ?? '').toLowerCase();
+            diff = atkA.localeCompare(atkB);
+          }
+          if (diff === 0) {
+            // Type order (first type only)
+            const typeA = a.types?.[0] ?? '';
+            const typeB = b.types?.[0] ?? '';
+            diff = (TYPE_ORDER.indexOf(typeA) - TYPE_ORDER.indexOf(typeB));
+          }
         }
         if (diff !== 0) return sortDesc ? -diff : diff;
         return (a.expCode ?? '').localeCompare(b.expCode ?? '');

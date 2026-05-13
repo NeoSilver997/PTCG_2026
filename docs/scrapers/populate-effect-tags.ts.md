@@ -1,9 +1,9 @@
 # populate-effect-tags.ts — Documentation
 
 **Source file:** `scrapers/populate-effect-tags.ts`
-**Last modified:** `2026-05-06 22:04`
-**MD5:** `87058B1D61CED63CFDB8B50B49309656`
-**Summarised by model:** `Claude Sonnet 4.6`
+**Last modified:** `2026-05-13 15:48`
+**MD5:** `8FF9209EF6A8AA07EC341D7BCAC890A4`
+**Summarised by model:** `GPT-5.3-Codex`
 
 ---
 
@@ -19,6 +19,11 @@ Reads every `PrimaryCard` from the database, locates its best language variant (
 | `cardTier` | `string` | Letter tier derived from score (D → S+) |
 
 **Multi-language coverage:** Every classification block now includes EN_US keyword patterns alongside ZH and JA patterns. This ensures English-only cards (EN_US with no ZH/JA variant) are correctly tagged.
+
+**Recent tuning (2026-05-13, CSV-driven):**
+- Added explicit `牌庫重洗` detection for ZH/JA/EN shuffle-deck wording (`重洗牌庫`, `山札に戻して切る`, `shuffle your deck`).
+- Added reveal/show-to-opponent detection as `情報收集` for ZH/JA/EN wording (`給對手看過後`, `相手に見せる`, `show/reveal ... to your opponent`).
+- Expanded Tool boilerplate detection with Chinese template strings so generic tool rule text is filtered as non-effect content more reliably.
 
 ## Usage
 
