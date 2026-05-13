@@ -88,3 +88,4 @@ scripts/qwen-vl-finetune/datasets/*
 scripts/qwen-vl-finetune/image_cache/*
 scripts/qwen-vl-finetune/llama-prebuilt/*
 scripts/qwen-vl-finetune/outputs/*
+temp/*
