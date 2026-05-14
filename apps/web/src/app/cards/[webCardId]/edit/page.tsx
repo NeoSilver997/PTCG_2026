@@ -1,10 +1,10 @@
 'use client';
 
 import { use, useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/api-client';
 import Link from 'next/link';
-import { Plus, Trash2, Copy } from 'lucide-react';
+import { Plus, Trash2, Copy, Unlink } from 'lucide-react';
 
 interface RelatedCardEntry {
   webCardId: string;
@@ -87,10 +87,22 @@ interface CardDetail {
     region: string;
     primaryExpansionId: string;
   } | null;
+  languageVariants?: Array<{
+    id: string;
+    webCardId: string;
+    name: string;
+    language: string;
+    variantType: string;
+    rarity: string | null;
+    collectorNumber?: string | null;
+    imageUrl: string | null;
+    text: string | null;
+  }>;
 }
 
 export default function CardEditPage({ params }: { params: Promise<{ webCardId: string }> }) {
   const { webCardId } = use(params);
+  const queryClient = useQueryClient();
   const [relatedCards, setRelatedCards] = useState<RelatedCardEntry[]>([
     { webCardId: '', note: '', searchQuery: '', searchResults: [], isSearching: false },
   ]);
@@ -104,6 +116,8 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
   ]);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [unlinkError, setUnlinkError] = useState<string | null>(null);
+  const [unlinkSuccess, setUnlinkSuccess] = useState<string | null>(null);
 
   // Card data state
   const [cardData, setCardData] = useState({
@@ -148,6 +162,45 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
     queryFn: async () => {
       const { data } = await apiClient.get(`/cards/web/${webCardId}`);
       return data;
+    },
+  });
+
+  const primaryGroupCards = card
+    ? [
+        {
+          id: card.id,
+          webCardId: card.webCardId,
+          name: card.name,
+          language: card.language,
+          variantType: card.variantType,
+          isCurrent: true,
+        },
+        ...((card.languageVariants || []).map((variant) => ({
+          id: variant.id,
+          webCardId: variant.webCardId,
+          name: variant.name,
+          language: variant.language,
+          variantType: variant.variantType,
+          isCurrent: false,
+        }))),
+      ]
+    : [];
+
+  const unlinkCardMutation = useMutation({
+    mutationFn: async (cardId: string) => {
+      const response = await apiClient.post(`/cards/primary-cards/unlink-card/${cardId}`);
+      return response.data as { cardId: string; oldPrimaryCardId: string; newPrimaryCardId: string };
+    },
+    onMutate: () => {
+      setUnlinkError(null);
+      setUnlinkSuccess(null);
+    },
+    onSuccess: (result) => {
+      setUnlinkSuccess(`已解除連結，新的 Primary Group: ${result.newPrimaryCardId}`);
+      queryClient.invalidateQueries({ queryKey: ['card', webCardId] });
+    },
+    onError: (error: any) => {
+      setUnlinkError(error?.response?.data?.message ?? error?.message ?? '解除連結失敗');
     },
   });
 
@@ -420,6 +473,19 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
     }
   };
 
+  const handleUnlinkCurrentCard = () => {
+    if (!card) return;
+    if (primaryGroupCards.length <= 1) {
+      setUnlinkError('這個 Primary Group 只有目前這張卡，無法再解除連結。');
+      return;
+    }
+
+    const confirmed = window.confirm(`確認要將 ${card.webCardId} 從目前 Primary Group 解除連結嗎？`);
+    if (!confirmed) return;
+
+    unlinkCardMutation.mutate(card.id);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
 
@@ -498,6 +564,47 @@ export default function CardEditPage({ params }: { params: Promise<{ webCardId: 
               >
                 取消編輯
               </Link>
+            </div>
+
+            <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
+              <h3 className="text-sm font-semibold text-amber-900">Primary Group 解除連結</h3>
+              <p className="mt-1 text-xs text-amber-800">
+                目前群組共 {primaryGroupCards.length} 張卡。解除連結會把目前卡片移到新的 Primary Group。
+              </p>
+
+              <button
+                type="button"
+                onClick={handleUnlinkCurrentCard}
+                disabled={unlinkCardMutation.isPending || primaryGroupCards.length <= 1}
+                className="mt-3 inline-flex items-center gap-2 rounded-lg border border-rose-300 bg-white px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Unlink className="h-4 w-4" />
+                {unlinkCardMutation.isPending ? '解除連結中...' : 'Unlink 目前卡片'}
+              </button>
+
+              {unlinkError && <p className="mt-2 text-xs text-rose-700">{unlinkError}</p>}
+              {unlinkSuccess && <p className="mt-2 text-xs text-emerald-700">{unlinkSuccess}</p>}
+
+              <div className="mt-3 max-h-52 space-y-1 overflow-y-auto rounded border border-amber-100 bg-white p-2">
+                {primaryGroupCards.map((entry) => (
+                  <div key={entry.id} className="flex items-center justify-between gap-2 rounded px-2 py-1 text-xs text-slate-700">
+                    <div className="min-w-0">
+                      <div className="truncate font-medium text-slate-900">{entry.name}</div>
+                      <div className="truncate text-slate-500">
+                        {entry.webCardId} • {entry.language} • {entry.variantType}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {entry.isCurrent && (
+                        <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-bold text-amber-900">目前</span>
+                      )}
+                      <Link href={`/cards/${entry.webCardId}`} className="text-blue-600 hover:text-blue-800">
+                        查看
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 

@@ -744,7 +744,7 @@ export function EffectTagSummary({ entries }: { entries: DeckCardEntry[] }) {
   for (const entry of entries) {
     const tags = entry.card.effectTags;
     if (!tags?.length) continue;
-    const displayName = entry.card.zhName ?? entry.card.name ?? '';
+    const displayName = entry.card.zhName ?? entry.card.name ?? entry.card.webCardId ?? '';
     for (const tag of tags) {
       if (!tagCounts.has(tag)) tagCounts.set(tag, { qty: 0, cards: [] });
       const rec = tagCounts.get(tag)!;
@@ -788,11 +788,13 @@ export function EffectTagSummary({ entries }: { entries: DeckCardEntry[] }) {
         {flatSorted.map(([tag, { qty, cards }]) => {
           const color = EFFECT_TAG_COLORS[tag] ?? TAG_DEFAULT_COLOR;
           const pct = totalCards > 0 ? Math.round((qty / totalCards) * 100) : 0;
+          const cardListText = cards.length ? cards.join('\n') : '無卡牌名稱';
           return (
             <div
               key={tag}
               className="group relative flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium cursor-default select-none"
               style={{ borderColor: `${color}55`, background: `${color}22`, color }}
+              title={cardListText}
             >
               <span>{tag}</span>
               <span className="opacity-60">×{qty}</span>
@@ -805,7 +807,9 @@ export function EffectTagSummary({ entries }: { entries: DeckCardEntry[] }) {
                     <span className="text-slate-400 ml-3">{qty}/{totalCards} ({pct}%)</span>
                   </div>
                   <div className="text-slate-400 text-[9px] uppercase tracking-wide mb-1">相關卡牌</div>
-                  {cards.map((c) => <div key={c} className="truncate text-slate-300">{c}</div>)}
+                  {cards.length > 0
+                    ? cards.map((c) => <div key={c} className="truncate text-slate-300">{c}</div>)
+                    : <div className="text-slate-500">無卡牌名稱</div>}
                 </div>
                 <div className="w-2 h-2 bg-slate-900 border-r border-b border-slate-600 rotate-45 mx-auto -mt-1" />
               </div>
@@ -851,12 +855,14 @@ export function EffectTagSummary({ entries }: { entries: DeckCardEntry[] }) {
                       const color = EFFECT_TAG_COLORS[tag] ?? TAG_DEFAULT_COLOR;
                       const pct = totalCards > 0 ? (qty / totalCards) * 100 : 0;
                       const barPct = maxQty > 0 ? (qty / maxQty) * 100 : 0;
+                      const cardListText = cards.length ? cards.join('\n') : '無卡牌名稱';
                       return (
                         <div key={tag} className="group relative flex items-center gap-2">
                           {/* Tag pill */}
                           <div
                             className="flex-none flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-medium cursor-default"
                             style={{ borderColor: `${color}55`, background: `${color}22`, color, minWidth: '7rem' }}
+                            title={cardListText}
                           >
                             <span className="truncate">{tag}</span>
                           </div>
@@ -876,7 +882,9 @@ export function EffectTagSummary({ entries }: { entries: DeckCardEntry[] }) {
                           <div className="hidden group-hover:block absolute left-full ml-2 top-1/2 -translate-y-1/2 z-50 pointer-events-none min-w-[160px]">
                             <div className="bg-slate-900 border border-slate-600 rounded-lg shadow-xl px-2.5 py-2 text-[11px] text-slate-200">
                               <div className="text-slate-400 text-[9px] uppercase tracking-wide mb-1">相關卡牌</div>
-                              {cards.map((c) => <div key={c} className="truncate">{c}</div>)}
+                              {cards.length > 0
+                                ? cards.map((c) => <div key={c} className="truncate">{c}</div>)
+                                : <div className="text-slate-500">無卡牌名稱</div>}
                             </div>
                           </div>
                         </div>

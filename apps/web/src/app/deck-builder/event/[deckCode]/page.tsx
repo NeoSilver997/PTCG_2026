@@ -186,6 +186,11 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
     try { localStorage.setItem(storageKey, JSON.stringify(Object.fromEntries(fresh))); } catch { /**/ }
   };
 
+  const shortenDeckCode = (value: string) => {
+    if (value.length <= 14) return value;
+    return `${value.slice(0, 6)}...${value.slice(-4)}`;
+  };
+
   // Fire-and-forget: persist computed archetype + ACE name to DB
   // Must be declared here (before early returns) to obey Rules of Hooks
   const cachedWritten = useRef(false);
@@ -366,10 +371,10 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
               href={`https://www.pokemon-card.com/deck/confirm.html/deckID/${data.deckCode}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-slate-400 hover:text-slate-200 font-mono text-xs transition"
+              className="text-slate-400 hover:text-slate-200 font-mono text-xs transition max-w-[180px] truncate"
               title="View on pokemon-card.com"
             >
-              #{data.deckCode} ↗
+              #{shortenDeckCode(data.deckCode)} ↗
             </a>
           )}
         </div>
@@ -403,7 +408,12 @@ function DeckViewInner({ deckCode }: { deckCode: string }) {
                   })}
                 </div>
                 {data.tournamentResults[0].tournament.location && (
-                  <div className="text-slate-400 text-xs">{data.tournamentResults[0].tournament.location}</div>
+                  <div
+                    className="text-slate-400 text-xs max-w-[260px] truncate"
+                    title={data.tournamentResults[0].tournament.location}
+                  >
+                    {data.tournamentResults[0].tournament.location}
+                  </div>
                 )}
               </div>
             )}
