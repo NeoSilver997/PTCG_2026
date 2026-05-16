@@ -83,6 +83,7 @@ interface FilterPanelProps {
 export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [effectTags, setEffectTags] = useState<Array<{ tag: string; count: number; isSpecial: boolean }>>([]);
+  const isNonPokemon = filters.supertype === 'TRAINER' || filters.supertype === 'ENERGY';
 
   useEffect(() => {
     fetch('/api/v1/cards/effect-tags')
@@ -90,6 +91,34 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
       .then(setEffectTags)
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!isNonPokemon) return;
+
+    const hasPokemonOnlyFilters =
+      !!filters.minHp ||
+      !!filters.maxHp ||
+      !!filters.weakness ||
+      !!filters.resistance ||
+      !!filters.hasAttackText ||
+      !!filters.hasAbilities;
+
+    if (!hasPokemonOnlyFilters) return;
+
+    onFilterChange({
+      ...filters,
+      minHp: '',
+      maxHp: '',
+      weakness: '',
+      resistance: '',
+      hasAttackText: '',
+      hasAbilities: '',
+    });
+  }, [
+    isNonPokemon,
+    filters,
+    onFilterChange,
+  ]);
   
   const updateFilter = (key: string, value: string) => {
     onFilterChange({ ...filters, [key]: value });
@@ -558,67 +587,71 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
               />
             </div>
 
-            {/* Min HP */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                最小 HP
-              </label>
-              <input
-                type="number"
-                placeholder="0"
-                value={filters.minHp || ''}
-                onChange={(e) => updateFilter('minHp', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900 bg-white placeholder:text-gray-400"
-                min="0"
-              />
-            </div>
+            {!isNonPokemon && (
+              <>
+                {/* Min HP */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    最小 HP
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="0"
+                    value={filters.minHp || ''}
+                    onChange={(e) => updateFilter('minHp', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900 bg-white placeholder:text-gray-400"
+                    min="0"
+                  />
+                </div>
 
-            {/* Max HP */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                最大 HP
-              </label>
-              <input
-                type="number"
-                placeholder="340"
-                value={filters.maxHp || ''}
-                onChange={(e) => updateFilter('maxHp', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900 bg-white placeholder:text-gray-400"
-                min="0"
-              />
-            </div>
+                {/* Max HP */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    最大 HP
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="340"
+                    value={filters.maxHp || ''}
+                    onChange={(e) => updateFilter('maxHp', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900 bg-white placeholder:text-gray-400"
+                    min="0"
+                  />
+                </div>
 
-            {/* Has Abilities */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                有特性
-              </label>
-              <select
-                value={filters.hasAbilities || ''}
-                onChange={(e) => updateFilter('hasAbilities', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900"
-              >
-                <option value="" className="text-gray-900">全部</option>
-                <option value="true" className="text-gray-900">有特性</option>
-                <option value="false" className="text-gray-900">無特性</option>
-              </select>
-            </div>
+                {/* Has Abilities */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    有特性
+                  </label>
+                  <select
+                    value={filters.hasAbilities || ''}
+                    onChange={(e) => updateFilter('hasAbilities', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900"
+                  >
+                    <option value="" className="text-gray-900">全部</option>
+                    <option value="true" className="text-gray-900">有特性</option>
+                    <option value="false" className="text-gray-900">無特性</option>
+                  </select>
+                </div>
 
-            {/* Has Attack Text */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                招式有特性
-              </label>
-              <select
-                value={filters.hasAttackText || ''}
-                onChange={(e) => updateFilter('hasAttackText', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900"
-              >
-                <option value="" className="text-gray-900">全部</option>
-                <option value="true" className="text-gray-900">有特性描述</option>
-                <option value="false" className="text-gray-900">無特性描述</option>
-              </select>
-            </div>
+                {/* Has Attack Text */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    招式有效果文字
+                  </label>
+                  <select
+                    value={filters.hasAttackText || ''}
+                    onChange={(e) => updateFilter('hasAttackText', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900"
+                  >
+                    <option value="" className="text-gray-900">全部</option>
+                    <option value="true" className="text-gray-900">有文字效果</option>
+                    <option value="false" className="text-gray-900">無文字效果</option>
+                  </select>
+                </div>
+              </>
+            )}
 
             {/* Effect Tag */}
             <div>
@@ -678,30 +711,31 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
               />
             </div>
 
-            {/* Weakness Type */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                弱點屬性
-              </label>
-              <select
-                value={filters.weakness || ''}
-                onChange={(e) => updateFilter('weakness', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900"
-              >
-                <option value="" className="text-gray-900">全部</option>
-                <option value="COLORLESS" className="text-gray-900">無色</option>
-                <option value="DARKNESS" className="text-gray-900">惡</option>
-                <option value="DRAGON" className="text-gray-900">龍</option>
-                <option value="FAIRY" className="text-gray-900">妖精</option>
-                <option value="FIGHTING" className="text-gray-900">格鬥</option>
-                <option value="FIRE" className="text-gray-900">火</option>
-                <option value="GRASS" className="text-gray-900">草</option>
-                <option value="LIGHTNING" className="text-gray-900">雷</option>
-                <option value="METAL" className="text-gray-900">鋼</option>
-                <option value="PSYCHIC" className="text-gray-900">超</option>
-                <option value="WATER" className="text-gray-900">水</option>
-              </select>
-            </div>
+            {!isNonPokemon && (
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  弱點屬性
+                </label>
+                <select
+                  value={filters.weakness || ''}
+                  onChange={(e) => updateFilter('weakness', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900"
+                >
+                  <option value="" className="text-gray-900">全部</option>
+                  <option value="COLORLESS" className="text-gray-900">無色</option>
+                  <option value="DARKNESS" className="text-gray-900">惡</option>
+                  <option value="DRAGON" className="text-gray-900">龍</option>
+                  <option value="FAIRY" className="text-gray-900">妖精</option>
+                  <option value="FIGHTING" className="text-gray-900">格鬥</option>
+                  <option value="FIRE" className="text-gray-900">火</option>
+                  <option value="GRASS" className="text-gray-900">草</option>
+                  <option value="LIGHTNING" className="text-gray-900">雷</option>
+                  <option value="METAL" className="text-gray-900">鋼</option>
+                  <option value="PSYCHIC" className="text-gray-900">超</option>
+                  <option value="WATER" className="text-gray-900">水</option>
+                </select>
+              </div>
+            )}
 
             {/* Card Tier */}
             <div>
@@ -725,30 +759,31 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
               </select>
             </div>
 
-            {/* Resistance Type */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                抵抗屬性
-              </label>
-              <select
-                value={filters.resistance || ''}
-                onChange={(e) => updateFilter('resistance', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900"
-              >
-                <option value="" className="text-gray-900">全部</option>
-                <option value="COLORLESS" className="text-gray-900">無色</option>
-                <option value="DARKNESS" className="text-gray-900">惡</option>
-                <option value="DRAGON" className="text-gray-900">龍</option>
-                <option value="FAIRY" className="text-gray-900">妖精</option>
-                <option value="FIGHTING" className="text-gray-900">格鬥</option>
-                <option value="FIRE" className="text-gray-900">火</option>
-                <option value="GRASS" className="text-gray-900">草</option>
-                <option value="LIGHTNING" className="text-gray-900">雷</option>
-                <option value="METAL" className="text-gray-900">鋼</option>
-                <option value="PSYCHIC" className="text-gray-900">超</option>
-                <option value="WATER" className="text-gray-900">水</option>
-              </select>
-            </div>
+            {!isNonPokemon && (
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  抵抗屬性
+                </label>
+                <select
+                  value={filters.resistance || ''}
+                  onChange={(e) => updateFilter('resistance', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900"
+                >
+                  <option value="" className="text-gray-900">全部</option>
+                  <option value="COLORLESS" className="text-gray-900">無色</option>
+                  <option value="DARKNESS" className="text-gray-900">惡</option>
+                  <option value="DRAGON" className="text-gray-900">龍</option>
+                  <option value="FAIRY" className="text-gray-900">妖精</option>
+                  <option value="FIGHTING" className="text-gray-900">格鬥</option>
+                  <option value="FIRE" className="text-gray-900">火</option>
+                  <option value="GRASS" className="text-gray-900">草</option>
+                  <option value="LIGHTNING" className="text-gray-900">雷</option>
+                  <option value="METAL" className="text-gray-900">鋼</option>
+                  <option value="PSYCHIC" className="text-gray-900">超</option>
+                  <option value="WATER" className="text-gray-900">水</option>
+                </select>
+              </div>
+            )}
           </div>
         </div>
       )}
