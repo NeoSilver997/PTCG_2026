@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 
 const DEFAULT_EXPANSION_CODES = '';
 const DEFAULT_REGULATION_MARKS = 'H,I,J';
-const QUICK_REGULATION_MARKS = ['J', 'I', 'H', 'G', 'F', 'E'];
+const QUICK_REGULATION_MARKS = ['J', 'I', 'H', 'G', 'F', 'E','D','C','B','A'];
 
 const LANG_LABEL: Record<string, string> = {
   JA_JP: '🇯🇵 日文',
@@ -27,6 +27,7 @@ const SUPERTYPE_ACTIVE: Record<string, string> = {
   ENERGY: 'bg-orange-500 text-white border-orange-500',
 };
 const QUICK_EXPANSIONS = [
+  { code: 'm5',    label: 'M5' },
   { code: 'm4',    label: 'M4' },
   { code: 'm3',    label: 'M3' },
   { code: 'm2a',   label: 'M2A' },
@@ -370,97 +371,123 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
         </div>
       </div>
 
-      {/* Regulation Mark Quick-Select (Always Visible) */}
-      <div className="mt-3 pt-3 border-t border-gray-100">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-xs font-medium text-gray-600 shrink-0">規格:</span>
-          {QUICK_REGULATION_MARKS.map((mark) => (
-            <button
-              key={mark}
-              onClick={() => toggleMark(mark)}
-              className={`px-2.5 py-1 rounded-full text-xs border font-medium transition ${
-                activeMarks.has(mark)
-                  ? 'bg-indigo-600 text-white border-indigo-600 shadow'
-                  : 'bg-gray-50 text-gray-800 border-gray-300 hover:border-indigo-400'
-              }`}
-            >
-              {mark}
-            </button>
-          ))}
-          {activeMarks.size > 0 && (
-            <button
-              onClick={() => updateFilter('regulationMark', '')}
-              className="px-2 py-1 rounded text-xs text-gray-400 hover:text-red-500 transition"
-              title="清除規格篩選"
-            >
-              ✕
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Expansion Quick-Select (Always Visible) */}
-      <div className="mt-3 pt-3 border-t border-gray-100">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-xs font-medium text-gray-600 shrink-0">擴展包:</span>
-          {QUICK_EXPANSIONS.map(({ code, label }, idx) => (
-            <React.Fragment key={code}>
-              {idx > 0 && activeExpansions.has(QUICK_EXPANSIONS[idx - 1].code) && activeExpansions.has(code) && (
-                <span className="text-[10px] font-bold text-purple-600 shrink-0">OR</span>
-              )}
+      {/* Quick Filter Row: Regulation Mark + Expansion Code */}
+      <div className="mt-3 pt-3 border-t border-gray-100 grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Regulation Mark Quick-Select */}
+        <div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-xs font-medium text-gray-600 shrink-0">規格:</span>
+            {QUICK_REGULATION_MARKS.map((mark) => (
               <button
-                onClick={() => toggleExpansion(code)}
-                className={`px-2.5 py-1 rounded-full text-xs border transition ${
-                  activeExpansions.has(code)
-                    ? 'bg-purple-600 text-white border-purple-600 shadow'
-                    : 'bg-gray-50 text-gray-800 border-gray-300 hover:border-purple-400'
+                key={mark}
+                onClick={() => toggleMark(mark)}
+                className={`px-2.5 py-1 rounded-full text-xs border font-medium transition ${
+                  activeMarks.has(mark)
+                    ? 'bg-indigo-600 text-white border-indigo-600 shadow'
+                    : 'bg-gray-50 text-gray-800 border-gray-300 hover:border-indigo-400'
                 }`}
               >
-                {label}
+                {mark}
               </button>
-            </React.Fragment>
-          ))}
-          {activeExpansions.size > 0 && (
-            <button
-              onClick={() => updateFilter('expansionCode', '')}
-              className="px-2 py-1 rounded text-xs text-gray-400 hover:text-red-500 transition"
-              title="清除擴展包篩選"
-            >
-              ✕
-            </button>
-          )}
-          <input
-            type="text"
-            placeholder="輸入代碼..."
-            onBlur={(e: React.FocusEvent<HTMLInputElement>) => {
-              const val = e.target.value.trim().toLowerCase();
-              if (val) {
-                const next = new Set(activeExpansions);
-                next.add(val);
-                updateFilter('expansionCode', Array.from(next).join(','));
-                e.target.value = '';
-              }
-            }}
-            onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
-              if (e.key === 'Enter') {
-                const val = (e.target as HTMLInputElement).value.trim().toLowerCase();
+            ))}
+            {activeMarks.size > 0 && (
+              <button
+                onClick={() => updateFilter('regulationMark', '')}
+                className="px-2 py-1 rounded text-xs text-gray-400 hover:text-red-500 transition"
+                title="清除規格篩選"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Expansion Quick-Select */}
+        <div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-xs font-medium text-gray-600 shrink-0">擴展包:</span>
+            {QUICK_EXPANSIONS.slice(0, 10).map(({ code, label }, idx) => (
+              <React.Fragment key={code}>
+                {idx > 0 && activeExpansions.has(QUICK_EXPANSIONS[idx - 1].code) && activeExpansions.has(code) && (
+                  <span className="text-[10px] font-bold text-purple-600 shrink-0">OR</span>
+                )}
+                <button
+                  onClick={() => toggleExpansion(code)}
+                  className={`px-2.5 py-1 rounded-full text-xs border transition ${
+                    activeExpansions.has(code)
+                      ? 'bg-purple-600 text-white border-purple-600 shadow'
+                      : 'bg-gray-50 text-gray-800 border-gray-300 hover:border-purple-400'
+                  }`}
+                >
+                  {label}
+                </button>
+              </React.Fragment>
+            ))}
+            {activeExpansions.size > 0 && (
+              <button
+                onClick={() => updateFilter('expansionCode', '')}
+                className="px-2 py-1 rounded text-xs text-gray-400 hover:text-red-500 transition"
+                title="清除擴展包篩選"
+              >
+                ✕
+              </button>
+            )}
+            <input
+              type="text"
+              placeholder="輸入代碼..."
+              onBlur={(e: React.FocusEvent<HTMLInputElement>) => {
+                const val = e.target.value.trim().toLowerCase();
                 if (val) {
                   const next = new Set(activeExpansions);
                   next.add(val);
                   updateFilter('expansionCode', Array.from(next).join(','));
-                  (e.target as HTMLInputElement).value = '';
+                  e.target.value = '';
                 }
-              }
-            }}
-            className="w-24 px-2 py-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-purple-500 text-gray-900 bg-white placeholder:text-gray-400"
-          />
+              }}
+              onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                if (e.key === 'Enter') {
+                  const val = (e.target as HTMLInputElement).value.trim().toLowerCase();
+                  if (val) {
+                    const next = new Set(activeExpansions);
+                    next.add(val);
+                    updateFilter('expansionCode', Array.from(next).join(','));
+                    (e.target as HTMLInputElement).value = '';
+                  }
+                }
+              }}
+              className="w-20 px-2 py-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-purple-500 text-gray-900 bg-white placeholder:text-gray-400"
+            />
+          </div>
         </div>
       </div>
 
       {/* Advanced Filters (Expandable) */}
       {isExpanded && (
         <div className="mt-4 pt-4 border-t border-gray-200">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="mb-4 pb-4 border-b border-gray-100">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-xs font-medium text-gray-600 shrink-0">更多擴展包:</span>
+              {QUICK_EXPANSIONS.slice(10).map(({ code, label }, idx) => (
+                <React.Fragment key={code}>
+                  {idx > 0 && activeExpansions.has(QUICK_EXPANSIONS[idx + 3].code) && activeExpansions.has(code) && (
+                    <span className="text-[10px] font-bold text-purple-600 shrink-0">OR</span>
+                  )}
+                  <button
+                    onClick={() => toggleExpansion(code)}
+                    className={`px-2.5 py-1 rounded-full text-xs border transition ${
+                      activeExpansions.has(code)
+                        ? 'bg-purple-600 text-white border-purple-600 shadow'
+                        : 'bg-gray-50 text-gray-800 border-gray-300 hover:border-purple-400'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-5 xl:grid-cols-6 gap-4">
             {/* Web Card ID */}
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">
