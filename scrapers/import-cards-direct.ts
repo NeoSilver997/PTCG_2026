@@ -184,6 +184,12 @@ async function batchUpsertExpansions(prisma: PrismaClient, cards: any[]) {
 
   // Collect unique expansions from all cards
   for (const card of cards) {
+    // Skip cards without expansionCode
+    if (!card.expansionCode) {
+      console.warn(`⚠️  Skipping card with missing expansionCode: ${card.webCardId || 'unknown'}`);
+      continue;
+    }
+
     const canonicalCode = card.expansionCode.toUpperCase();
     if (!primaryExpansions.has(canonicalCode)) {
       primaryExpansions.set(canonicalCode, {
@@ -616,7 +622,14 @@ async function main() {
     }
     try {
       const cards: JapaneseCard[] = JSON.parse(fs.readFileSync(singleFile, 'utf-8'));
-      const validCards = cards.filter(card => card.name !== 'カード検索');
+      const validCards = cards.filter(card => {
+        if (card.name === 'カード検索') return false; // Skip placeholder cards
+        if (!card.expansionCode) {
+          console.warn(`⚠️  Skipping card with missing expansionCode: ${card.webCardId || card.name || 'unknown'}`);
+          return false;
+        }
+        return true;
+      });
       allCards.push(...validCards);
       fileCardCounts[path.basename(singleFile)] = validCards.length;
       totalFiles++;
@@ -665,7 +678,15 @@ async function main() {
       const filePath = path.join(regionDir, file);
       try {
         const cards: JapaneseCard[] = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-        const validCards = cards.filter(card => card.name !== 'カード検索'); // Filter out placeholder cards
+        // Filter out placeholder cards and cards without expansionCode
+        const validCards = cards.filter(card => {
+          if (card.name === 'カード検索') return false; // Skip placeholder cards
+          if (!card.expansionCode) {
+            console.warn(`  ⚠️  Skipping card in ${file} with missing expansionCode: ${card.webCardId || card.name || 'unknown'}`);
+            return false;
+          }
+          return true;
+        });
         allCards.push(...validCards);
         fileCardCounts[`${regionName}/${file}`] = validCards.length;
         totalFiles++;

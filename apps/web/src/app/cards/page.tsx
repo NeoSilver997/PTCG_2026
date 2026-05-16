@@ -33,6 +33,7 @@ const DEFAULT_FILTERS = {
   cardTier: '',
   abilityText: '',
   weakness: '',
+  resistance: '',
 };
 
 function getInitialFilters() {

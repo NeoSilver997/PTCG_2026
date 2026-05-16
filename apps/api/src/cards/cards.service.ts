@@ -407,6 +407,7 @@ export class CardsService {
     cardTier?: string;
     abilityText?: string;
     weakness?: string;
+    resistance?: string;
   }): Promise<{
     data: any[];
     pagination: {
@@ -445,6 +446,7 @@ export class CardsService {
       cardTier,
       abilityText,
       weakness,
+      resistance,
     } = params;
 
     const where: any = {};
@@ -605,7 +607,7 @@ export class CardsService {
     // Detect multi-value regulationMark (Prisma { in: [...] }) — must use raw SQL path
     const regulationMarkIsMulti = where.regulationMark !== undefined && typeof where.regulationMark === 'object' && 'in' in (where.regulationMark as any);
 
-    if (hasAbilities !== undefined || hasAttackText !== undefined || evolvesTo || attackName || effectTag || cardTier || abilityText || weakness || regulationMarkIsMulti || actualSortBy === 'expansionReleaseDate' || actualSortBy === 'expansionCode' || expansionCode) {
+    if (hasAbilities !== undefined || hasAttackText !== undefined || evolvesTo || attackName || effectTag || cardTier || abilityText || weakness || resistance || regulationMarkIsMulti || actualSortBy === 'expansionReleaseDate' || actualSortBy === 'expansionCode' || expansionCode) {
       const jsonFieldConditions: string[] = [];
 
       // Expansion codes: directly inject as raw SQL OR condition
@@ -682,6 +684,15 @@ export class CardsService {
         jsonFieldConditions.push(
           `(c.weaknesses IS NOT NULL AND c.weaknesses != 'null'::jsonb AND EXISTS (` +
           `SELECT 1 FROM jsonb_array_elements(c.weaknesses) w WHERE w->>'type' = '${escapedWeakness}'))`
+        );
+      }
+
+      // resistance: filter by resistance type stored as JSON array [{type, value}]
+      if (resistance) {
+        const escapedResistance = resistance.replace(/'/g, "''");
+        jsonFieldConditions.push(
+          `(c.resistances IS NOT NULL AND c.resistances != 'null'::jsonb AND EXISTS (` +
+          `SELECT 1 FROM jsonb_array_elements(c.resistances) r WHERE r->>'type' = '${escapedResistance}'))`
         );
       }
 

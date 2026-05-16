@@ -400,22 +400,72 @@ export default function CardDetailPage({ params }: { params: Promise<{ webCardId
       staleTime: 5 * 60 * 1000,
     });
 
-    const normalize = (s?: string) =>
+    const normalizeName = (s?: string) =>
       s
         ? s
+            .normalize('NFKC')
             .toLowerCase()
-            .replace(/[^a-z0-9\s]/g, '')
-            .replace(/\b(mega|ex|gx|v|vstar)\b/g, '')
+            .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+        : '';
+
+    const stripCardNameAffixes = (s?: string) =>
+      s
+        ? s
+            .replace(/^(mega|メガ|超級)\s*/i, '')
+            .replace(/\s*(ex|gx|vmax|vstar|v)\s*$/i, '')
             .trim()
         : '';
 
     const fallbackSpecies = (() => {
       if (!speciesList || !card || card.supertype !== 'POKEMON') return null;
-      const primaryName = card.primaryCard?.name || card.name || '';
-      const base = normalize(primaryName).split(/\s+/).slice(-2).join(' ');
-      const exact = speciesList.find((s: any) => normalize(s.nameEn) === normalize(primaryName) || normalize(s.nameEn) === base);
+
+      const rawCandidates = [
+        card.name,
+        card.primaryCard?.name,
+        ...(card.languageVariants?.map((v) => v.name) ?? []),
+      ].filter((name): name is string => !!name && name.trim().length > 0);
+
+      const candidateNames = Array.from(
+        new Set(
+          rawCandidates
+            .flatMap((name) => [normalizeName(name), normalizeName(stripCardNameAffixes(name))])
+            .filter((name) => name.length > 0)
+        )
+      );
+
+      if (candidateNames.length === 0) return null;
+
+      const speciesNameKeys: Array<'nameEn' | 'nameJa' | 'nameZhHant' | 'nameZhHans'> = [
+        'nameEn',
+        'nameJa',
+        'nameZhHant',
+        'nameZhHans',
+      ];
+
+      const exact = speciesList.find((s: any) =>
+        speciesNameKeys.some((key) => {
+          const speciesName = normalizeName(s?.[key]);
+          return speciesName.length > 0 && candidateNames.includes(speciesName);
+        })
+      );
       if (exact) return exact;
-      return speciesList.find((s: any) => normalize(s.nameEn).includes(base) || base.includes(normalize(s.nameEn)));
+
+      const MIN_PARTIAL_LEN = 2;
+      return (
+        speciesList.find((s: any) =>
+          speciesNameKeys.some((key) => {
+            const speciesName = normalizeName(s?.[key]);
+            if (speciesName.length < MIN_PARTIAL_LEN) return false;
+            return candidateNames.some(
+              (candidate) =>
+                candidate.length >= MIN_PARTIAL_LEN &&
+                (speciesName.includes(candidate) || candidate.includes(speciesName))
+            );
+          })
+        ) ?? null
+      );
     })();
 
     const species = card?.supertype === 'POKEMON'

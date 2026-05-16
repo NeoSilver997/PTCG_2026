@@ -68,6 +68,7 @@ interface FilterPanelProps {
     cardTier?: string;
     abilityText?: string;
     weakness?: string;
+    resistance?: string;
   };
   onFilterChange: (filters: any) => void;
   stats?: {
@@ -98,7 +99,7 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
     sortBy: 'webCardId', sortOrder: 'desc', webCardId: '', subtypes: '',
     variantType: '', minHp: '', maxHp: '', artist: '', regulationMark: '',
     expansionCode: DEFAULT_EXPANSION_CODES, hasAbilities: '', hasAttackText: '',
-    effectTag: '', cardTier: '', abilityText: '', weakness: '',
+    effectTag: '', cardTier: '', abilityText: '', weakness: '', resistance: '',
   };
 
   // Reset to defaults: restore the H,I,J regulation mark, clear everything else
@@ -137,14 +138,14 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
     !filters.language && !filters.webCardId && !filters.subtypes && !filters.variantType &&
     !filters.minHp && !filters.maxHp && !filters.artist && !filters.expansionCode &&
     !filters.hasAbilities && !filters.hasAttackText && !filters.effectTag &&
-    !filters.cardTier && !filters.abilityText && !filters.weakness;
+    !filters.cardTier && !filters.abilityText && !filters.weakness && !filters.resistance;
 
   // Any non-empty filter (including the default H,I,J) is "active"
   const hasAnyActiveFilters = !!(filters.name || filters.supertype || filters.types ||
     filters.rarity || filters.language || filters.webCardId || filters.subtypes ||
     filters.variantType || filters.minHp || filters.maxHp || filters.artist ||
     filters.regulationMark || filters.expansionCode || filters.hasAbilities || filters.hasAttackText ||
-    filters.effectTag || filters.cardTier || filters.abilityText || filters.weakness);
+    filters.effectTag || filters.cardTier || filters.abilityText || filters.weakness || filters.resistance);
   
   return (
     <div className="bg-white rounded-lg shadow-md p-4 mb-6">
@@ -694,6 +695,31 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
                 <option value="B">B</option>
                 <option value="C+">C+</option>
                 <option value="C">C</option>
+              </select>
+            </div>
+
+            {/* Resistance Type */}
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                抵抗屬性
+              </label>
+              <select
+                value={filters.resistance || ''}
+                onChange={(e) => updateFilter('resistance', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900"
+              >
+                <option value="" className="text-gray-900">全部</option>
+                <option value="COLORLESS" className="text-gray-900">無色</option>
+                <option value="DARKNESS" className="text-gray-900">惡</option>
+                <option value="DRAGON" className="text-gray-900">龍</option>
+                <option value="FAIRY" className="text-gray-900">妖精</option>
+                <option value="FIGHTING" className="text-gray-900">格鬥</option>
+                <option value="FIRE" className="text-gray-900">火</option>
+                <option value="GRASS" className="text-gray-900">草</option>
+                <option value="LIGHTNING" className="text-gray-900">雷</option>
+                <option value="METAL" className="text-gray-900">鋼</option>
+                <option value="PSYCHIC" className="text-gray-900">超</option>
+                <option value="WATER" className="text-gray-900">水</option>
               </select>
             </div>
           </div>

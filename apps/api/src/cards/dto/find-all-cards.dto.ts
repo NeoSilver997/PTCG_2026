@@ -165,4 +165,9 @@ export class FindAllCardsDto {
   @IsOptional()
   @IsString()
   weakness?: string;
+
+  @ApiProperty({ required: false, example: 'GRASS', description: 'Filter by resistance type (PokemonType enum)' })
+  @IsOptional()
+  @IsString()
+  resistance?: string;
 }
