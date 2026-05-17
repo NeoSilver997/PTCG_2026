@@ -95,7 +95,7 @@ async function seedProductTypes(): Promise<Map<string, string>> {
 // ─── Upsert one product ───────────────────────────────────────────────────────
 
 async function upsertProduct(p: any, productTypeId: string | null) {
-  await prisma.product.upsert({
+  const existingByComposite = await prisma.product.findUnique({
     where: {
       country_code_productName_releaseDate: {
         country: p.country,
@@ -104,36 +104,70 @@ async function upsertProduct(p: any, productTypeId: string | null) {
         releaseDate: p.release_date || '',
       },
     },
-    update: {
-      price: p.price || null,
-      releaseDate: p.release_date || '',
-      link: p.link || null,
-      imageUrl: p.image_url || null,
-      include: p.include || null,
-      cardOnly: p.card_only || null,
-      beginnerFlag: p.beginner_flag != null ? Number(p.beginner_flag) : 0,
-      storesAvailable: p.stores_available || null,
-      linkCardList: p.link_card_list || null,
-      linkPokemonCenter: p.link_pokemon_center || null,
-      productTypeId: productTypeId,
-    },
-    create: {
+  });
+
+  if (existingByComposite) {
+    return false; // Skipped
+  }
+
+  if (p.code) {
+    const existingByCode = await prisma.product.findFirst({
+      where: {
+        country: p.country,
+        code: p.code,
+      },
+      select: { id: true },
+    });
+    if (existingByCode) {
+      return false; // Skipped
+    }
+  }
+
+  if (p.link) {
+    const existingByLink = await prisma.product.findFirst({
+      where: {
+        country: p.country,
+        link: p.link,
+      },
+      select: { id: true },
+    });
+    if (existingByLink) {
+      return false; // Skipped
+    }
+  }
+
+  const existingByName = await prisma.product.findFirst({
+    where: {
       country: p.country,
       productName: p.product_name,
-      price: p.price || null,
-      releaseDate: p.release_date || null,
-      code: p.code || null,
-      link: p.link || null,
-      imageUrl: p.image_url || null,
-      include: p.include || null,
-      cardOnly: p.card_only || null,
-      beginnerFlag: p.beginner_flag != null ? Number(p.beginner_flag) : 0,
-      storesAvailable: p.stores_available || null,
-      linkCardList: p.link_card_list || null,
-      linkPokemonCenter: p.link_pokemon_center || null,
-      productTypeId: productTypeId,
     },
+    select: { id: true },
   });
+  if (existingByName) {
+    return false; // Skipped
+  }
+
+  {
+    await prisma.product.create({
+      data: {
+        country: p.country,
+        productName: p.product_name,
+        price: p.price || null,
+        releaseDate: p.release_date || null,
+        code: p.code || null,
+        link: p.link || null,
+        imageUrl: p.image_url || null,
+        include: p.include || null,
+        cardOnly: p.card_only || null,
+        beginnerFlag: p.beginner_flag != null ? Number(p.beginner_flag) : 0,
+        storesAvailable: p.stores_available || null,
+        linkCardList: p.link_card_list || null,
+        linkPokemonCenter: p.link_pokemon_center || null,
+        productTypeId: productTypeId,
+      },
+    });
+    return true; // Inserted
+  }
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
@@ -150,19 +184,23 @@ async function main() {
   } else {
     const hkZhProducts: any[] = JSON.parse(fs.readFileSync(hkZhPath, 'utf-8'));
     console.log(`Importing ${hkZhProducts.length} HK (ZH) products...`);
-    let ok = 0, fail = 0;
+    let ok = 0, skip = 0, fail = 0;
     for (const p of hkZhProducts) {
       try {
         const typeCode = inferZhTypeCode(p.product_name);
         const typeId = typeMap.get(typeCode) ?? null;
-        await upsertProduct(p, typeId);
-        ok++;
+        const inserted = await upsertProduct(p, typeId);
+        if (inserted) {
+          ok++;
+        } else {
+          skip++;
+        }
       } catch (e: any) {
         console.error(`  [HK-ZH] Error: ${p.product_name} — ${e.message}`);
         fail++;
       }
     }
-    console.log(`  → ${ok} OK, ${fail} errors\n`);
+    console.log(`  → ${ok} inserted, ${skip} skipped, ${fail} errors\n`);
   }
 
   // 3. Import Japan + HK (EN) products —— PTCG_CardDB/ptcg_products.json
@@ -176,35 +214,43 @@ async function main() {
 
     // Japan
     console.log(`Importing ${jpProducts.length} Japan products...`);
-    let okJp = 0, failJp = 0;
+    let okJp = 0, skipJp = 0, failJp = 0;
     for (const p of jpProducts) {
       try {
         const typeCode = JP_TYPE_MAP[p.product_type] ?? 'special_products';
         const typeId = typeMap.get(typeCode) ?? null;
-        await upsertProduct(p, typeId);
-        okJp++;
+        const inserted = await upsertProduct(p, typeId);
+        if (inserted) {
+          okJp++;
+        } else {
+          skipJp++;
+        }
       } catch (e: any) {
         console.error(`  [JP] Error: ${p.product_name} — ${e.message}`);
         failJp++;
       }
     }
-    console.log(`  → ${okJp} OK, ${failJp} errors\n`);
+    console.log(`  → ${okJp} inserted, ${skipJp} skipped, ${failJp} errors\n`);
 
     // HK English
     console.log(`Importing ${hkEnProducts.length} HK (EN) products...`);
-    let okEn = 0, failEn = 0;
+    let okEn = 0, skipEn = 0, failEn = 0;
     for (const p of hkEnProducts) {
       try {
         const typeCode = inferEnTypeCode(p.product_name, p.card_only);
         const typeId = typeMap.get(typeCode) ?? null;
-        await upsertProduct(p, typeId);
-        okEn++;
+        const inserted = await upsertProduct(p, typeId);
+        if (inserted) {
+          okEn++;
+        } else {
+          skipEn++;
+        }
       } catch (e: any) {
         console.error(`  [HK-EN] Error: ${p.product_name} — ${e.message}`);
         failEn++;
       }
     }
-    console.log(`  → ${okEn} OK, ${failEn} errors\n`);
+    console.log(`  → ${okEn} inserted, ${skipEn} skipped, ${failEn} errors\n`);
   }
 
   // Final count
