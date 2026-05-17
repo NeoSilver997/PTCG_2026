@@ -435,7 +435,7 @@
 "cmo1u8eij30gm5ueevymdk5df","阿羅拉 喵喵","0052","attack","B","若在後攻玩家的最初回合使用，則增加60點傷害。","",""
 "cmo1u7woj25805uee1q12gifw","<火箭隊的>果然翁","0202","attack","I","選擇1隻自己的備戰區的「火箭隊的寶可夢」，將所選的寶可夢身上放置的傷害指示物，全部改放於對手的戰鬥寶可夢身上。","自分のベンチの「ロケット団のポケモン」を1匹選び、選んだポケモンにのっているダメカンをすべて、相手のバトルポケモンにのせ替える。","Move all damage counters from 1 of your Benched Team Rocket’s Pokémon to your opponent’s Active Pokémon."
 "cmo1u7yik28eh5ueebr8ef9xg","飛腿郎","0106","attack","G","對手的所有寶可夢各受到10點傷害。將這隻寶可夢與備戰寶可夢互換。[在備戰區不計算弱點・抵抗力。]","相手のポケモン全員に、それぞれ10ダメージ。このポケモンをベンチポケモンと入れ替える。［ベンチは弱点・抵抗力を計算しない。］",""
-"cmo1u7o111qex5ueeruc7qijv","哥達鴨","0055","ability","I","只要這隻寶可夢在場上，雙方所有寶可夢的將自己【昏厥】的效果的特性，全部消除。","このポケモンがいるかぎり、おたがいのポケモン全員は、そのポケモン自身をきぜつさせる効果の特性が、すべてなくなる。","Pokémon in play (both yours and your opponent’s) lose any Ability that requires the Pokémon using it to Knock Out itself."
+"cmo1u7o111qex5ueeruc7qijv","哥達鴨","0055","ability","I","只要這隻寶可夢在場上，雙方所有寶可夢的將自己【昏厥】的效果的特性，全部消除。","このポケモンがいるかぎり、おたがいのポケモン全員は、そのポケモン自身をきぜつさせる効果の特性が、すべてなくなる。","Pokémon in play (both yours and your opponent’s) lose any Ability that requires the Pokémon using it to Knock Out itself."
 "cmo1u8eix30ha5ueeik1b1n50","臭鼬噗","0434","attack","B","將雙方的戰鬥寶可夢【混亂】。","",""
 "cmo1u81nr2ds35ueexlh4v7it","席多藍恩","0485","ability","H","這隻寶可夢在戰鬥場上受到對手的寶可夢招式的傷害時，將使用招式的寶可夢【灼傷】。","このポケモンが、バトル場で相手のポケモンからワザのダメージを受けたとき、ワザを使ったポケモンをやけどにする。",""
 "cmo1u8ell30lv5uee3yfuzycb","懶人獺","0287","attack","B","擲1次硬幣若為反面，則這個招式失敗。 | 將這隻寶可夢的HP全部恢復。在下個自己的回合，這隻寶可夢無法使用招式。","",""

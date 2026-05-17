@@ -333,6 +333,29 @@ function translatePokemonNameWithPokedex(
   return name;
 }
 
+async function translateCardNameWithLlm(
+  name: string | null | undefined,
+  supertype: string | null | undefined,
+  mapper: PokedexNameMapper,
+  llm: LlmState,
+): Promise<string | null> {
+  if (!name) return null;
+
+  // Try Pokedex first for Pokemon
+  if (supertype === 'POKEMON') {
+    const pokedexResult = translatePokemonNameWithPokedex(name, supertype, mapper);
+    if (pokedexResult !== name) return pokedexResult;
+  }
+
+  // Fall back to LLM for any remaining JP text
+  const normalized = normalizeTextKey(name);
+  if (!normalized) return name;
+  if (!hasJapaneseLikeChars(normalized)) return name;
+
+  const field = supertype === 'POKEMON' ? 'pokemon_name' : 'trainer_or_energy_name';
+  return (await llmTranslateText(normalized, field as any, llm)) || name;
+}
+
 async function translateAbilities(value: unknown, tm: TranslationMemory, llm: LlmState): Promise<unknown> {
   const arr = asObjectArray(value);
   if (arr.length === 0) return value;
@@ -340,6 +363,7 @@ async function translateAbilities(value: unknown, tm: TranslationMemory, llm: Ll
   for (const a of arr) {
     let nameMapped = getMappedOrOriginal(a.name, tm.abilityName);
     let descMapped = getMappedOrOriginal(a.description, tm.abilityDescription);
+    let textMapped = getMappedOrOriginal(a.text, tm.text);
 
     if (needsLlmTranslation(a.name, nameMapped)) {
       nameMapped = await llmTranslateText(nameMapped, 'ability_name', llm);
@@ -347,11 +371,15 @@ async function translateAbilities(value: unknown, tm: TranslationMemory, llm: Ll
     if (needsLlmTranslation(a.description, descMapped)) {
       descMapped = await llmTranslateText(descMapped, 'ability_description', llm);
     }
+    if (needsLlmTranslation(a.text, textMapped)) {
+      textMapped = await llmTranslateText(textMapped, 'ability_description', llm);
+    }
 
     out.push({
       ...a,
       name: nameMapped,
       description: descMapped,
+      text: textMapped,
     });
   }
   return out;
@@ -376,7 +404,7 @@ async function translateAttacks(value: unknown, tm: TranslationMemory, llm: LlmS
       ...a,
       name: nameMapped,
       effect: effectMapped,
-    });
+    } as any);
   }
   return out;
 }
@@ -665,20 +693,29 @@ async function main() {
       primaryExpansionCode,
     );
 
-    const pokedexName = translatePokemonNameWithPokedex(jp.name, jp.supertype, pokedexMapper);
-    const translatedName = getMappedOrOriginal(pokedexName, translationMemory.cardName);
-    const translatedText = getMappedOrOriginal(jp.text, translationMemory.text);
+    const translatedName = await translateCardNameWithLlm(jp.name, jp.supertype, pokedexMapper, llmState);
+    const translatedNameMapped = getMappedOrOriginal(translatedName, translationMemory.cardName);
+    let translatedText = getMappedOrOriginal(jp.text, translationMemory.text);
+    if (needsLlmTranslation(jp.text, translatedText)) {
+      translatedText = await llmTranslateText(translatedText, 'attack_effect', llmState);
+    }
     const translatedFlavor = getMappedOrOriginal(jp.flavorText, translationMemory.flavorText);
     const translatedRules = translateRules(jp.rules, translationMemory);
     const translatedAbilities = await translateAbilities(jp.abilities, translationMemory, llmState);
     const translatedAttacks = await translateAttacks(jp.attacks, translationMemory, llmState);
     const pokedexEvolvesFrom = translatePokemonNameWithPokedex(jp.evolvesFrom, 'POKEMON', pokedexMapper);
     const pokedexEvolvesTo = translatePokemonNameWithPokedex(jp.evolvesTo, 'POKEMON', pokedexMapper);
-    const translatedEvolvesFrom = getMappedOrOriginal(pokedexEvolvesFrom, translationMemory.cardName);
-    const translatedEvolvesTo = getMappedOrOriginal(pokedexEvolvesTo, translationMemory.cardName);
+    let translatedEvolvesFrom = getMappedOrOriginal(pokedexEvolvesFrom, translationMemory.cardName);
+    let translatedEvolvesTo = getMappedOrOriginal(pokedexEvolvesTo, translationMemory.cardName);
+    if (needsLlmTranslation(jp.evolvesFrom, translatedEvolvesFrom)) {
+      translatedEvolvesFrom = await llmTranslateText(translatedEvolvesFrom, 'pokemon_name', llmState);
+    }
+    if (needsLlmTranslation(jp.evolvesTo, translatedEvolvesTo)) {
+      translatedEvolvesTo = await llmTranslateText(translatedEvolvesTo, 'pokemon_name', llmState);
+    }
 
     const memoryTranslatedThisCard = (
-      normalizeTextKey(translatedName) !== normalizeTextKey(jp.name) ||
+      normalizeTextKey(translatedNameMapped) !== normalizeTextKey(jp.name) ||
       normalizeTextKey(translatedText) !== normalizeTextKey(jp.text) ||
       normalizeTextKey(translatedFlavor) !== normalizeTextKey(jp.flavorText) ||
       JSON.stringify(translatedRules ?? []) !== JSON.stringify(jp.rules ?? []) ||
@@ -695,7 +732,7 @@ async function main() {
       webCardId: zhTempWebCardId,
       language: LanguageCode.ZH_TW,
       variantType: (preferZh(zhOld?.variantType, jp.variantType) ?? VariantType.NORMAL) as VariantType,
-      name: (preferZh(zhOld?.name, translatedName as string | null) ?? jp.name) as string,
+      name: (preferZh(zhOld?.name, translatedNameMapped as string | null) ?? jp.name) as string,
       supertype: preferZh(zhOld?.supertype, jp.supertype),
       subtypes: preferZh(zhOld?.subtypes, jp.subtypes) ?? [],
       hp: preferZh(zhOld?.hp, jp.hp),
