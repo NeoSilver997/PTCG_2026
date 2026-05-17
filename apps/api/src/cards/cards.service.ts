@@ -399,6 +399,7 @@ export class CardsService {
     maxHp?: number;
     artist?: string;
     regulationMark?: string;
+    missingRegulationMark?: boolean;
     hasAbilities?: boolean;
     hasAttackText?: boolean;
     evolvesTo?: string;
@@ -438,6 +439,7 @@ export class CardsService {
       maxHp,
       artist,
       regulationMark,
+      missingRegulationMark,
       hasAbilities,
       hasAttackText,
       evolvesTo,
@@ -450,6 +452,7 @@ export class CardsService {
     } = params;
 
     const where: any = {};
+    let includesMissingRegulationMarkToken = false;
     
     // Handle legacy values passed as subtypes that belong to other enums
     let actualEvolutionStage = evolutionStage;
@@ -543,7 +546,9 @@ export class CardsService {
       };
     }
     if (regulationMark) {
-      const marks = String(regulationMark).split(',').map((m: string) => m.trim()).filter(Boolean);
+      const marksRaw = String(regulationMark).split(',').map((m: string) => m.trim()).filter(Boolean);
+      includesMissingRegulationMarkToken = marksRaw.includes('__MISSING__');
+      const marks = marksRaw.filter((m: string) => m !== '__MISSING__');
       if (marks.length === 1) {
         where.regulationMark = marks[0];
       } else if (marks.length > 1) {
@@ -600,6 +605,11 @@ export class CardsService {
 
     let countQuery = this.prisma.card.count({ where });
 
+    const wantsMissingRegulationMark =
+      includesMissingRegulationMarkToken ||
+      missingRegulationMark === true ||
+      String(missingRegulationMark).toLowerCase() === 'true';
+
     // Apply hasAbilities, hasAttackText, evolvesTo, attackName or expansionReleaseDate sort using raw SQL
     // hasAbilities, hasAttackText, and attackName require raw SQL due to Prisma JSON field limitations
     // evolvesTo requires raw SQL for exact CSV value matching
@@ -607,7 +617,7 @@ export class CardsService {
     // Detect multi-value regulationMark (Prisma { in: [...] }) — must use raw SQL path
     const regulationMarkIsMulti = where.regulationMark !== undefined && typeof where.regulationMark === 'object' && 'in' in (where.regulationMark as any);
 
-    if (hasAbilities !== undefined || hasAttackText !== undefined || evolvesTo || attackName || effectTag || cardTier || abilityText || weakness || resistance || regulationMarkIsMulti || actualSortBy === 'expansionReleaseDate' || actualSortBy === 'expansionCode' || expansionCode) {
+    if (hasAbilities !== undefined || hasAttackText !== undefined || evolvesTo || attackName || effectTag || cardTier || abilityText || weakness || resistance || wantsMissingRegulationMark || regulationMarkIsMulti || actualSortBy === 'expansionReleaseDate' || actualSortBy === 'expansionCode' || expansionCode) {
       const jsonFieldConditions: string[] = [];
 
       // Expansion codes: directly inject as raw SQL OR condition
@@ -620,22 +630,38 @@ export class CardsService {
         }
       }
       
-      // For JSON fields: null (JSON null) is different from NULL (SQL null)
-      // Cards without abilities have abilities = null (JSON value)
-      // Cards with abilities have abilities = [{...}] (JSON array)
+      // For JSON fields: null (JSON null) is different from SQL NULL.
+      // Some records store arrays, others store a single object.
       if (hasAbilities !== undefined) {
-        const abilityCondition = hasAbilities 
-          ? `(c.abilities IS NOT NULL AND c.abilities != 'null'::jsonb)` 
-          : `c.abilities = 'null'::jsonb`;
+        const abilityHasTextExpr = `(
+          (jsonb_typeof(c.abilities) = 'array' AND EXISTS (
+            SELECT 1 FROM jsonb_array_elements(c.abilities) AS ab
+            WHERE btrim(coalesce(ab->>'text', ab->>'description', '')) <> ''
+          ))
+          OR
+          (jsonb_typeof(c.abilities) = 'object' AND btrim(coalesce(c.abilities->>'text', c.abilities->>'description', '')) <> '')
+        )`;
+
+        const abilityCondition = hasAbilities
+          ? `(c.abilities IS NOT NULL AND c.abilities != 'null'::jsonb AND ${abilityHasTextExpr})`
+          : `(c.abilities IS NULL OR c.abilities = 'null'::jsonb OR NOT ${abilityHasTextExpr})`;
         jsonFieldConditions.push(abilityCondition);
       }
       
-      // Cards without attack text have attacks = null (JSON value)
-      // Cards with attack text have attacks = [{...}] (JSON array with text)
+      // hasAttackText: true only when at least one attack has non-empty effect/text.
       if (hasAttackText !== undefined) {
+        const attackHasTextExpr = `(
+          (jsonb_typeof(c.attacks) = 'array' AND EXISTS (
+            SELECT 1 FROM jsonb_array_elements(c.attacks) AS atk
+            WHERE btrim(coalesce(atk->>'effect', atk->>'text', '')) <> ''
+          ))
+          OR
+          (jsonb_typeof(c.attacks) = 'object' AND btrim(coalesce(c.attacks->>'effect', c.attacks->>'text', '')) <> '')
+        )`;
+
         const attackCondition = hasAttackText
-          ? `(c.attacks IS NOT NULL AND c.attacks != 'null'::jsonb)`
-          : `c.attacks = 'null'::jsonb`;
+          ? `(c.attacks IS NOT NULL AND c.attacks != 'null'::jsonb AND ${attackHasTextExpr})`
+          : `(c.attacks IS NULL OR c.attacks = 'null'::jsonb OR NOT ${attackHasTextExpr})`;
         jsonFieldConditions.push(attackCondition);
       }
       
@@ -694,6 +720,11 @@ export class CardsService {
           `(c.resistances IS NOT NULL AND c.resistances != 'null'::jsonb AND EXISTS (` +
           `SELECT 1 FROM jsonb_array_elements(c.resistances) r WHERE r->>'type' = '${escapedResistance}'))`
         );
+      }
+
+      // missingRegulationMark: include cards where regulationMark is NULL or blank
+      if (wantsMissingRegulationMark) {
+        jsonFieldConditions.push(`(c."regulationMark" IS NULL OR btrim(c."regulationMark") = '')`);
       }
 
       const baseWhereConditions = Object.entries(where)

@@ -116,6 +116,16 @@ export class FindAllCardsDto {
   @IsString()
   regulationMark?: string;
 
+  @ApiProperty({ required: false, type: Boolean, description: 'Filter cards with missing regulation mark (NULL or empty string)' })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return value;
+  })
+  @IsBoolean()
+  missingRegulationMark?: boolean;
+
   @ApiProperty({ required: false, type: Boolean })
   @IsOptional()
   @Transform(({ value }) => {

@@ -169,6 +169,60 @@ function firstNonEmptyText(...values: unknown[]): string | null {
   return null;
 }
 
+function isCopyrightFooterText(value: string | null | undefined): boolean {
+  if (!value) return false;
+  return /©\s*Pok[eé]mon|©\s*Nintendo|ポケットモンスター・ポケモン・Pok[eé]monは任天堂|無断転載はお断りします/u.test(value);
+}
+
+function sanitizeCardText(value: string | null): string | null {
+  if (!value) return null;
+
+  let cleaned = value.trim().replace(/\s+/g, ' ');
+  if (!cleaned) return null;
+
+  // Strip legal/footer text fragments that sometimes get scraped as effect text.
+  const footerStart = cleaned.search(/©\s*Pok[eé]mon|©\s*Nintendo|ポケットモンスター・ポケモン・Pok[eé]monは任天堂/u);
+  if (footerStart >= 0) {
+    cleaned = cleaned.slice(0, footerStart).trim();
+  }
+
+  if (!cleaned) return null;
+  return cleaned;
+}
+
+function sanitizeAbilitiesPayload(value: unknown): any[] | null {
+  if (!Array.isArray(value)) return null;
+
+  const sanitized = value
+    .map((entry: any) => {
+      if (!entry || typeof entry !== 'object') return null;
+
+      const name = typeof entry.name === 'string' ? entry.name.trim() : '';
+      const text = sanitizeCardText(firstNonEmptyText(entry.text, entry.description));
+
+      // Keep only meaningful ability rows after sanitization.
+      if (!name && !text) return null;
+
+      return {
+        ...entry,
+        name,
+        text,
+      };
+    })
+    .filter(Boolean) as any[];
+
+  return sanitized.length > 0 ? sanitized : null;
+}
+
+function abilitiesContainFooter(value: unknown): boolean {
+  if (!Array.isArray(value)) return false;
+
+  return value.some((entry: any) => {
+    const rawText = firstNonEmptyText(entry?.text, entry?.description);
+    return typeof rawText === 'string' && isCopyrightFooterText(rawText);
+  });
+}
+
 function generateSkillsSignature(card: any): string {
   // Create a signature from abilities and attacks to identify unique card mechanics
   const abilitiesStr = JSON.stringify(card.abilities || []);
@@ -401,12 +455,13 @@ async function importCardOptimized(
   const language = card.language ? (languageMap[card.language] || LanguageCode.JA_JP) : LanguageCode.JA_JP;
 
   // Normalize effect text from multiple scraper field names
-  const normalizedText = firstNonEmptyText(
+  const rawNormalizedText = firstNonEmptyText(
     card.effectText,
     card.text,
     card.description,
     card.effect,
   );
+  const normalizedText = sanitizeCardText(rawNormalizedText);
 
   // Log empty trainer cards
   if (supertype === Supertype.TRAINER && !normalizedText) {
@@ -414,7 +469,7 @@ async function importCardOptimized(
   }
 
   // Handle trainer card effects - keep text and mirror to abilities when needed
-  let abilities = card.abilities || null;
+  let abilities = sanitizeAbilitiesPayload(card.abilities);
   let text = normalizedText;
 
   if (supertype === Supertype.TRAINER && normalizedText) {
@@ -435,23 +490,42 @@ async function importCardOptimized(
   if (existing) {
     if (options.repairMissingText) {
       const existingText = typeof existing.text === 'string' ? existing.text.trim() : '';
-      const shouldRepairText = existingText.length === 0 && Boolean(text);
+      const existingHasCopyrightFooter = isCopyrightFooterText(existingText);
+      const shouldRepairText =
+        (existingText.length === 0 && Boolean(text)) ||
+        (existingHasCopyrightFooter && Boolean(text) && existingText !== text) ||
+        (existingHasCopyrightFooter && !text);
 
       const existingAbilities = Array.isArray(existing.abilities) ? existing.abilities as any[] : [];
+      const existingAbilitiesSanitized = sanitizeAbilitiesPayload(existingAbilities);
+      const existingAbilitiesHadFooter = abilitiesContainFooter(existingAbilities);
+      const existingAbilitiesChanged =
+        JSON.stringify(existingAbilitiesSanitized ?? null) !== JSON.stringify(existingAbilities.length > 0 ? existingAbilities : null);
       const hasExistingAbilityText = existingAbilities.some((a: any) => {
-        const abilityText = firstNonEmptyText(a?.text, a?.description);
+        const abilityText = sanitizeCardText(firstNonEmptyText(a?.text, a?.description));
         return Boolean(abilityText);
       });
       const shouldRepairTrainerAbilities =
-        supertype === Supertype.TRAINER && Boolean(text) && !hasExistingAbilityText;
+        supertype === Supertype.TRAINER && (
+          (Boolean(text) && (!hasExistingAbilityText || existingAbilitiesHadFooter)) ||
+          (!text && existingAbilitiesHadFooter)
+        );
 
-      if (shouldRepairText || shouldRepairTrainerAbilities) {
+      const shouldRepairAbilities = existingAbilitiesChanged || shouldRepairTrainerAbilities;
+
+      if (shouldRepairText || shouldRepairAbilities) {
+        const repairedAbilities = shouldRepairTrainerAbilities
+          ? (text ? [{ type: 'ABILITY', name: '', text }] : null)
+          : existingAbilitiesSanitized;
+
         await prisma.card.update({
           where: { webCardId: card.webCardId },
           data: {
-            text: shouldRepairText ? text : existing.text,
-            abilities: shouldRepairTrainerAbilities
-              ? [{ type: 'ABILITY', name: '', text }]
+            text: shouldRepairText
+              ? (existingHasCopyrightFooter && !text ? null : text)
+              : existing.text,
+            abilities: shouldRepairAbilities
+              ? repairedAbilities
               : (existing.abilities as any),
           },
         });

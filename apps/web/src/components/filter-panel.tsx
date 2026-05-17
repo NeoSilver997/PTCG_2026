@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 
 const DEFAULT_EXPANSION_CODES = '';
 const DEFAULT_REGULATION_MARKS = 'H,I,J';
+const MISSING_REGULATION_MARK_TOKEN = '__MISSING__';
 const QUICK_REGULATION_MARKS = ['J', 'I', 'H', 'G', 'F', 'E','D','C','B','A'];
 
 const LANG_LABEL: Record<string, string> = {
@@ -62,6 +63,7 @@ interface FilterPanelProps {
     maxHp?: string;
     artist?: string;
     regulationMark?: string;
+    missingRegulationMark?: string;
     expansionCode?: string;
     hasAbilities?: string;
     hasAttackText?: string;
@@ -127,7 +129,7 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
   const BLANK_FILTERS = {
     name: '', supertype: '', types: '', rarity: '', language: '',
     sortBy: 'webCardId', sortOrder: 'desc', webCardId: '', subtypes: '',
-    variantType: '', minHp: '', maxHp: '', artist: '', regulationMark: '',
+    variantType: '', minHp: '', maxHp: '', artist: '', regulationMark: '', missingRegulationMark: '',
     expansionCode: DEFAULT_EXPANSION_CODES, hasAbilities: '', hasAttackText: '',
     effectTag: '', cardTier: '', abilityText: '', weakness: '', resistance: '',
   };
@@ -153,12 +155,19 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
   };
 
   const activeMarks = new Set(
-    (filters.regulationMark || '').split(',').map(m => m.trim().toUpperCase()).filter(Boolean)
+    (filters.regulationMark || '')
+      .split(',')
+      .map(m => m.trim().toUpperCase())
+      .filter(m => Boolean(m) && m !== MISSING_REGULATION_MARK_TOKEN)
   );
   const toggleMark = (mark: string) => {
     const next = new Set(activeMarks);
     if (next.has(mark)) next.delete(mark); else next.add(mark);
-    updateFilter('regulationMark', Array.from(next).join(','));
+    onFilterChange({
+      ...filters,
+      regulationMark: Array.from(next).join(','),
+      missingRegulationMark: '',
+    });
   };
 
   // At defaults = only H,I,J regulationMark active, everything else empty
@@ -168,14 +177,16 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
     !filters.language && !filters.webCardId && !filters.subtypes && !filters.variantType &&
     !filters.minHp && !filters.maxHp && !filters.artist && !filters.expansionCode &&
     !filters.hasAbilities && !filters.hasAttackText && !filters.effectTag &&
-    !filters.cardTier && !filters.abilityText && !filters.weakness && !filters.resistance;
+    !filters.cardTier && !filters.abilityText && !filters.weakness && !filters.resistance &&
+    !filters.missingRegulationMark;
 
   // Any non-empty filter (including the default H,I,J) is "active"
   const hasAnyActiveFilters = !!(filters.name || filters.supertype || filters.types ||
     filters.rarity || filters.language || filters.webCardId || filters.subtypes ||
     filters.variantType || filters.minHp || filters.maxHp || filters.artist ||
     filters.regulationMark || filters.expansionCode || filters.hasAbilities || filters.hasAttackText ||
-    filters.effectTag || filters.cardTier || filters.abilityText || filters.weakness || filters.resistance);
+    filters.effectTag || filters.cardTier || filters.abilityText || filters.weakness || filters.resistance ||
+    filters.missingRegulationMark);
   
   return (
     <div className="bg-white rounded-lg shadow-md p-4 mb-6">
@@ -406,15 +417,35 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
         <div>
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-xs font-medium text-gray-600 shrink-0">規格:</span>
+            <select
+              value={
+                filters.regulationMark === MISSING_REGULATION_MARK_TOKEN || filters.missingRegulationMark === 'true'
+                  ? 'true'
+                  : ''
+              }
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value === 'true') {
+                  onFilterChange({ ...filters, missingRegulationMark: '', regulationMark: MISSING_REGULATION_MARK_TOKEN });
+                  return;
+                }
+                onFilterChange({ ...filters, missingRegulationMark: '', regulationMark: '' });
+              }}
+              className="px-2 py-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-indigo-500 text-gray-900 bg-white"
+            >
+              <option value="">全部規格</option>
+              <option value="true">缺規格</option>
+            </select>
             {QUICK_REGULATION_MARKS.map((mark) => (
               <button
                 key={mark}
                 onClick={() => toggleMark(mark)}
+                disabled={filters.regulationMark === MISSING_REGULATION_MARK_TOKEN || filters.missingRegulationMark === 'true'}
                 className={`px-2.5 py-1 rounded-full text-xs border font-medium transition ${
                   activeMarks.has(mark)
                     ? 'bg-indigo-600 text-white border-indigo-600 shadow'
                     : 'bg-gray-50 text-gray-800 border-gray-300 hover:border-indigo-400'
-                }`}
+                } ${(filters.regulationMark === MISSING_REGULATION_MARK_TOKEN || filters.missingRegulationMark === 'true') ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 {mark}
               </button>

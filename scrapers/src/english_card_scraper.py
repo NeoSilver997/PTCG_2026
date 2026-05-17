@@ -676,7 +676,14 @@ class EnglishCardScraper:
         if supertype == 'POKEMON':
             return None
         
-        # Look for paragraphs with effect-like keywords
+        # First, try to find the skillEffect paragraph (most reliable method)
+        skill_effect = soup.find('p', class_='skillEffect')
+        if skill_effect:
+            text = skill_effect.get_text(strip=True)
+            if text:
+                return text
+        
+        # Fallback: Look for paragraphs with effect-like keywords
         for p in soup.find_all('p'):
             text = p.get_text(strip=True)
             if text and len(text) > 20:

@@ -26,6 +26,7 @@ const DEFAULT_FILTERS = {
   maxHp: '',
   artist: '',
   regulationMark: 'H,I,J',
+  missingRegulationMark: '',
   expansionCode: '',
   hasAbilities: '',
   hasAttackText: '',
