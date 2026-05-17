@@ -6,7 +6,7 @@ import { CardGrid } from '@/components/card-grid';
 import { FilterPanel } from '@/components/filter-panel';
 import { CardDetailOverlay } from '@/components/card-detail-overlay';
 import apiClient from '@/lib/api-client';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 
 const FILTER_VERSION = '7';
 const TAKE = 120;
@@ -63,7 +63,6 @@ interface CardStats {
 }
 
 function CardsPageInner() {
-  const router = useRouter();
   const searchParams = useSearchParams();
 
   // Derive URL params before state initialization so they win on first render
@@ -83,6 +82,7 @@ function CardsPageInner() {
   const [skip, setSkip] = useState(0);
   const [hideDuplicates, setHideDuplicates] = useState(false);
   const [selectedCard, setSelectedCard] = useState<any>(null);
+  const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [showOverlay, setShowOverlay] = useState(false);
 
   // Derive URL params so the effect dependency is stable scalars (re-runs on client-side navigation)
@@ -156,14 +156,46 @@ function CardsPageInner() {
   const totalPages = Math.ceil(totalCards / TAKE);
   const currentPage = Math.floor(skip / TAKE) + 1;
 
-  const handleCardClick = (card: any) => {
+  const handleCardImageClick = (card: any, index: number) => {
     setSelectedCard(card);
+    setSelectedIndex(index);
     setShowOverlay(true);
+  };
+
+  const applyFilter = (patch: Partial<typeof DEFAULT_FILTERS>) => {
+    updateFilters({ ...filters, ...patch });
+  };
+
+  const handleTagFilter = (tag: string) => {
+    applyFilter({ effectTag: filters.effectTag === tag ? '' : tag });
+  };
+
+  const handleTypeFilter = (type: string) => {
+    applyFilter({ types: filters.types === type ? '' : type });
+  };
+
+  const handleWeaknessFilter = (type: string) => {
+    applyFilter({ weakness: filters.weakness === type ? '' : type });
+  };
+
+  const handlePrevCard = () => {
+    if (selectedIndex <= 0) return;
+    const nextIndex = selectedIndex - 1;
+    setSelectedIndex(nextIndex);
+    setSelectedCard(displayCards[nextIndex]);
+  };
+
+  const handleNextCard = () => {
+    if (selectedIndex < 0 || selectedIndex >= displayCards.length - 1) return;
+    const nextIndex = selectedIndex + 1;
+    setSelectedIndex(nextIndex);
+    setSelectedCard(displayCards[nextIndex]);
   };
 
   const handleCloseOverlay = () => {
     setShowOverlay(false);
     setSelectedCard(null);
+    setSelectedIndex(-1);
   };
 
   const handleExportMarkdown = () => {
@@ -313,7 +345,7 @@ function generateCardMarkdown(cards: any[], filters: typeof DEFAULT_FILTERS): st
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto px-4 py-6">
+      <div className="w-full px-4 md:px-6 xl:px-8 2xl:px-10 py-6">
         <div className="mb-6">
           <FilterPanel filters={filters} onFilterChange={updateFilters} stats={stats} />
         </div>
@@ -361,7 +393,13 @@ function generateCardMarkdown(cards: any[], filters: typeof DEFAULT_FILTERS): st
                     )}
                   </div>
                 </div>
-                <CardGrid cards={displayCards} onCardClick={handleCardClick} />
+                <CardGrid
+                  cards={displayCards}
+                  onCardImageClick={handleCardImageClick}
+                  onFilterByEffectTag={handleTagFilter}
+                  onFilterByType={handleTypeFilter}
+                  onFilterByWeakness={handleWeaknessFilter}
+                />
                 {totalPages > 1 && (
                   <div className="mt-6 flex justify-center items-center gap-3">
                     <button onClick={() => setSkip(Math.max(0, skip - TAKE))} disabled={skip === 0}
@@ -387,6 +425,12 @@ function generateCardMarkdown(cards: any[], filters: typeof DEFAULT_FILTERS): st
         <CardDetailOverlay
           card={selectedCard}
           onClose={handleCloseOverlay}
+          onPrev={handlePrevCard}
+          onNext={handleNextCard}
+          canPrev={selectedIndex > 0}
+          canNext={selectedIndex >= 0 && selectedIndex < displayCards.length - 1}
+          currentIndex={selectedIndex}
+          totalCount={displayCards.length}
         />
       )}
     </div>

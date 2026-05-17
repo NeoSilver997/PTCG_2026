@@ -1,6 +1,11 @@
+import Link from 'next/link';
+
 interface CardGridProps {
   cards: any[];
-  onCardClick?: (card: any) => void;
+  onCardImageClick?: (card: any, index: number) => void;
+  onFilterByEffectTag?: (tag: string) => void;
+  onFilterByType?: (type: string) => void;
+  onFilterByWeakness?: (type: string) => void;
 }
 
 const TIER_COLORS: Record<string, string> = {
@@ -81,24 +86,36 @@ function CardTooltip({ card }: { card: any }) {
   );
 }
 
-export function CardGrid({ cards, onCardClick }: CardGridProps) {
+export function CardGrid({
+  cards,
+  onCardImageClick,
+  onFilterByEffectTag,
+  onFilterByType,
+  onFilterByWeakness,
+}: CardGridProps) {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
-      {cards.map((card) => (
+    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-4">
+      {cards.map((card, index) => (
         <div
           key={card.id}
-          className="group bg-white rounded-lg shadow-md hover:shadow-xl transition-shadow cursor-pointer overflow-visible relative"
-          onClick={() => onCardClick?.(card)}
+          className="group bg-white rounded-lg shadow-md hover:shadow-xl transition-shadow overflow-visible relative"
         >
           <div className="overflow-hidden rounded-lg">
           <div className="aspect-[2.5/3.5] bg-gray-100 relative">
             {card.imageUrl ? (
-              <img
-                src={card.imageUrl}
-                alt={card.name}
-                className="w-full h-full object-cover"
-                loading="lazy"
-              />
+              <button
+                type="button"
+                className="w-full h-full block cursor-zoom-in"
+                onClick={() => onCardImageClick?.(card, index)}
+                title="點擊開啟卡片預覽"
+              >
+                <img
+                  src={card.imageUrl}
+                  alt={card.name}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
+              </button>
             ) : (
               <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">
                 No Image
@@ -115,14 +132,30 @@ export function CardGrid({ cards, onCardClick }: CardGridProps) {
           
           <div className="p-3">
             <h3 className="font-semibold text-sm text-gray-900 truncate" title={card.name}>
-              {card.name}
+              <Link
+                href={`/cards/${card.webCardId}`}
+                className="hover:text-blue-700 hover:underline"
+                title="點擊前往卡片詳細頁"
+              >
+                {card.name}
+              </Link>
             </h3>
             <div className="flex items-center justify-between mt-2">
               {card.hp && (
                 <span className="text-xs font-bold text-red-600">HP {card.hp}</span>
               )}
               {card.types && (
-                <TypeIcon type={card.types} size="sm" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const mainType = Array.isArray(card.types) ? card.types[0] : card.types;
+                    if (mainType) onFilterByType?.(mainType);
+                  }}
+                  title="點擊以此屬性篩選"
+                  className="rounded"
+                >
+                  <TypeIcon type={card.types} size="sm" />
+                </button>
               )}
             </div>
             {/* Weakness badge */}
@@ -130,9 +163,15 @@ export function CardGrid({ cards, onCardClick }: CardGridProps) {
               <div className="mt-1 flex items-center gap-1">
                 <span className="text-[9px] text-gray-500">弱:</span>
                 {card.weaknesses.map((w: any, i: number) => (
-                  <span key={i} className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-white font-bold text-[7px] ${TYPE_COLORS[w.type] || 'bg-gray-400'}`} title={`${w.type} ${w.value}`}>
+                  <button
+                    key={i}
+                    type="button"
+                    className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-white font-bold text-[7px] ${TYPE_COLORS[w.type] || 'bg-gray-400'}`}
+                    title={`點擊以弱點 ${w.type} 篩選`}
+                    onClick={() => w.type && onFilterByWeakness?.(w.type)}
+                  >
                     {w.type?.charAt(0)}
-                  </span>
+                  </button>
                 ))}
                 {card.weaknesses[0]?.value && (
                   <span className="text-[9px] text-gray-500">{card.weaknesses[0].value}</span>
@@ -146,12 +185,15 @@ export function CardGrid({ cards, onCardClick }: CardGridProps) {
                   .filter(t => t !== '其他效果')
                   .slice(0, 3)
                   .map((tag: string) => (
-                    <span
+                    <button
+                      type="button"
                       key={tag}
-                      className="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium bg-blue-50 text-blue-700 border border-blue-200 leading-tight"
+                      className="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium bg-blue-50 text-blue-700 border border-blue-200 leading-tight hover:bg-blue-100"
+                      onClick={() => onFilterByEffectTag?.(tag)}
+                      title={`點擊以標籤 ${tag} 篩選`}
                     >
                       {tag}
-                    </span>
+                    </button>
                   ))}
                 {card.primaryCard?.cardTier && card.primaryCard.cardTier !== 'D' && (
                   <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold leading-tight border ${TIER_COLORS[card.primaryCard.cardTier] ?? 'bg-gray-100 text-gray-600 border-gray-300'}`}>

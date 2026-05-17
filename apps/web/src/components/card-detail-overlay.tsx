@@ -1,10 +1,16 @@
 import { useEffect } from 'react';
-import { X, ExternalLink } from 'lucide-react';
+import { X, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 
 interface CardDetailOverlayProps {
   card: any;
   onClose: () => void;
+  onPrev?: () => void;
+  onNext?: () => void;
+  canPrev?: boolean;
+  canNext?: boolean;
+  currentIndex?: number;
+  totalCount?: number;
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -31,17 +37,32 @@ const RARITY_COLORS: Record<string, string> = {
   HYPER_RARE: 'bg-red-500',
 };
 
-export function CardDetailOverlay({ card, onClose }: CardDetailOverlayProps) {
+export function CardDetailOverlay({
+  card,
+  onClose,
+  onPrev,
+  onNext,
+  canPrev = false,
+  canNext = false,
+  currentIndex = -1,
+  totalCount = 0,
+}: CardDetailOverlayProps) {
   // Close on Escape key
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         onClose();
       }
+      if (e.key === 'ArrowLeft' && canPrev) {
+        onPrev?.();
+      }
+      if (e.key === 'ArrowRight' && canNext) {
+        onNext?.();
+      }
     };
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [onClose]);
+  }, [onClose, onPrev, onNext, canPrev, canNext]);
 
   // Close on backdrop click
   const handleBackdropClick = (e: React.MouseEvent) => {
@@ -58,8 +79,31 @@ export function CardDetailOverlay({ card, onClose }: CardDetailOverlayProps) {
       <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-xl font-bold text-gray-900">{card.name}</h2>
+          <div className="min-w-0">
+            <h2 className="text-xl font-bold text-gray-900 truncate">{card.name}</h2>
+            {currentIndex >= 0 && totalCount > 0 && (
+              <p className="text-xs text-gray-500 mt-0.5">{currentIndex + 1} / {totalCount}</p>
+            )}
+          </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={onPrev}
+              disabled={!canPrev}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              title="上一張 (←)"
+            >
+              <ChevronLeft className="w-5 h-5" />
+              <span className="text-sm font-medium">上一張</span>
+            </button>
+            <button
+              onClick={onNext}
+              disabled={!canNext}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              title="下一張 (→)"
+            >
+              <ChevronRight className="w-5 h-5" />
+              <span className="text-sm font-medium">下一張</span>
+            </button>
             <Link
               href={`/cards/${card.webCardId}`}
               className="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
@@ -70,10 +114,11 @@ export function CardDetailOverlay({ card, onClose }: CardDetailOverlayProps) {
             </Link>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition-colors"
               title="關閉"
             >
               <X className="w-5 h-5" />
+              <span className="text-sm font-medium">關閉</span>
             </button>
           </div>
         </div>

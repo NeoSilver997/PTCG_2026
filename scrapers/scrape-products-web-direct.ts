@@ -29,6 +29,17 @@ const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36';
 const HK_EN_URL = 'https://asia.pokemon-card.com/hk-en/card-search/';
 const HK_ZH_URL = 'https://asia.pokemon-card.com/hk/card-search/';
+const JP_TOP_LIST_URL = 'https://www.pokemon-card.com/products/topList.php';
+
+const JP_TYPE_MAP: Record<string, string> = {
+  '拡張パック': 'expansion_pack',
+  '強化拡張パック': 'enhanced_expansion',
+  '入門セット': 'starter_set',
+  '構築デッキ': 'constructed_deck',
+  '周辺グッズ': 'accessories',
+  'その他の商品': 'special_products',
+  'デッキ': 'deck',
+};
 
 const PRODUCT_TYPES = [
   { code: 'expansion_pack', nameJa: '拡張パック', nameZh: '擴充包系列', nameEn: 'Expansion Pack' },
@@ -62,6 +73,7 @@ type CliOptions = {
   dryRun: boolean;
   importDb: boolean;
   output: string;
+  includeJapanTop: boolean;
 };
 
 function getArg(name: string): string | null {
@@ -77,12 +89,13 @@ function parseOptions(): CliOptions {
   const output = getArg('--output') ?? path.join('data', 'products', 'web_products_dryrun.json');
   const dryRun = process.argv.includes('--dry-run') || !process.argv.includes('--import-db');
   const importDb = process.argv.includes('--import-db');
+  const includeJapanTop = process.argv.includes('--include-japan-top');
 
   if (!Number.isFinite(maxPages) || maxPages < 1) {
     throw new Error('--max-pages must be a positive number');
   }
 
-  return { maxPages, dryRun, importDb, output };
+  return { maxPages, dryRun, importDb, output, includeJapanTop };
 }
 
 function decodeHtml(value: string): string {
@@ -101,6 +114,14 @@ function stripHtml(value: string): string {
 
 function toIsoDate(raw: string): string {
   const text = raw.trim();
+
+  const jp = text.match(/(\d{4})年\s*(\d{1,2})月\s*(\d{1,2})日/);
+  if (jp) {
+    const yyyy = jp[1];
+    const mm = jp[2].padStart(2, '0');
+    const dd = jp[3].padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
 
   const ymd = text.match(/(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
   if (ymd) {
@@ -185,6 +206,17 @@ function inferEnTypeCode(_name: string, cardOnly: string): string {
   return 'special_products';
 }
 
+function inferJpTypeCode(productType: string): string {
+  return JP_TYPE_MAP[productType] ?? 'special_products';
+}
+
+function extractJpCodeFromDetailLink(detailLink: string): string {
+  const link = detailLink.trim();
+  const m = link.match(/\/ex\/([^/?#]+)\/?/i);
+  if (!m) return '';
+  return m[1].trim();
+}
+
 async function fetchPage(url: string): Promise<string> {
   const res = await fetch(url, {
     headers: {
@@ -198,6 +230,95 @@ async function fetchPage(url: string): Promise<string> {
   }
 
   return await res.text();
+}
+
+async function fetchJson<T>(url: string): Promise<T> {
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': USER_AGENT,
+      Accept: 'application/json,text/plain,*/*',
+    },
+  });
+
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status} at ${url}`);
+  }
+
+  return (await res.json()) as T;
+}
+
+type JapanApiRow = {
+  productTitle?: string;
+  productType?: string;
+  tumbsImg?: string;
+  releaseDate?: string;
+  priceTxt?: string;
+  description?: string;
+  beginnerFlg?: number | string;
+  storesAvailable?: string;
+  link_cardList?: string;
+  link_detailPage?: string;
+  link_pokemonCenter?: string;
+};
+
+type JapanTopListResponse = {
+  products?: JapanApiRow[];
+};
+
+function mapJapanApiRow(row: JapanApiRow): ProductRow | null {
+  const productTitle = (row.productTitle || '').trim();
+  if (!productTitle) return null;
+
+  const productType = (row.productType || '').trim();
+  const detailLinkRaw = (row.link_detailPage || '').trim();
+  const detailLink = detailLinkRaw
+    ? (detailLinkRaw.startsWith('http') ? detailLinkRaw : `https://www.pokemon-card.com${detailLinkRaw}`)
+    : '';
+
+  const imageRaw = (row.tumbsImg || '').trim();
+  const imageUrl = imageRaw
+    ? (imageRaw.startsWith('http') ? imageRaw : `https://www.pokemon-card.com${imageRaw}`)
+    : '';
+
+  const cardListRaw = (row.link_cardList || '').trim();
+  const cardList = cardListRaw
+    ? (cardListRaw.startsWith('http') ? cardListRaw : `https://www.pokemon-card.com${cardListRaw}`)
+    : '';
+
+  const pcRaw = (row.link_pokemonCenter || '').trim();
+  const pcLink = pcRaw
+    ? (pcRaw.startsWith('http') ? pcRaw : `https://www.pokemon-card.com${pcRaw}`)
+    : '';
+
+  return {
+    country: 'Japan',
+    product_name: productType ? `${productType} ${productTitle}` : productTitle,
+    price: (row.priceTxt || '').trim(),
+    release_date: toIsoDate((row.releaseDate || '').trim()),
+    code: extractJpCodeFromDetailLink(detailLink),
+    link: detailLink,
+    image_url: imageUrl,
+    include: (row.description || '').trim(),
+    card_only: '',
+    product_type: productType,
+    beginner_flag: row.beginnerFlg != null ? String(row.beginnerFlg) : '',
+    stores_available: (row.storesAvailable || '').trim(),
+    link_card_list: cardList,
+    link_pokemon_center: pcLink,
+  };
+}
+
+async function scrapeJapanTopList(): Promise<ProductRow[]> {
+  const json = await fetchJson<JapanTopListResponse>(JP_TOP_LIST_URL);
+  const rows: ProductRow[] = [];
+
+  for (const item of json.products || []) {
+    const mapped = mapJapanApiRow(item);
+    if (mapped) rows.push(mapped);
+  }
+
+  console.log(`Japan top list: ${rows.length} products`);
+  return rows;
 }
 
 function parseProductItemsFromHtml(html: string, country: string): ProductRow[] {
@@ -404,6 +525,7 @@ async function main() {
   console.log(`max pages: ${opts.maxPages}`);
   console.log(`dry run: ${opts.dryRun ? 'YES' : 'NO'}`);
   console.log(`import DB: ${opts.importDb ? 'YES' : 'NO'}`);
+  console.log(`include japan top: ${opts.includeJapanTop ? 'YES' : 'NO'}`);
   console.log('============================================================\n');
 
   const [hkEn, hkZh] = await Promise.all([
@@ -411,7 +533,9 @@ async function main() {
     scrapeHongKongPages(HK_ZH_URL, 'Hong Kong (ZH)', opts.maxPages),
   ]);
 
-  const scraped = dedupeProducts([...hkEn, ...hkZh]);
+  const jpTop = opts.includeJapanTop ? await scrapeJapanTopList() : [];
+
+  const scraped = dedupeProducts([...hkEn, ...hkZh, ...jpTop]);
 
   fs.mkdirSync(path.dirname(opts.output), { recursive: true });
   fs.writeFileSync(opts.output, JSON.stringify(scraped, null, 2), 'utf-8');
@@ -430,9 +554,14 @@ async function main() {
 
   for (const p of scraped) {
     try {
-      const typeCode = p.country === 'Hong Kong (EN)'
-        ? inferEnTypeCode(p.product_name, p.card_only)
-        : inferZhTypeCode(p.product_name);
+      let typeCode = 'special_products';
+      if (p.country === 'Hong Kong (EN)') {
+        typeCode = inferEnTypeCode(p.product_name, p.card_only);
+      } else if (p.country === 'Hong Kong (ZH)') {
+        typeCode = inferZhTypeCode(p.product_name);
+      } else if (p.country === 'Japan') {
+        typeCode = inferJpTypeCode(p.product_type);
+      }
       const typeId = typeMap.get(typeCode) ?? null;
 
       const result = await insertOnlyProduct(p, typeId, opts.dryRun);

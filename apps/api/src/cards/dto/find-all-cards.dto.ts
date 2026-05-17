@@ -20,9 +20,9 @@ export class FindAllCardsDto {
   take?: number = 50;
 
   // Sorting
-  @ApiProperty({ required: false, enum: ['id', 'webCardId', 'name', 'hp', 'createdAt', 'updatedAt', 'rarity', 'supertype', 'expansionReleaseDate'] })
+  @ApiProperty({ required: false, enum: ['id', 'webCardId', 'name', 'hp', 'maxDamage', 'createdAt', 'updatedAt', 'rarity', 'supertype', 'expansionReleaseDate', 'expansionCode'] })
   @IsOptional()
-  @IsIn(['id', 'webCardId', 'name', 'hp', 'createdAt', 'updatedAt', 'rarity', 'supertype', 'expansionReleaseDate', 'expansionCode'])
+  @IsIn(['id', 'webCardId', 'name', 'hp', 'maxDamage', 'createdAt', 'updatedAt', 'rarity', 'supertype', 'expansionReleaseDate', 'expansionCode'])
   sortBy?: string;
 
   @ApiProperty({ required: false, enum: ['asc', 'desc'], example: 'desc' })
