@@ -408,6 +408,11 @@ async function importCardOptimized(
     card.effect,
   );
 
+  // Log empty trainer cards
+  if (supertype === Supertype.TRAINER && !normalizedText) {
+    console.log(`Empty Trainer: ${card.webCardId} - ${card.name}`);
+  }
+
   // Handle trainer card effects - keep text and mirror to abilities when needed
   let abilities = card.abilities || null;
   let text = normalizedText;

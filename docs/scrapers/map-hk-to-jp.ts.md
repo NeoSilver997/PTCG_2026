@@ -1,9 +1,9 @@
 # map-hk-to-jp.ts — Documentation
 
 **Source file:** `scrapers/map-hk-to-jp.ts`
-**Last modified:** `2026-05-12 18:32`
-**MD5:** `4501AD233949D515DCE23A313D078437`
-**Summarised by model:** `Claude Sonnet 4.6`
+**Last modified:** `2026-05-17 00:05`
+**MD5:** `96DEE1B9A55CE79EF93354C8C52CE09B`
+**Summarised by model:** `GPT-5.3-Codex`
 
 Maps Hong Kong (`ZH_TW`) cards in the database to their Japanese (`JA_JP`) counterparts by linking them to the same `PrimaryCard` record.
 
@@ -113,9 +113,9 @@ Two sets of sync fields are computed per matched pair:
 #### HK → JP (reverse sync)
 | Field | Rule |
 |-------|------|
-| `regulationMark` | Write to JP only when JP value is null/empty |
+| `regulationMark` | Write to JP only when JP value is null/empty. Source from linked `primaryCardId` and choose the biggest regulation letter across linked cards (e.g. `J > I > H`). |
 
-The HK scraper captures `regulationMark`; the JP scraper does not — this reverse sync fills the gap.
+The HK scraper captures `regulationMark`; the JP scraper does not — this reverse sync fills the gap. The direct HK↔JP match is used first, then a primary-card-level fallback fills any remaining JP missing marks.
 
 ---
 
@@ -191,6 +191,7 @@ npx tsx scrapers/map-hk-to-jp.ts --apply m4
 | Pokédex mismatch = warning only, not a blocker | HK source data often has wrong dex numbers; collector number is the stronger identifier |
 | JP is authoritative for `rarity` / `variantType` | JP is the original release; HK is a regional reprint |
 | Reverse sync `regulationMark` HK → JP | JP scraper does not capture this field; HK scraper does |
+| Pick biggest linked regulation mark | When JP is missing, use the highest letter from cards sharing the same `primaryCardId` to avoid under-filling |
 | Batch size 200 | Balances transaction size vs. memory usage |
 | `SVK` / `SVHK` explicitly excluded | These sets have collector-number offsets between HK and JP; dedicated fix scripts handle them |
 

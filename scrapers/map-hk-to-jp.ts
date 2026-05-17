@@ -27,7 +27,8 @@
  *   rarity, regulationMark, variantType  — always overwritten with JP value (JP is authoritative)
  *   artist, evolvesFrom, ruleBox, subtypes — fill only when HK is null/empty
  * Field sync (HK → JP):
- *   regulationMark — HK scraper has it; fill JP when JP is null/empty
+ *   regulationMark — fill JP when JP is null/empty, using the highest regulation mark
+ *                    found among cards linked to the same primaryCardId
  */
 
 import { PrismaClient } from '../packages/database/node_modules/.prisma/client';
@@ -197,6 +198,11 @@ async function main() {
     prisma.card.findMany({ where: { language: 'JA_JP' }, select: SYNC_SELECT }),
   ]);
 
+  const allRegulationMarks = await prisma.card.findMany({
+    where: { regulationMark: { not: null } },
+    select: { primaryCardId: true, regulationMark: true },
+  });
+
   // Build JP DB lookup: webCardId → { primaryCardId, syncable fields }
   const jpDbByWebId = new Map<string, typeof dbJP[number]>();
   for (const c of dbJP) jpDbByWebId.set(c.webCardId, c);
@@ -274,7 +280,31 @@ async function main() {
   }[] = [];
   // Reverse sync: JP card updates from HK data
   const jpUpdates: { jpCardDbId: string; jpWebCardId: string; syncFields: Record<string, unknown> }[] = [];
-  const jpUpdateSet = new Set<string>(); // avoid duplicate JP updates
+
+  const normalizeRegulationMark = (value: string | null | undefined): string | null => {
+    if (!value) return null;
+    const v = value.trim().toUpperCase();
+    return /^[A-Z]$/.test(v) ? v : null;
+  };
+
+  const biggerRegulationMark = (a: string | null, b: string | null): string | null => {
+    if (!a) return b;
+    if (!b) return a;
+    return a > b ? a : b;
+  };
+
+  const upsertJPRegulationMarkUpdate = (jpCardDbId: string, jpWebCardId: string, regulationMark: string) => {
+    const existing = jpUpdates.find(u => u.jpCardDbId === jpCardDbId);
+    if (existing) {
+      existing.syncFields.regulationMark = regulationMark;
+      return;
+    }
+    jpUpdates.push({
+      jpCardDbId,
+      jpWebCardId,
+      syncFields: { regulationMark },
+    });
+  };
   const pokedexMismatches: { hkWebId: string; jpWebId: string; hkDex: number | null; jpDex: number | null; expansion: string; collNum: string }[] = [];
   const notInJsonHK: string[] = [];
   const notMatchedInJP: { webId: string; expansion: string; collNum: string }[] = [];
@@ -418,11 +448,9 @@ async function main() {
       syncFields.subtypes = jpDbCard.subtypes;
 
     // Reverse sync: HK → JP for regulationMark (HK scraper has it; JP scraper doesn't)
-    const jpSyncFields: Record<string, unknown> = {};
-    if (!jpDbCard.regulationMark && dbHKCard.regulationMark) jpSyncFields.regulationMark = dbHKCard.regulationMark;
-    if (Object.keys(jpSyncFields).length > 0 && !jpUpdateSet.has(jpDbCard.id)) {
-      jpUpdateSet.add(jpDbCard.id);
-      jpUpdates.push({ jpCardDbId: jpDbCard.id, jpWebCardId: jpDbCard.webCardId, syncFields: jpSyncFields });
+    const directHKRegMark = normalizeRegulationMark(dbHKCard.regulationMark);
+    if (!normalizeRegulationMark(jpDbCard.regulationMark) && directHKRegMark) {
+      upsertJPRegulationMarkUpdate(jpDbCard.id, jpDbCard.webCardId, directHKRegMark);
     }
 
     // Only queue an update if there's something to do
@@ -443,6 +471,25 @@ async function main() {
         updates.push(record);
       }
     }
+  }
+
+  // Reverse sync enhancement:
+  // For JP cards still missing regulationMark, infer from all cards linked to the same primaryCardId.
+  // Choose the biggest regulation-mark letter (e.g. J > I > H).
+  const biggestRegMarkByPrimaryCard = new Map<string, string>();
+  for (const row of allRegulationMarks) {
+    const mark = normalizeRegulationMark(row.regulationMark);
+    if (!mark) continue;
+    const current = biggestRegMarkByPrimaryCard.get(row.primaryCardId) ?? null;
+    const next = biggerRegulationMark(current, mark);
+    if (next) biggestRegMarkByPrimaryCard.set(row.primaryCardId, next);
+  }
+
+  for (const jpCard of dbJP) {
+    if (normalizeRegulationMark(jpCard.regulationMark)) continue;
+    const inferred = biggestRegMarkByPrimaryCard.get(jpCard.primaryCardId);
+    if (!inferred) continue;
+    upsertJPRegulationMarkUpdate(jpCard.id, jpCard.webCardId, inferred);
   }
 
   // ─────────────────────────────────────────────
