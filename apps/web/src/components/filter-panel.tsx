@@ -61,6 +61,7 @@ interface FilterPanelProps {
     variantType?: string;
     minHp?: string;
     maxHp?: string;
+    minDamage?: string;
     artist?: string;
     regulationMark?: string;
     missingRegulationMark?: string;
@@ -100,6 +101,7 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
     const hasPokemonOnlyFilters =
       !!filters.minHp ||
       !!filters.maxHp ||
+      !!filters.minDamage ||
       !!filters.weakness ||
       !!filters.resistance ||
       !!filters.hasAttackText ||
@@ -111,6 +113,7 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
       ...filters,
       minHp: '',
       maxHp: '',
+      minDamage: '',
       weakness: '',
       resistance: '',
       hasAttackText: '',
@@ -129,7 +132,7 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
   const BLANK_FILTERS = {
     name: '', supertype: '', types: '', rarity: '', language: '',
     sortBy: 'webCardId', sortOrder: 'desc', webCardId: '', subtypes: '',
-    variantType: '', minHp: '', maxHp: '', artist: '', regulationMark: '', missingRegulationMark: '',
+    variantType: '', minHp: '', maxHp: '', minDamage: '', artist: '', regulationMark: '', missingRegulationMark: '',
     expansionCode: DEFAULT_EXPANSION_CODES, hasAbilities: '', hasAttackText: '',
     effectTag: '', cardTier: '', abilityText: '', weakness: '', resistance: '',
   };
@@ -175,7 +178,7 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
     filters.regulationMark === DEFAULT_REGULATION_MARKS &&
     !filters.name && !filters.supertype && !filters.types && !filters.rarity &&
     !filters.language && !filters.webCardId && !filters.subtypes && !filters.variantType &&
-    !filters.minHp && !filters.maxHp && !filters.artist && !filters.expansionCode &&
+    !filters.minHp && !filters.maxHp && !filters.minDamage && !filters.artist && !filters.expansionCode &&
     !filters.hasAbilities && !filters.hasAttackText && !filters.effectTag &&
     !filters.cardTier && !filters.abilityText && !filters.weakness && !filters.resistance &&
     !filters.missingRegulationMark;
@@ -183,7 +186,7 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
   // Any non-empty filter (including the default H,I,J) is "active"
   const hasAnyActiveFilters = !!(filters.name || filters.supertype || filters.types ||
     filters.rarity || filters.language || filters.webCardId || filters.subtypes ||
-    filters.variantType || filters.minHp || filters.maxHp || filters.artist ||
+    filters.variantType || filters.minHp || filters.maxHp || filters.minDamage || filters.artist ||
     filters.regulationMark || filters.expansionCode || filters.hasAbilities || filters.hasAttackText ||
     filters.effectTag || filters.cardTier || filters.abilityText || filters.weakness || filters.resistance ||
     filters.missingRegulationMark);
@@ -324,17 +327,24 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-700 mb-1">
-            超級類型
+            次類型
           </label>
           <select
-            value={filters.supertype}
-            onChange={(e) => updateFilter('supertype', e.target.value)}
+            value={filters.subtypes || ''}
+            onChange={(e) => updateFilter('subtypes', e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900"
           >
             <option value="" className="text-gray-900">全部</option>
-            <option value="POKEMON" className="text-gray-900">寶可夢</option>
-            <option value="TRAINER" className="text-gray-900">訓練師</option>
-            <option value="ENERGY" className="text-gray-900">能量</option>
+            <option value="BASIC" className="text-gray-900">基本寶可夢</option>
+            <option value="STAGE_1" className="text-gray-900">1階進化</option>
+            <option value="STAGE_2" className="text-gray-900">2階進化</option>
+            <option value="EX" className="text-gray-900">EX</option>
+            <option value="V" className="text-gray-900">V</option>
+            <option value="VMAX" className="text-gray-900">VMAX</option>
+            <option value="ITEM" className="text-gray-900">物品</option>
+            <option value="SUPPORTER" className="text-gray-900">支援者</option>
+            <option value="STADIUM" className="text-gray-900">競技場</option>
+            <option value="TOOL" className="text-gray-900">寶可夢道具</option>
           </select>
         </div>
         
@@ -399,17 +409,22 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
         
         <div>
           <label className="block text-xs font-medium text-gray-700 mb-1">
-            語言
+            Tier
           </label>
           <select
-            value={filters.language}
-            onChange={(e) => updateFilter('language', e.target.value)}
+            value={filters.cardTier || ''}
+            onChange={(e) => updateFilter('cardTier', e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900"
           >
             <option value="" className="text-gray-900">全部</option>
-            <option value="JA_JP" className="text-gray-900">日文</option>
-            <option value="ZH_TW" className="text-gray-900">繁體中文</option>
-            <option value="EN_US" className="text-gray-900">英文</option>
+            <option value="S+" className="text-gray-900">S+ (最強)</option>
+            <option value="S" className="text-gray-900">S</option>
+            <option value="A+" className="text-gray-900">A+</option>
+            <option value="A" className="text-gray-900">A</option>
+            <option value="B+" className="text-gray-900">B+</option>
+            <option value="B" className="text-gray-900">B</option>
+            <option value="C+" className="text-gray-900">C+</option>
+            <option value="C" className="text-gray-900">C</option>
           </select>
         </div>
       </div>
@@ -565,30 +580,6 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
               />
             </div>
 
-            {/* Subtypes */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                次類型
-              </label>
-              <select
-                value={filters.subtypes || ''}
-                onChange={(e) => updateFilter('subtypes', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900"
-              >
-                <option value="" className="text-gray-900">全部</option>
-                <option value="BASIC" className="text-gray-900">基本寶可夢</option>
-                <option value="STAGE_1" className="text-gray-900">1階進化</option>
-                <option value="STAGE_2" className="text-gray-900">2階進化</option>
-                <option value="EX" className="text-gray-900">EX</option>
-                <option value="V" className="text-gray-900">V</option>
-                <option value="VMAX" className="text-gray-900">VMAX</option>
-                <option value="ITEM" className="text-gray-900">物品</option>
-                <option value="SUPPORTER" className="text-gray-900">支援者</option>
-                <option value="STADIUM" className="text-gray-900">競技場</option>
-                <option value="TOOL" className="text-gray-900">寶可夢道具</option>
-              </select>
-            </div>
-
             {/* Variant Type */}
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -648,6 +639,27 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
                     placeholder="340"
                     value={filters.maxHp || ''}
                     onChange={(e) => updateFilter('maxHp', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900 bg-white placeholder:text-gray-400"
+                    min="0"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    最小傷害
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="0"
+                    value={filters.minDamage || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      onFilterChange({
+                        ...filters,
+                        minDamage: val,
+                        ...(val !== '' ? { supertype: 'POKEMON' } : {}),
+                      });
+                    }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900 bg-white placeholder:text-gray-400"
                     min="0"
                   />
@@ -770,28 +782,6 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
                 </select>
               </div>
             )}
-
-            {/* Card Tier */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                卡牌等級
-              </label>
-              <select
-                value={filters.cardTier || ''}
-                onChange={(e) => updateFilter('cardTier', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900"
-              >
-                <option value="">全部</option>
-                <option value="S+">S+ (最強)</option>
-                <option value="S">S</option>
-                <option value="A+">A+</option>
-                <option value="A">A</option>
-                <option value="B+">B+</option>
-                <option value="B">B</option>
-                <option value="C+">C+</option>
-                <option value="C">C</option>
-              </select>
-            </div>
 
             {!isNonPokemon && (
               <div>

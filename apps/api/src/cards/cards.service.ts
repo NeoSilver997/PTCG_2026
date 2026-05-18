@@ -397,6 +397,7 @@ export class CardsService {
     variantType?: string;
     minHp?: number;
     maxHp?: number;
+    minDamage?: number;
     artist?: string;
     regulationMark?: string;
     missingRegulationMark?: boolean;
@@ -437,6 +438,7 @@ export class CardsService {
       variantType,
       minHp,
       maxHp,
+      minDamage,
       artist,
       regulationMark,
       missingRegulationMark,
@@ -506,6 +508,10 @@ export class CardsService {
     if (supertype) {
       where.supertype = supertype;
     }
+    if (minDamage !== undefined) {
+      // maxDamage is a Pokemon-centric metric; enforce Pokemon scope for predictable filtering.
+      where.supertype = 'POKEMON';
+    }
     if (types) {
       where.types = {
         has: types,
@@ -538,6 +544,14 @@ export class CardsService {
       if (maxHp !== undefined) {
         where.hp.lte = maxHp;
       }
+    }
+    if (minDamage !== undefined) {
+      where.primaryCard = {
+        ...(where.primaryCard ?? {}),
+        maxDamage: {
+          gte: minDamage,
+        },
+      };
     }
     if (artist) {
       where.artist = {
@@ -620,7 +634,7 @@ export class CardsService {
     // Detect multi-value regulationMark (Prisma { in: [...] }) — must use raw SQL path
     const regulationMarkIsMulti = where.regulationMark !== undefined && typeof where.regulationMark === 'object' && 'in' in (where.regulationMark as any);
 
-    if (hasAbilities !== undefined || hasAttackText !== undefined || evolvesTo || attackName || effectTag || cardTier || abilityText || weakness || resistance || wantsMissingRegulationMark || regulationMarkIsMulti || actualSortBy === 'expansionReleaseDate' || actualSortBy === 'expansionCode' || actualSortBy === 'hp' || actualSortBy === 'maxDamage' || expansionCode) {
+    if (hasAbilities !== undefined || hasAttackText !== undefined || evolvesTo || attackName || effectTag || cardTier || abilityText || weakness || resistance || minDamage !== undefined || wantsMissingRegulationMark || regulationMarkIsMulti || actualSortBy === 'expansionReleaseDate' || actualSortBy === 'expansionCode' || actualSortBy === 'hp' || actualSortBy === 'maxDamage' || expansionCode) {
       const jsonFieldConditions: string[] = [];
 
       // Expansion codes: directly inject as raw SQL OR condition
@@ -699,6 +713,10 @@ export class CardsService {
       // cardTier: filter by primaryCard.cardTier
       if (cardTier) {
         jsonFieldConditions.push(`pc."cardTier" = '${cardTier.replace(/'/g, "''")}'`);
+      }
+
+      if (minDamage !== undefined) {
+        jsonFieldConditions.push(`pc."maxDamage" >= ${Math.max(0, Number(minDamage))}`);
       }
 
       // abilityText: search within abilities or attacks JSON text (e.g. find trainers referencing 超-type)

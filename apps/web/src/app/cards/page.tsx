@@ -24,6 +24,7 @@ const DEFAULT_FILTERS = {
   variantType: '',
   minHp: '',
   maxHp: '',
+  minDamage: '',
   artist: '',
   regulationMark: 'H,I,J',
   missingRegulationMark: '',

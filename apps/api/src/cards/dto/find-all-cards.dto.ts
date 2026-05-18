@@ -106,6 +106,13 @@ export class FindAllCardsDto {
   @Min(0)
   maxHp?: number;
 
+  @ApiProperty({ required: false, example: 180, description: 'Minimum max damage (PrimaryCard.maxDamage)' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  minDamage?: number;
+
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
