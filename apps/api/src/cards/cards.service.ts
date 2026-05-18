@@ -562,7 +562,7 @@ export class CardsService {
     let actualSortBy = sortBy;
     let actualSortOrder = sortOrder;
     const orderBy: any = {};
-    const validSortFields = ['id', 'webCardId', 'name', 'hp', 'createdAt', 'updatedAt', 'rarity', 'supertype', 'expansionReleaseDate', 'expansionCode'];
+    const validSortFields = ['id', 'webCardId', 'name', 'hp', 'maxDamage', 'createdAt', 'updatedAt', 'rarity', 'supertype', 'expansionReleaseDate', 'expansionCode'];
     if (actualSortBy && validSortFields.includes(actualSortBy)) {
       if (actualSortBy === 'expansionReleaseDate') {
         // Sort by primary expansion release date
@@ -574,6 +574,9 @@ export class CardsService {
       } else if (actualSortBy === 'expansionCode') {
         // Sort by regional expansion code (always goes through raw SQL path)
         orderBy.regionalExpansion = { code: actualSortOrder || 'asc' };
+      } else if (actualSortBy === 'maxDamage') {
+        // Relation scalar field on PrimaryCard
+        orderBy.primaryCard = { maxDamage: actualSortOrder || 'desc' };
       } else {
         orderBy[actualSortBy] = actualSortOrder || 'desc';
       }
@@ -617,7 +620,7 @@ export class CardsService {
     // Detect multi-value regulationMark (Prisma { in: [...] }) — must use raw SQL path
     const regulationMarkIsMulti = where.regulationMark !== undefined && typeof where.regulationMark === 'object' && 'in' in (where.regulationMark as any);
 
-    if (hasAbilities !== undefined || hasAttackText !== undefined || evolvesTo || attackName || effectTag || cardTier || abilityText || weakness || resistance || wantsMissingRegulationMark || regulationMarkIsMulti || actualSortBy === 'expansionReleaseDate' || actualSortBy === 'expansionCode' || expansionCode) {
+    if (hasAbilities !== undefined || hasAttackText !== undefined || evolvesTo || attackName || effectTag || cardTier || abilityText || weakness || resistance || wantsMissingRegulationMark || regulationMarkIsMulti || actualSortBy === 'expansionReleaseDate' || actualSortBy === 'expansionCode' || actualSortBy === 'hp' || actualSortBy === 'maxDamage' || expansionCode) {
       const jsonFieldConditions: string[] = [];
 
       // Expansion codes: directly inject as raw SQL OR condition
@@ -811,6 +814,8 @@ export class CardsService {
         orderByClause = 'c."webCardId"';
       } else if (actualSortBy === 'hp') {
         orderByClause = 'c."hp"';
+      } else if (actualSortBy === 'maxDamage') {
+        orderByClause = 'pc."maxDamage"';
       } else if (actualSortBy === 'updatedAt') {
         orderByClause = 'c."updatedAt"';
       } else if (actualSortBy === 'rarity') {
@@ -830,6 +835,7 @@ export class CardsService {
                  pc."specialEffectTags" as "primaryCard_specialEffectTags",
                  pc."effectScore" as "primaryCard_effectScore",
                  pc."cardTier" as "primaryCard_cardTier",
+                 pc."maxDamage" as "primaryCard_maxDamage",
                  re.id as "regionalExpansion_id",
                  re.code as "regionalExpansion_code",
                  re.name as "regionalExpansion_name",
@@ -843,7 +849,15 @@ export class CardsService {
           LEFT JOIN regional_expansions re ON c."regionalExpansionId" = re.id
           LEFT JOIN primary_expansions pe ON re."primaryExpansionId" = pe.id
           ${whereClause}
-          ORDER BY ${orderByClause} ${actualSortOrder === 'asc' ? 'ASC' : 'DESC'} NULLS LAST${actualSortBy === 'expansionCode' ? ', c."id" ASC' : ''}
+          ORDER BY
+            ${orderByClause} ${actualSortOrder === 'asc' ? 'ASC' : 'DESC'} NULLS LAST
+            ${actualSortBy === 'hp'
+              ? `, COALESCE(pc."maxDamage", 0) ${actualSortOrder === 'asc' ? 'ASC' : 'DESC'} NULLS LAST, c."id" ASC`
+              : actualSortBy === 'maxDamage'
+                ? `, c."hp" ${actualSortOrder === 'asc' ? 'ASC' : 'DESC'} NULLS LAST, c."id" ASC`
+                : actualSortBy === 'expansionCode'
+                  ? ', c."id" ASC'
+                  : ''}
           LIMIT ${Math.min(take, 200)} OFFSET ${skip}
         `),
         this.prisma.$queryRawUnsafe<[{ count: bigint }]>(`
@@ -865,6 +879,7 @@ export class CardsService {
             specialEffectTags: card.primaryCard_specialEffectTags ?? [],
             effectScore: card.primaryCard_effectScore ?? null,
             cardTier: card.primaryCard_cardTier ?? null,
+            maxDamage: card.primaryCard_maxDamage ?? null,
             primaryExpansion: card.primaryExpansion_id ? {
               code: card.primaryExpansion_code,
               nameEn: card.primaryExpansion_nameEn,
