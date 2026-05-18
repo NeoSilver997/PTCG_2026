@@ -508,10 +508,6 @@ export class CardsService {
     if (supertype) {
       where.supertype = supertype;
     }
-    if (minDamage !== undefined) {
-      // maxDamage is a Pokemon-centric metric; enforce Pokemon scope for predictable filtering.
-      where.supertype = 'POKEMON';
-    }
     if (types) {
       where.types = {
         has: types,
@@ -544,14 +540,6 @@ export class CardsService {
       if (maxHp !== undefined) {
         where.hp.lte = maxHp;
       }
-    }
-    if (minDamage !== undefined) {
-      where.primaryCard = {
-        ...(where.primaryCard ?? {}),
-        maxDamage: {
-          gte: minDamage,
-        },
-      };
     }
     if (artist) {
       where.artist = {
@@ -716,7 +704,23 @@ export class CardsService {
       }
 
       if (minDamage !== undefined) {
-        jsonFieldConditions.push(`pc."maxDamage" >= ${Math.max(0, Number(minDamage))}`);
+        const minDamageValue = Math.max(0, Number(minDamage));
+        jsonFieldConditions.push(`(
+          c.attacks IS NOT NULL
+          AND c.attacks != 'null'::jsonb
+          AND EXISTS (
+            SELECT 1
+            FROM jsonb_array_elements(
+              CASE
+                WHEN jsonb_typeof(c.attacks) = 'array' THEN c.attacks
+                WHEN jsonb_typeof(c.attacks) = 'object' THEN jsonb_build_array(c.attacks)
+                ELSE '[]'::jsonb
+              END
+            ) AS atk
+            WHERE NULLIF(regexp_replace(COALESCE(atk->>'damage', ''), '[^0-9]', '', 'g'), '') IS NOT NULL
+              AND CAST(NULLIF(regexp_replace(COALESCE(atk->>'damage', ''), '[^0-9]', '', 'g'), '') AS integer) >= ${minDamageValue}
+          )
+        )`);
       }
 
       // abilityText: search within abilities or attacks JSON text (e.g. find trainers referencing 超-type)

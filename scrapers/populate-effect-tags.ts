@@ -293,6 +293,8 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     (has('【基礎】寶可夢', '基本寶可夢') && (has('備戰區') || has('放置', '放到'))) ||
     // ZH: search Basic/Tera Pokémon to hand from deck — e.g. 戰鬥鑼, 太晶珠
     (has('【基礎】寶可夢', '基本寶可夢', '「太晶」寶可夢') && has('加入手牌') && has('牌庫')) ||
+    // ZH: looser Tera token variant used by some scrapers/translations
+    (has('「太晶」') && has('寶可夢') && has('加入手牌') && has('牌庫')) ||
     // ZH: search any non-rule-box Pokémon from deck — e.g. 寶可平板
     (has('擁有規則的寶可夢') && has('除外') && has('加入手牌') && has('牌庫')) ||
     // JA: bench/hand from deck — 基本ポケモン / たねポケモン (old sets) / テラスタルのポケモン
@@ -303,7 +305,11 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     // EN: "Search your deck for up to N Basic Pokémon and put them onto your Bench"
     ((has('Basic Pokémon') || has('Basic {')) &&
       (has('Search your deck', 'search your deck') || has('your deck for')) &&
-      (has('Bench', 'your hand', 'put it onto')))
+      (has('Bench', 'your hand', 'put it onto'))) ||
+    // EN: Tera Pokémon search phrasing
+    (has('Tera Pokémon', 'Tera Pokemon') &&
+      (has('Search your deck', 'search your deck') || has('your deck for')) &&
+      has('into your hand', 'your hand', 'show it', 'reveal it'))
   ) {
     const qty = extractQuantity(effect);
     primary.add(qty > 0 ? `放置基礎×${qty}` : '放置基礎寶可夢');
@@ -669,6 +675,10 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
     ((has('「基本【') || has('「基 本【')) && has('能量') &&
       (has('牌庫') || has('棄牌區')) &&
       !has('手牌將', '手牌丟棄')) ||
+    // ZH: typed energy symbol without explicit 基本 wording
+    (has('【鬥】', '【草】', '【火】', '【水】', '【雷】', '【超】', '【鋼】', '【惡】', '【龍】') &&
+      has('能量') && (has('牌庫', '棄牌區') || has('附上', '附於', '附加') || has('加入手牌')) &&
+      !has('手札', '手牌將', '手牌丟棄')) ||
     // JA: typed Basic energy — type keyword before 基本エネルギー in deck/discard context
     ((has('タイプの') || has('闘') || has('草') || has('炎') || has('水') ||
       has('雷') || has('超') || has('鋼') || has('悪') || has('竜')) &&
@@ -883,7 +893,7 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
   }
 
   if (
-    (has('受到對手的寶可夢招式的傷害') || /傷害「-\d+/.test(effect)) &&
+    (has('受到對手的寶可夢招式的傷害') || /傷害「-?\d+/.test(effect)) &&
     has('【鋼】', '【鬥】')
   ) {
     primary.add('屬性防禦');
@@ -1028,7 +1038,11 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
 
   // Specific Pokemon defense (ZH + JA + EN)
   if (
-    (has('的所有「', '的寶可夢」') && /傷害「-\d+/.test(effect)) ||
+    (has('的所有「', '的寶可夢」') && /傷害「-?\d+/.test(effect)) ||
+    // Team Rocket-specific naming in ZH/JA/EN variants
+    ((has('「火箭隊的寶可夢」') || has('「ロケット団のポケモン」') || has("Team Rocket's Pokémon", "Team Rocket's Pokemon")) &&
+      (has('傷害') || has('ダメージ') || has('damage')) &&
+      /「-?\d+」/.test(effect)) ||
     (has('すべての「') && has('ダメージ') && has('少なくなる', '減る')) ||
     // EN: "each of your {Name} Pokémon" / "all of your {Name} Pokémon" + damage reduction
     (/each of your \"[^\"]+\" Pok\u00e9mon/i.test(effect) && has('less damage', 'takes')) ||
@@ -1060,8 +1074,9 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
   // High damage reduction (ZH + JA + EN) — threshold ≥ 70
   {
     const _jaReductionDash = effect.match(/(?:受けるワザのダメージ|受けるダメージ)は「-(\d+)」/);
+    const _zhReductionQuoted = effect.match(/傷害「-?(\d+)」/);
     if (
-      (/傷害「-(\d+)/.test(effect) && parseInt(effect.match(/傷害「-(\d+)/)?.[1] ?? '0', 10) >= 70) ||
+      (_zhReductionQuoted !== null && parseInt(_zhReductionQuoted[1] ?? '0', 10) >= 70) ||
       (/受けるダメージは?「?(\d+)」?少なく/.test(effect) &&
         parseInt(effect.match(/受けるダメージは?「?(\d+)」?少なく/)?.[1] ?? '0', 10) >= 70) ||
       // JA: 「-XX」 dash form (ガラルのむねあて, タケシのニビシティジム, リバースバレー, etc.)
@@ -1077,10 +1092,11 @@ function classifySingleEffect(effect: string): [Set<string>, Set<string>] {
   // Damage reduction (ZH + JA + EN) — any positive reduction < 70
   {
     const _jaReductionDash = effect.match(/(?:受けるワザのダメージ|受けるダメージ)は「-(\d+)」/);
+    const _zhReductionQuoted = effect.match(/傷害「-?(\d+)」/);
     if (
-      ((has('受到招式的傷害') || has('傷害「-')) &&
-        /傷害「-(\d+)/.test(effect) &&
-        parseInt(effect.match(/傷害「-(\d+)/)?.[1] ?? '0', 10) < 70 &&
+      ((has('受到招式的傷害') || has('傷害「-') || has('傷害「')) &&
+        _zhReductionQuoted !== null &&
+        parseInt(_zhReductionQuoted[1] ?? '0', 10) < 70 &&
         !has('【鋼】', '【鬥】', '所有寶可夢')) ||
       (/受けるダメージは?「?(\d+)」?少なく/.test(effect) &&
         parseInt(effect.match(/受けるダメージは?「?(\d+)」?少なく/)?.[1] ?? '0', 10) < 70) ||

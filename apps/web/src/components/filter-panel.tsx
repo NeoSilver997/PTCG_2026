@@ -652,14 +652,7 @@ export function FilterPanel({ filters, onFilterChange, stats }: FilterPanelProps
                     type="number"
                     placeholder="0"
                     value={filters.minDamage || ''}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      onFilterChange({
-                        ...filters,
-                        minDamage: val,
-                        ...(val !== '' ? { supertype: 'POKEMON' } : {}),
-                      });
-                    }}
+                    onChange={(e) => updateFilter('minDamage', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-gray-900 bg-white placeholder:text-gray-400"
                     min="0"
                   />

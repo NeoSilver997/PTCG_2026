@@ -1,8 +1,8 @@
 # populate-effect-tags.ts — Documentation
 
 **Source file:** `scrapers/populate-effect-tags.ts`
-**Last modified:** `2026-05-13 23:24`
-**MD5:** `D91CB891E48F3634A158781B60A25CAE`
+**Last modified:** `2026-05-17 11:10`
+**MD5:** `82B2B2517E42BB72962390FB44DC332C`
 **Summarised by model:** `GPT-5.3-Codex`
 
 ---
@@ -30,6 +30,7 @@ Reads every `PrimaryCard` from the database, locates its best language variant (
 - Trainer CSV export is deduplicated by `primaryCardId` so the same primary group is emitted only once.
 - CSV export language selection now uses deterministic best-variant picking per language (`ZH_TW`/`JA_JP`/`EN_US`) based on richest extracted text instead of first-match `.find(...)`, reducing empty EN text rows.
 - Pokemon CSV export is now deduplicated by `primaryCardId` to avoid duplicate rows from multiple variants in the same primary group.
+- Added JP/EN pattern coverage for tokenized strings seen in mixed-language cards: `【鬥】`, `【撤退】`, `「30」`, `「火箭隊的寶可夢」`, and `「太晶」` (including `ロケット団のポケモン`, `Team Rocket's Pokémon`, and `Tera Pokémon`) so these effects are mapped into existing tag families more reliably.
 
 ## Usage
 
